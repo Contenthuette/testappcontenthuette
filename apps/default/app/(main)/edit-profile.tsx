@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { Icon } from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
@@ -22,7 +22,7 @@ import * as Haptics from "expo-haptics";
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const me = useQuery(api.users.me);
+  const user = useQuery(api.users.me);
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateUploadUrl);
 
@@ -31,58 +31,55 @@ export default function EditProfileScreen() {
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
 
-  // Avatar
+  // Avatar state
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<{ uri: string; mimeType: string } | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [pickingAvatar, setPickingAvatar] = useState(false);
 
-  // Banner
+  // Banner state
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [bannerFile, setBannerFile] = useState<{ uri: string; mimeType: string } | null>(null);
-  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [pickingBanner, setPickingBanner] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
+  // Populate with current user data
   useEffect(() => {
-    if (me) {
-      setName(me.name ?? "");
-      setBio(me.bio ?? "");
-      setCounty(me.county ?? "");
-      setCity(me.city ?? "");
-      if (me.avatarUrl) setAvatarPreview(me.avatarUrl);
-      if (me.bannerUrl) setBannerPreview(me.bannerUrl);
+    if (user) {
+      setName(user.name ?? "");
+      setBio(user.bio ?? "");
+      setCounty(user.county ?? "");
+      setCity(user.city ?? "");
+      if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
+      if (user.bannerUrl) setBannerPreview(user.bannerUrl);
     }
-  }, [me]);
+  }, [user]);
 
   const handlePickAvatar = async () => {
-    setUploadingAvatar(true);
+    setPickingAvatar(true);
     try {
-      const result = await pickImage({ quality: 0.8, allowsEditing: true });
+      const result = await pickImage({ quality: 0.8, allowsEditing: true, aspect: [1, 1] });
       if (result) {
         setAvatarPreview(result.uri);
         setAvatarFile({ uri: result.uri, mimeType: result.mimeType });
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } finally {
-      setUploadingAvatar(false);
+      setPickingAvatar(false);
     }
   };
 
   const handlePickBanner = async () => {
-    setUploadingBanner(true);
+    setPickingBanner(true);
     try {
-      const result = await pickImage({ quality: 0.8, allowsEditing: false });
+      const result = await pickImage({ quality: 0.8, allowsEditing: true, aspect: [16, 9] });
       if (result) {
         setBannerPreview(result.uri);
         setBannerFile({ uri: result.uri, mimeType: result.mimeType });
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } finally {
-      setUploadingBanner(false);
+      setPickingBanner(false);
     }
   };
 
@@ -96,6 +93,7 @@ export default function EditProfileScreen() {
         const url = await generateUploadUrl();
         avatarStorageId = await uploadToConvex(url, avatarFile.uri, avatarFile.mimeType);
       }
+
       if (bannerFile) {
         const url = await generateUploadUrl();
         bannerStorageId = await uploadToConvex(url, bannerFile.uri, bannerFile.mimeType);
@@ -116,19 +114,18 @@ export default function EditProfileScreen() {
       safeBack(router, "/(main)/(tabs)/profile");
     } catch (error) {
       console.error("Profile update failed:", error);
-      if (Platform.OS !== "web") {
-        const { Alert } = require("react-native");
-        Alert.alert("Fehler", "Profil konnte nicht gespeichert werden.");
-      }
-    } finally {
       setSaving(false);
+      if (Platform.OS !== "web") {
+        const { Alert: RNAlert } = require("react-native");
+        RNAlert.alert("Fehler", "Profil konnte nicht gespeichert werden.");
+      }
     }
   };
 
-  if (me === undefined) {
+  if (user === undefined) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.black} />
+      <View style={styles.loadingWrap}>
+        <ActivityIndicator size="large" color={colors.gray400} />
       </View>
     );
   }
@@ -138,6 +135,7 @@ export default function EditProfileScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => safeBack(router, "/(main)/(tabs)/profile")}
@@ -165,67 +163,80 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Banner */}
-        <TouchableOpacity
-          style={styles.bannerArea}
-          onPress={handlePickBanner}
-          disabled={uploadingBanner || saving}
-          activeOpacity={0.7}
-        >
-          {bannerPreview ? (
-            <Image
-              source={{ uri: bannerPreview }}
-              style={styles.bannerImage}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={styles.bannerPlaceholder}>
-              <Icon name="photo" size={28} color={colors.grey400} />
-            </View>
-          )}
-          <View style={styles.bannerOverlay}>
-            {uploadingBanner ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <View style={styles.editBadge}>
-                <Icon name="camera" size={14} color={colors.white} />
-                <Text style={styles.editBadgeText}>Banner \u00e4ndern</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        {/* Avatar */}
-        <View style={styles.avatarRow}>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Banner</Text>
           <TouchableOpacity
-            style={styles.avatarContainer}
-            onPress={handlePickAvatar}
-            disabled={uploadingAvatar || saving}
+            style={styles.bannerArea}
+            onPress={handlePickBanner}
+            disabled={pickingBanner || saving}
             activeOpacity={0.7}
           >
-            {avatarPreview ? (
-              <Image
-                source={{ uri: avatarPreview }}
-                style={styles.avatar}
-                contentFit="cover"
-              />
+            {bannerPreview ? (
+              <View style={styles.bannerPreviewWrap}>
+                <Image
+                  source={{ uri: bannerPreview }}
+                  style={styles.bannerImage}
+                  contentFit="cover"
+                />
+                <View style={styles.bannerOverlay}>
+                  {pickingBanner ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <View style={styles.editBadge}>
+                      <Icon name="camera" size={14} color={colors.white} />
+                      <Text style={styles.editBadgeText}>\u00c4ndern</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : pickingBanner ? (
+              <View style={styles.bannerEmpty}>
+                <ActivityIndicator size="large" color={colors.gray400} />
+              </View>
             ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Icon name="person" size={32} color={colors.grey400} />
+              <View style={styles.bannerEmpty}>
+                <Icon name="photo" size={28} color={colors.gray400} />
+                <Text style={styles.bannerEmptyText}>Banner ausw\u00e4hlen</Text>
               </View>
             )}
-            <View style={styles.avatarBadge}>
-              {uploadingAvatar ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Icon name="camera" size={14} color={colors.white} />
-              )}
-            </View>
           </TouchableOpacity>
-          <Text style={styles.avatarHint}>Profilbild \u00e4ndern</Text>
         </View>
 
-        {/* Form Fields */}
-        <View style={styles.formSection}>
+        {/* Avatar */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Profilbild</Text>
+          <View style={styles.avatarRow}>
+            <TouchableOpacity
+              style={styles.avatarWrap}
+              onPress={handlePickAvatar}
+              disabled={pickingAvatar || saving}
+              activeOpacity={0.7}
+            >
+              {avatarPreview ? (
+                <Image
+                  source={{ uri: avatarPreview }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Icon name="person.fill" size={32} color={colors.gray400} />
+                </View>
+              )}
+              <View style={styles.avatarBadge}>
+                {pickingAvatar ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Icon name="camera" size={12} color={colors.white} />
+                )}
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.avatarHint}>Tippe auf das Bild, um dein Profilbild zu \u00e4ndern</Text>
+          </View>
+        </View>
+
+        {/* Form fields */}
+        <View style={styles.section}>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Name</Text>
             <TextInput
@@ -233,7 +244,7 @@ export default function EditProfileScreen() {
               value={name}
               onChangeText={setName}
               placeholder="Dein Name"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               editable={!saving}
             />
           </View>
@@ -244,13 +255,12 @@ export default function EditProfileScreen() {
               style={[styles.fieldInput, styles.fieldInputMultiline]}
               value={bio}
               onChangeText={setBio}
-              placeholder="Erz\u00e4hl etwas \u00fcber dich..."
-              placeholderTextColor={colors.grey400}
+              placeholder="Erz\u00e4hle etwas \u00fcber dich"
+              placeholderTextColor={colors.gray400}
               multiline
-              maxLength={200}
+              maxLength={300}
               editable={!saving}
             />
-            <Text style={styles.charCount}>{bio.length}/200</Text>
           </View>
 
           <View style={styles.fieldGroup}>
@@ -260,7 +270,7 @@ export default function EditProfileScreen() {
               value={county}
               onChangeText={setCounty}
               placeholder="z.B. Rostock"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               editable={!saving}
             />
           </View>
@@ -271,8 +281,8 @@ export default function EditProfileScreen() {
               style={styles.fieldInput}
               value={city}
               onChangeText={setCity}
-              placeholder="z.B. Warnem\u00fcnde"
-              placeholderTextColor={colors.grey400}
+              placeholder="z.B. Schwerin"
+              placeholderTextColor={colors.gray400}
               editable={!saving}
             />
           </View>
@@ -283,16 +293,8 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.white,
-  },
+  container: { flex: 1, backgroundColor: colors.white },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -301,13 +303,13 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.grey200,
+    borderBottomColor: colors.gray200,
   },
   headerBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.grey100,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -325,40 +327,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveBtnDisabled: {
-    backgroundColor: colors.grey300,
+    backgroundColor: colors.gray300,
   },
   saveBtnText: {
     color: colors.white,
     fontSize: 15,
     fontWeight: "600",
   },
-  scroll: {
-    flex: 1,
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.lg, gap: spacing.xl },
+  section: { gap: spacing.sm },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  /* Banner */
+  // Banner
   bannerArea: {
-    height: 160,
-    backgroundColor: colors.grey100,
-    position: "relative",
+    borderRadius: radius.md,
     overflow: "hidden",
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderStyle: "dashed",
+    minHeight: 140,
   },
-  bannerImage: {
-    width: "100%",
-    height: "100%",
-  },
-  bannerPlaceholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  bannerPreviewWrap: { position: "relative", minHeight: 140 },
+  bannerImage: { width: "100%", height: 160, borderRadius: radius.md },
   bannerOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: radius.md,
   },
   editBadge: {
     flexDirection: "row",
@@ -369,45 +372,43 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 16,
   },
-  editBadgeText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  /* Avatar */
-  avatarRow: {
+  editBadgeText: { color: colors.white, fontSize: 13, fontWeight: "600" },
+  bannerEmpty: {
     alignItems: "center",
-    marginTop: -40,
+    justifyContent: "center",
+    paddingVertical: 40,
     gap: 8,
-    marginBottom: spacing.lg,
   },
-  avatarContainer: {
-    position: "relative",
+  bannerEmptyText: { fontSize: 14, color: colors.gray500 },
+  // Avatar
+  avatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
   },
-  avatar: {
+  avatarWrap: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    borderWidth: 3,
-    borderColor: colors.white,
+    overflow: "hidden",
+    position: "relative",
   },
+  avatarImage: { width: 90, height: 90, borderRadius: 45 },
   avatarPlaceholder: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
-    borderColor: colors.white,
   },
   avatarBadge: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
@@ -415,27 +416,23 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
   },
   avatarHint: {
-    fontSize: 13,
-    color: colors.grey500,
+    flex: 1,
+    fontSize: 14,
+    color: colors.gray500,
+    lineHeight: 20,
   },
-  /* Form */
-  formSection: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.lg,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
+  // Fields
+  fieldGroup: { gap: 6 },
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: colors.grey500,
+    color: colors.gray500,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   fieldInput: {
-    backgroundColor: colors.grey100,
-    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     fontSize: 16,
@@ -444,11 +441,5 @@ const styles = StyleSheet.create({
   fieldInputMultiline: {
     minHeight: 80,
     textAlignVertical: "top",
-  },
-  charCount: {
-    fontSize: 12,
-    color: colors.grey400,
-    textAlign: "right",
-    marginTop: 2,
   },
 });

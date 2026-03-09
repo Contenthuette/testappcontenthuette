@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { Icon } from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
@@ -43,9 +43,7 @@ export default function CreateGroupScreen() {
       if (result) {
         setThumbnailPreview(result.uri);
         setThumbnailFile({ uri: result.uri, mimeType: result.mimeType });
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } finally {
       setPickingThumbnail(false);
@@ -79,8 +77,8 @@ export default function CreateGroupScreen() {
     } catch (error) {
       console.error("Group creation failed:", error);
       if (Platform.OS !== "web") {
-        const { Alert } = require("react-native");
-        Alert.alert("Fehler", "Gruppe konnte nicht erstellt werden.");
+        const { Alert: RNAlert } = require("react-native");
+        RNAlert.alert("Fehler", "Gruppe konnte nicht erstellt werden.");
       }
     } finally {
       setCreating(false);
@@ -122,45 +120,47 @@ export default function CreateGroupScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Thumbnail */}
-        <Text style={styles.sectionLabel}>Gruppenbild</Text>
-        <TouchableOpacity
-          style={styles.thumbnailArea}
-          onPress={handlePickThumbnail}
-          disabled={pickingThumbnail || creating}
-          activeOpacity={0.7}
-        >
-          {thumbnailPreview ? (
-            <View style={styles.thumbnailPreviewWrap}>
-              <Image
-                source={{ uri: thumbnailPreview }}
-                style={styles.thumbnailImage}
-                contentFit="cover"
-              />
-              <View style={styles.thumbnailOverlay}>
-                {pickingThumbnail ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <View style={styles.editBadge}>
-                    <Icon name="camera" size={14} color={colors.white} />
-                    <Text style={styles.editBadgeText}>Bild \u00e4ndern</Text>
-                  </View>
-                )}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Gruppenbild</Text>
+          <TouchableOpacity
+            style={styles.thumbnailArea}
+            onPress={handlePickThumbnail}
+            disabled={pickingThumbnail || creating}
+            activeOpacity={0.7}
+          >
+            {thumbnailPreview ? (
+              <View style={styles.thumbPreviewWrap}>
+                <Image
+                  source={{ uri: thumbnailPreview }}
+                  style={styles.thumbImage}
+                  contentFit="cover"
+                />
+                <View style={styles.thumbOverlay}>
+                  {pickingThumbnail ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <View style={styles.editBadge}>
+                      <Icon name="camera" size={14} color={colors.white} />
+                      <Text style={styles.editBadgeText}>Bild \u00e4ndern</Text>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
-          ) : pickingThumbnail ? (
-            <View style={styles.thumbnailEmpty}>
-              <ActivityIndicator size="large" color={colors.grey400} />
-            </View>
-          ) : (
-            <View style={styles.thumbnailEmpty}>
-              <Icon name="photo" size={36} color={colors.grey400} />
-              <Text style={styles.thumbnailEmptyText}>Tippe hier, um ein Gruppenbild auszuw\u00e4hlen</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            ) : pickingThumbnail ? (
+              <View style={styles.thumbEmpty}>
+                <ActivityIndicator size="large" color={colors.gray400} />
+              </View>
+            ) : (
+              <View style={styles.thumbEmpty}>
+                <Icon name="photo" size={36} color={colors.gray400} />
+                <Text style={styles.thumbEmptyText}>Tippe hier, um ein Gruppenbild auszuw\u00e4hlen</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Fields */}
-        <View style={styles.formSection}>
+        <View style={styles.section}>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Name *</Text>
             <TextInput
@@ -168,7 +168,7 @@ export default function CreateGroupScreen() {
               value={name}
               onChangeText={setName}
               placeholder="Gruppenname"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               editable={!creating}
             />
           </View>
@@ -180,7 +180,7 @@ export default function CreateGroupScreen() {
               value={description}
               onChangeText={setDescription}
               placeholder="Worum geht es in der Gruppe?"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               multiline
               maxLength={300}
               editable={!creating}
@@ -194,7 +194,7 @@ export default function CreateGroupScreen() {
               value={topic}
               onChangeText={setTopic}
               placeholder="z.B. Sport, Kultur, Technik"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               editable={!creating}
             />
           </View>
@@ -206,7 +206,7 @@ export default function CreateGroupScreen() {
               value={county}
               onChangeText={setCounty}
               placeholder="z.B. Rostock"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               editable={!creating}
             />
           </View>
@@ -218,7 +218,7 @@ export default function CreateGroupScreen() {
               value={city}
               onChangeText={setCity}
               placeholder="z.B. Stralsund"
-              placeholderTextColor={colors.grey400}
+              placeholderTextColor={colors.gray400}
               editable={!creating}
             />
           </View>
@@ -229,10 +229,7 @@ export default function CreateGroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
+  container: { flex: 1, backgroundColor: colors.white },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -241,13 +238,13 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.grey200,
+    borderBottomColor: colors.gray200,
   },
   headerBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.grey100,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -265,51 +262,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveBtnDisabled: {
-    backgroundColor: colors.grey300,
+    backgroundColor: colors.gray300,
   },
   saveBtnText: {
     color: colors.white,
     fontSize: 15,
     fontWeight: "600",
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.lg, gap: spacing.xl },
+  section: { gap: spacing.sm },
   sectionLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: colors.grey500,
+    color: colors.gray500,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   thumbnailArea: {
-    borderRadius: 16,
+    borderRadius: radius.md,
     overflow: "hidden",
-    backgroundColor: colors.grey100,
+    backgroundColor: colors.gray100,
     borderWidth: 1,
-    borderColor: colors.grey200,
+    borderColor: colors.gray200,
     borderStyle: "dashed",
     minHeight: 180,
   },
-  thumbnailPreviewWrap: {
-    position: "relative",
-    minHeight: 180,
-  },
-  thumbnailImage: {
-    width: "100%",
-    height: 200,
-    borderRadius: 16,
-  },
-  thumbnailOverlay: {
+  thumbPreviewWrap: { position: "relative", minHeight: 180 },
+  thumbImage: { width: "100%", height: 200, borderRadius: radius.md },
+  thumbOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.2)",
-    borderRadius: 16,
+    borderRadius: radius.md,
   },
   editBadge: {
     flexDirection: "row",
@@ -320,39 +306,30 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 16,
   },
-  editBadgeText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  thumbnailEmpty: {
+  editBadgeText: { color: colors.white, fontSize: 13, fontWeight: "600" },
+  thumbEmpty: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 50,
     gap: 10,
   },
-  thumbnailEmptyText: {
+  thumbEmptyText: {
     fontSize: 14,
-    color: colors.grey500,
+    color: colors.gray500,
     textAlign: "center",
     paddingHorizontal: spacing.lg,
   },
-  formSection: {
-    gap: spacing.lg,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
+  fieldGroup: { gap: 6 },
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: colors.grey500,
+    color: colors.gray500,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   fieldInput: {
-    backgroundColor: colors.grey100,
-    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     fontSize: 16,

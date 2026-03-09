@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,94 +10,117 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { Icon } from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
-import type { MediaPickerResult } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 
 type PostType = "photo" | "video" | "reel";
 
+const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
+  photo: { title: "Foto posten", pickLabel: "Foto ausw\u00e4hlen", icon: "photo" },
+  video: { title: "Video posten", pickLabel: "Video ausw\u00e4hlen", icon: "video" },
+  reel: { title: "Reel posten", pickLabel: "Reel ausw\u00e4hlen", icon: "play.rectangle" },
+};
+
 export default function CreatePostScreen() {
+  const { type } = useLocalSearchParams<{ type?: string }>();
+  const postType: PostType = (type === "video" || type === "reel") ? type : "photo";
+  const config = typeConfig[postType];
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string }>();
-  const postType: PostType =
-    params.type === "video" || params.type === "reel"
-      ? (params.type as PostType)
-      : "photo";
 
-  const [caption, setCaption] = useState("");
-  const [media, setMedia] = useState<MediaPickerResult | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [pickingMedia, setPickingMedia] = useState(false);
-
-  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
   const createPost = useMutation(api.posts.create);
+  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
 
-  const isVideo = postType === "video" || postType === "reel";
-  const titleMap: Record<PostType, string> = {
-    photo: "Foto posten",
-    video: "Video posten",
-    reel: "Reel posten",
-  };
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [caption, setCaption] = useState("");
+  const [picking, setPicking] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
 
-  const handlePickMedia = async () => {
-    setPickingMedia(true);
+  // Auto-open picker on mount
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      handlePick();
+    }, 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePick = async () => {
+    setPicking(true);
     try {
+      const isVideo = postType === "video" || postType === "reel";
       const result = isVideo
         ? await pickVideo({ quality: 0.8 })
         : await pickImage({ quality: 0.8, allowsEditing: true });
+
       if (result) {
-        setMedia(result);
+        setMediaPreview(result.uri);
+        setMediaFile({ uri: result.uri, mimeType: result.mimeType });
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
       }
     } finally {
-      setPickingMedia(false);
+      setPicking(false);
     }
   };
 
   const handlePublish = async () => {
-    if (!media) return;
-    setUploading(true);
+    if (!mediaFile) return;
+    setPublishing(true);
     try {
       const uploadUrl = await generateUploadUrl();
-      const storageId = await uploadToConvex(uploadUrl, media.uri, media.mimeType);
+      const storageId = await uploadToConvex(uploadUrl, mediaFile.uri, mediaFile.mimeType);
+
       await createPost({
         type: postType,
         caption: caption.trim() || undefined,
         mediaStorageId: storageId as never,
       });
+
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      router.replace("/(main)/(tabs)");
+      setPublished(true);
+      setTimeout(() => {
+        router.replace("/(main)/(tabs)");
+      }, 600);
     } catch (error) {
-      console.error("Post upload failed:", error);
+      console.error("Post creation failed:", error);
+      setPublishing(false);
       if (Platform.OS !== "web") {
-        const { Alert } = require("react-native");
-        Alert.alert("Fehler", "Post konnte nicht ver\u00f6ffentlicht werden. Bitte versuche es erneut.");
+        const { Alert: RNAlert } = require("react-native");
+        RNAlert.alert("Fehler", "Beitrag konnte nicht ver\u00f6ffentlicht werden.");
       }
-    } finally {
-      setUploading(false);
     }
   };
 
-  const handleRemoveMedia = () => {
-    setMedia(null);
-  };
+  if (published) {
+    return (
+      <View style={styles.successWrap}>
+        <View style={styles.successBadge}>
+          <Icon name="checkmark.circle.fill" size={48} color={colors.success} />
+        </View>
+        <Text style={styles.successTitle}>Ver\u00f6ffentlicht!</Text>
+        <Text style={styles.successSub}>Dein Beitrag ist jetzt im Feed sichtbar.</Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => safeBack(router, "/(main)/(tabs)/create")}
@@ -105,26 +128,19 @@ export default function CreatePostScreen() {
         >
           <Icon name="chevron.left" size={20} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{titleMap[postType]}</Text>
+        <Text style={styles.headerTitle}>{config.title}</Text>
         <TouchableOpacity
           onPress={handlePublish}
-          disabled={!media || uploading}
+          disabled={publishing || !mediaFile}
           style={[
             styles.publishBtn,
-            (!media || uploading) && styles.publishBtnDisabled,
+            (publishing || !mediaFile) && styles.publishBtnDisabled,
           ]}
         >
-          {uploading ? (
+          {publishing ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text
-              style={[
-                styles.publishText,
-                (!media || uploading) && styles.publishTextDisabled,
-              ]}
-            >
-              Posten
-            </Text>
+            <Text style={styles.publishBtnText}>Posten</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -134,93 +150,66 @@ export default function CreatePostScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Media Picker Area */}
+        {/* Media area */}
         <TouchableOpacity
           style={styles.mediaArea}
-          onPress={handlePickMedia}
-          disabled={pickingMedia || uploading}
+          onPress={handlePick}
+          disabled={picking || publishing}
           activeOpacity={0.7}
         >
-          {media ? (
-            <View style={styles.previewContainer}>
+          {mediaPreview ? (
+            <View style={styles.previewWrap}>
               <Image
-                source={{ uri: media.uri }}
-                style={styles.preview}
+                source={{ uri: mediaPreview }}
+                style={styles.previewImage}
                 contentFit="cover"
               />
-              {isVideo && (
-                <View style={styles.videoOverlay}>
-                  <Icon name="play.fill" size={40} color={colors.white} />
-                </View>
-              )}
-              <TouchableOpacity
-                style={styles.removeBtn}
-                onPress={handleRemoveMedia}
-              >
-                <Icon name="xmark.circle.fill" size={24} color={colors.white} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.changeBtn}
-                onPress={handlePickMedia}
-              >
-                <Text style={styles.changeBtnText}>
-                  {isVideo ? "Video \u00e4ndern" : "Bild \u00e4ndern"}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.previewOverlay}>
+                {picking ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <View style={styles.changeBadge}>
+                    <Icon name="camera" size={14} color={colors.white} />
+                    <Text style={styles.changeBadgeText}>\u00c4ndern</Text>
+                  </View>
+                )}
+              </View>
             </View>
-          ) : pickingMedia ? (
+          ) : picking ? (
             <View style={styles.emptyMedia}>
-              <ActivityIndicator size="large" color={colors.grey400} />
-              <Text style={styles.emptyMediaText}>Mediathek wird ge\u00f6ffnet...</Text>
+              <ActivityIndicator size="large" color={colors.gray400} />
+              <Text style={styles.emptyLabel}>\u00d6ffne Galerie...</Text>
             </View>
           ) : (
             <View style={styles.emptyMedia}>
-              <Icon
-                name={isVideo ? "video" : "photo"}
-                size={48}
-                color={colors.grey400}
-              />
-              <Text style={styles.emptyMediaTitle}>
-                {isVideo ? "Video ausw\u00e4hlen" : "Foto ausw\u00e4hlen"}
-              </Text>
-              <Text style={styles.emptyMediaText}>
-                Tippe hier, um {isVideo ? "ein Video" : "ein Bild"} aus deiner Mediathek zu w\u00e4hlen
-              </Text>
+              <Icon name={config.icon} size={40} color={colors.gray400} />
+              <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
+              <Text style={styles.emptyHint}>Tippe hier, um Medien auszuw\u00e4hlen</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Caption */}
-        <View style={styles.captionContainer}>
+        <View style={styles.captionSection}>
+          <Text style={styles.sectionLabel}>Beschreibung</Text>
           <TextInput
             style={styles.captionInput}
-            placeholder="Beschreibung hinzuf\u00fcgen..."
-            placeholderTextColor={colors.grey400}
             value={caption}
             onChangeText={setCaption}
+            placeholder="Schreibe etwas zu deinem Beitrag..."
+            placeholderTextColor={colors.gray400}
             multiline
             maxLength={500}
-            editable={!uploading}
+            editable={!publishing}
           />
-          <Text style={styles.charCount}>{caption.length}/500</Text>
         </View>
-
-        {uploading && (
-          <View style={styles.uploadingBanner}>
-            <ActivityIndicator size="small" color={colors.black} />
-            <Text style={styles.uploadingText}>Wird hochgeladen...</Text>
-          </View>
-        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
+  container: { flex: 1, backgroundColor: colors.white },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -229,13 +218,13 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.grey200,
+    borderBottomColor: colors.gray200,
   },
   headerBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.grey100,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -253,69 +242,50 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   publishBtnDisabled: {
-    backgroundColor: colors.grey300,
+    backgroundColor: colors.gray300,
   },
-  publishText: {
+  publishBtnText: {
     color: colors.white,
     fontSize: 15,
     fontWeight: "600",
   },
-  publishTextDisabled: {
-    color: colors.grey500,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.lg, gap: spacing.lg },
   mediaArea: {
-    borderRadius: 16,
+    borderRadius: radius.md,
     overflow: "hidden",
-    backgroundColor: colors.grey100,
+    backgroundColor: colors.gray100,
     borderWidth: 1,
-    borderColor: colors.grey200,
+    borderColor: colors.gray200,
     borderStyle: "dashed",
-    minHeight: 280,
+    minHeight: 260,
   },
-  previewContainer: {
+  previewWrap: {
     position: "relative",
-    minHeight: 280,
+    minHeight: 260,
   },
-  preview: {
+  previewImage: {
     width: "100%",
-    height: 320,
-    borderRadius: 16,
+    height: 300,
+    borderRadius: radius.md,
   },
-  videoOverlay: {
+  previewOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.25)",
-    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: radius.md,
   },
-  removeBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
+  changeBadge: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  changeBtn: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
+    gap: 6,
     backgroundColor: "rgba(0,0,0,0.55)",
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
   },
-  changeBtnText: {
+  changeBadgeText: {
     color: colors.white,
     fontSize: 13,
     fontWeight: "600",
@@ -326,46 +296,50 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     gap: 10,
   },
-  emptyMediaTitle: {
-    fontSize: 17,
+  emptyLabel: {
+    fontSize: 16,
     fontWeight: "600",
-    color: colors.black,
+    color: colors.gray500,
   },
-  emptyMediaText: {
-    fontSize: 14,
-    color: colors.grey500,
-    textAlign: "center",
-    paddingHorizontal: spacing.lg,
+  emptyHint: {
+    fontSize: 13,
+    color: colors.gray400,
   },
-  captionContainer: {
-    backgroundColor: colors.grey100,
-    borderRadius: 14,
-    padding: spacing.md,
+  captionSection: { gap: 8 },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   captionInput: {
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
     fontSize: 16,
     color: colors.black,
-    minHeight: 80,
+    minHeight: 100,
     textAlignVertical: "top",
   },
-  charCount: {
-    fontSize: 12,
-    color: colors.grey400,
-    textAlign: "right",
-    marginTop: 4,
-  },
-  uploadingBanner: {
-    flexDirection: "row",
+  successWrap: {
+    flex: 1,
+    backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.grey100,
-    borderRadius: 12,
+    gap: 12,
   },
-  uploadingText: {
-    fontSize: 14,
+  successBadge: {
+    marginBottom: 8,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: "700",
     color: colors.black,
-    fontWeight: "500",
+  },
+  successSub: {
+    fontSize: 15,
+    color: colors.gray500,
   },
 });
