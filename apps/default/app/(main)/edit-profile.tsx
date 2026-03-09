@@ -15,7 +15,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import { colors, spacing, radius } from "@/lib/theme";
-import { Icon } from "@/components/Icon";
+import Icon from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
@@ -111,7 +111,7 @@ export default function EditProfileScreen() {
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      safeBack(router, "/(main)/(tabs)/profile");
+      safeBack("edit-profile");
     } catch (error) {
       console.error("Profile update failed:", error);
       setSaving(false);
@@ -138,7 +138,7 @@ export default function EditProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => safeBack(router, "/(main)/(tabs)/profile")}
+          onPress={() => safeBack("edit-profile")}
           style={styles.headerBtn}
         >
           <Icon name="chevron.left" size={20} color={colors.black} />

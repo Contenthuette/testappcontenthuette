@@ -14,8 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing, radius } from "@/lib/theme";
-import { Icon } from "@/components/Icon";
+import Icon from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
@@ -91,7 +90,7 @@ export default function CreatePostScreen() {
       }
       setPublished(true);
       setTimeout(() => {
-        router.replace("/(main)/(tabs)");
+        router.replace("/(main)/(tabs)/feed" as "/");
       }, 600);
     } catch (error) {
       console.error("Post creation failed:", error);
@@ -123,7 +122,7 @@ export default function CreatePostScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => safeBack(router, "/(main)/(tabs)/create")}
+          onPress={() => safeBack("create-post")}
           style={styles.headerBtn}
         >
           <Icon name="chevron.left" size={20} color={colors.black} />

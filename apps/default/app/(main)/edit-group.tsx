@@ -15,7 +15,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import { colors, spacing, radius } from "@/lib/theme";
-import { Icon } from "@/components/Icon";
+import Icon from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
@@ -88,7 +88,7 @@ export default function EditGroupScreen() {
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      safeBack(router, "/(main)/groups/" + id);
+      safeBack("edit-group");
     } catch (error) {
       console.error("Group update failed:", error);
       setSaving(false);
@@ -114,7 +114,7 @@ export default function EditGroupScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => safeBack(router, id ? "/(main)/groups/" + id : "/(main)/(tabs)/groups")}
+          onPress={() => safeBack("edit-group")}
           style={styles.headerBtn}
         >
           <Icon name="chevron.left" size={20} color={colors.black} />

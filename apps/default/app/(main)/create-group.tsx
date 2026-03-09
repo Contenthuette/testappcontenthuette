@@ -14,8 +14,7 @@ import { useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing, radius } from "@/lib/theme";
-import { Icon } from "@/components/Icon";
+import Icon from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
@@ -61,12 +60,13 @@ export default function CreateGroupScreen() {
         thumbnailStorageId = await uploadToConvex(url, thumbnailFile.uri, thumbnailFile.mimeType);
       }
 
-      await createGroup({
+      const groupId = await createGroup({
         name: name.trim(),
         description: description.trim() || undefined,
         county: county.trim() || undefined,
         city: city.trim() || undefined,
         topic: topic.trim() || undefined,
+        visibility: "public" as const,
         ...(thumbnailStorageId ? { thumbnailStorageId: thumbnailStorageId as never } : {}),
       });
 
@@ -92,7 +92,7 @@ export default function CreateGroupScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => safeBack(router, "/(main)/(tabs)/create")}
+          onPress={() => safeBack("create-group")}
           style={styles.headerBtn}
         >
           <Icon name="chevron.left" size={20} color={colors.black} />
