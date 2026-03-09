@@ -67,7 +67,7 @@ export default function FeedScreen() {
                 height={screenWidth * (16 / 9)}
                 autoPlay
                 loop
-                muted
+                hideControls
               />
             </View>
           ) : (
