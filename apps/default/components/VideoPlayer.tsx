@@ -5,21 +5,27 @@ import { useVideoPlayer, VideoView } from "expo-video";
 interface VideoPlayerProps {
   uri: string;
   height: number;
+  width?: number;
   autoPlay?: boolean;
   loop?: boolean;
   muted?: boolean;
   hideControls?: boolean;
   isVisible?: boolean;
+  borderRadius?: number;
+  contentFit?: "cover" | "contain";
 }
 
 export function VideoPlayer({
   uri,
   height,
+  width,
   autoPlay = true,
   loop = true,
   muted = false,
   hideControls = false,
   isVisible = true,
+  borderRadius = 0,
+  contentFit = "cover",
 }: VideoPlayerProps) {
   const player = useVideoPlayer(uri, (p) => {
     p.loop = loop;
@@ -46,8 +52,14 @@ export function VideoPlayer({
     }
   }, [player, hideControls, isVisible]);
 
+  const containerStyle = [
+    styles.container,
+    { height, ...(width ? { width } : {}) },
+    borderRadius > 0 && { borderRadius, overflow: "hidden" as const },
+  ];
+
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={containerStyle}>
       {hideControls ? (
         <Pressable
           onPressIn={handlePressIn}
@@ -57,7 +69,7 @@ export function VideoPlayer({
           <VideoView
             player={player}
             style={styles.video}
-            contentFit="cover"
+            contentFit={contentFit}
             nativeControls={false}
           />
         </Pressable>
@@ -65,7 +77,7 @@ export function VideoPlayer({
         <VideoView
           player={player}
           style={styles.video}
-          contentFit="cover"
+          contentFit={contentFit}
         />
       )}
     </View>
@@ -76,8 +88,6 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     backgroundColor: "#000",
-    borderRadius: 16,
-    overflow: "hidden",
   },
   video: {
     flex: 1,

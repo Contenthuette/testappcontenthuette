@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Alert,
   useWindowDimensions,
+  PanResponder,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
@@ -31,7 +32,7 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
   video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
 };
 
-const FEED_ASPECT = 4 / 3;
+const FEED_ASPECT = 3 / 4; // 3:4 portrait
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type?: string }>();
@@ -45,34 +46,73 @@ export default function CreatePostScreen() {
 
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaFile, setMediaFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [mediaDims, setMediaDims] = useState<{ width: number; height: number } | null>(null);
   const [caption, setCaption] = useState("");
   const [picking, setPicking] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [aspectMode, setAspectMode] = useState<AspectMode>("cropped");
+  const [cropOffsetY, setCropOffsetY] = useState(0.5);
+
+  const cropOffsetRef = useRef(0.5);
 
   const previewWidth = width - spacing.lg * 2;
-  const croppedPreviewHeight = previewWidth / FEED_ASPECT;
-  const originalPreviewHeight = previewWidth * (16 / 9);
+  const cropContainerHeight = previewWidth / FEED_ASPECT; // 3:4 → taller than wide
+
+  // Scaled media dimensions at preview width
+  const scaledMediaHeight = mediaDims
+    ? previewWidth * (mediaDims.height / mediaDims.width)
+    : cropContainerHeight;
+  const overflowY = Math.max(0, scaledMediaHeight - cropContainerHeight);
+  const canCrop = overflowY > 0;
+
+  const overflowRef = useRef(overflowY);
+  useEffect(() => {
+    overflowRef.current = overflowY;
+  }, [overflowY]);
+
+  // Pan gesture for crop positioning
+  const startOffsetRef = useRef(0.5);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 3,
+        onPanResponderGrant: () => {
+          startOffsetRef.current = cropOffsetRef.current;
+        },
+        onPanResponderMove: (_, gesture) => {
+          const overflow = overflowRef.current;
+          if (overflow <= 0) return;
+          const delta = gesture.dy / overflow;
+          const newVal = Math.max(0, Math.min(1, startOffsetRef.current - delta));
+          cropOffsetRef.current = newVal;
+          setCropOffsetY(newVal);
+        },
+      }),
+    [],
+  );
+
+  const translateY = -cropOffsetY * overflowY;
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      handlePick();
-    }, 400);
+    const timeout = setTimeout(() => handlePick(), 400);
     return () => clearTimeout(timeout);
   }, []);
 
   const handlePick = async () => {
     setPicking(true);
     try {
-      const isVideo = postType === "video";
-      const result = isVideo
+      const result = postType === "video"
         ? await pickVideo({ quality: 0.8 })
-        : await pickImage({ quality: 0.8, allowsEditing: true });
+        : await pickImage({ quality: 0.8, allowsEditing: false });
 
       if (result) {
         setMediaPreview(result.uri);
         setMediaFile({ uri: result.uri, mimeType: result.mimeType });
+        setMediaDims({ width: result.width, height: result.height });
+        setCropOffsetY(0.5);
+        cropOffsetRef.current = 0.5;
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
@@ -96,11 +136,17 @@ export default function CreatePostScreen() {
       const uploadUrl = await generateUploadUrl();
       const storageId = await uploadToConvex(uploadUrl, mediaFile.uri, mediaFile.mimeType);
 
+      const mediaAspectRatio = mediaDims
+        ? mediaDims.width / mediaDims.height
+        : undefined;
+
       await createPost({
         type: postType,
         caption: caption.trim() || undefined,
         mediaStorageId: storageId as never,
-        aspectMode: postType === "video" ? aspectMode : undefined,
+        aspectMode,
+        cropOffsetY: aspectMode === "cropped" ? cropOffsetY : undefined,
+        mediaAspectRatio,
       });
 
       if (Platform.OS !== "web") {
@@ -131,10 +177,10 @@ export default function CreatePostScreen() {
     );
   }
 
-  const renderVideoPreview = () => {
-    if (!mediaPreview) return null;
-    const isCropped = aspectMode === "cropped";
-    const containerHeight = isCropped ? croppedPreviewHeight : originalPreviewHeight;
+  const isCropped = aspectMode === "cropped";
+
+  const renderCropPreview = () => {
+    if (!mediaPreview || !mediaDims) return null;
 
     return (
       <View>
@@ -143,27 +189,25 @@ export default function CreatePostScreen() {
           <Text style={styles.aspectLabel}>Format</Text>
           <View style={styles.aspectToggle}>
             <TouchableOpacity
-              style={[
-                styles.aspectBtn,
-                isCropped && styles.aspectBtnActive,
-              ]}
+              style={[styles.aspectBtn, isCropped && styles.aspectBtnActive]}
               onPress={() => handleAspectToggle("cropped")}
               activeOpacity={0.7}
             >
               <Icon name="crop" size={14} tintColor={isCropped ? colors.white : colors.gray600} />
               <Text style={[styles.aspectBtnText, isCropped && styles.aspectBtnTextActive]}>
-                4:3 anpassen
+                3:4 anpassen
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[
-                styles.aspectBtn,
-                !isCropped && styles.aspectBtnActive,
-              ]}
+              style={[styles.aspectBtn, !isCropped && styles.aspectBtnActive]}
               onPress={() => handleAspectToggle("original")}
               activeOpacity={0.7}
             >
-              <Icon name="arrow.up.left.and.arrow.down.right" size={14} tintColor={!isCropped ? colors.white : colors.gray600} />
+              <Icon
+                name="arrow.up.left.and.arrow.down.right"
+                size={14}
+                tintColor={!isCropped ? colors.white : colors.gray600}
+              />
               <Text style={[styles.aspectBtnText, !isCropped && styles.aspectBtnTextActive]}>
                 Original
               </Text>
@@ -171,31 +215,98 @@ export default function CreatePostScreen() {
           </View>
         </View>
 
-        {/* Video preview */}
-        <View
-          style={[
-            styles.videoPreviewWrap,
-            { height: containerHeight },
-            !isCropped && styles.videoPreviewOriginal,
-          ]}
-        >
-          <VideoPlayer
-            uri={mediaPreview}
-            height={isCropped ? containerHeight : originalPreviewHeight}
-            autoPlay={false}
-            muted={false}
-          />
-        </View>
+        {isCropped ? (
+          /* ── Cropped preview with drag ── */
+          <View>
+            <View
+              style={[
+                styles.cropContainer,
+                { width: previewWidth, height: cropContainerHeight },
+              ]}
+              {...panResponder.panHandlers}
+            >
+              {postType === "video" ? (
+                <View style={{ transform: [{ translateY }] }}>
+                  <VideoPlayer
+                    uri={mediaPreview}
+                    height={scaledMediaHeight}
+                    width={previewWidth}
+                    autoPlay={false}
+                    muted
+                    hideControls
+                  />
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: mediaPreview }}
+                  style={[
+                    styles.cropImage,
+                    {
+                      width: previewWidth,
+                      height: scaledMediaHeight,
+                      transform: [{ translateY }],
+                    },
+                  ]}
+                  contentFit="cover"
+                />
+              )}
+
+              {/* Drag indicators */}
+              {canCrop && (
+                <View style={styles.dragOverlay} pointerEvents="none">
+                  <View style={styles.dragHandle}>
+                    <Icon name="chevron.up" size={14} tintColor="rgba(255,255,255,0.9)" />
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <View style={styles.dragHandle}>
+                    <Icon name="chevron.down" size={14} tintColor="rgba(255,255,255,0.9)" />
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {canCrop && (
+              <Text style={styles.cropHint}>Ziehe um den Ausschnitt zu waehlen</Text>
+            )}
+          </View>
+        ) : (
+          /* ── Original preview ── */
+          <View style={[styles.originalContainer, { width: previewWidth }]}>
+            {postType === "video" ? (
+              <VideoPlayer
+                uri={mediaPreview}
+                height={Math.min(scaledMediaHeight, cropContainerHeight)}
+                width={previewWidth}
+                autoPlay={false}
+                muted
+                contentFit="contain"
+                borderRadius={16}
+              />
+            ) : (
+              <Image
+                source={{ uri: mediaPreview }}
+                style={[
+                  styles.originalImage,
+                  {
+                    width: previewWidth,
+                    height: Math.min(scaledMediaHeight, cropContainerHeight),
+                  },
+                ]}
+                contentFit="contain"
+              />
+            )}
+          </View>
+        )}
 
         <Text style={styles.aspectHint}>
           {isCropped
-            ? "Das Video wird auf 4:3 zugeschnitten und fuellt den Feed."
-            : "Das Video wird im Originalformat mit seitlichen Raendern angezeigt."}
+            ? "Das Medium wird auf 3:4 zugeschnitten und fuellt den Feed."
+            : "Das Medium wird im Originalformat mit Raendern angezeigt."}
         </Text>
 
-        {/* Change button */}
+        {/* Change media button */}
         <TouchableOpacity
-          style={styles.changeVideoBtn}
+          style={styles.changeBtn}
           onPress={handlePick}
           disabled={picking || publishing}
           activeOpacity={0.7}
@@ -205,7 +316,9 @@ export default function CreatePostScreen() {
           ) : (
             <>
               <Icon name="arrow.triangle.2.circlepath" size={16} tintColor={colors.black} />
-              <Text style={styles.changeVideoBtnText}>Anderes Video</Text>
+              <Text style={styles.changeBtnText}>
+                {postType === "video" ? "Anderes Video" : "Anderes Foto"}
+              </Text>
             </>
           )}
         </TouchableOpacity>
@@ -219,20 +332,14 @@ export default function CreatePostScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => safeBack("create-post")}
-          style={styles.headerBtn}
-        >
+        <TouchableOpacity onPress={() => safeBack("create-post")} style={styles.headerBtn}>
           <Icon name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{config.title}</Text>
         <TouchableOpacity
           onPress={handlePublish}
           disabled={publishing || !mediaFile}
-          style={[
-            styles.publishBtn,
-            (publishing || !mediaFile) && styles.publishBtnDisabled,
-          ]}
+          style={[styles.publishBtn, (publishing || !mediaFile) && styles.publishBtnDisabled]}
         >
           {publishing ? (
             <ActivityIndicator size="small" color={colors.white} />
@@ -247,8 +354,8 @@ export default function CreatePostScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {postType === "video" && mediaPreview ? (
-          renderVideoPreview()
+        {mediaPreview && mediaDims ? (
+          renderCropPreview()
         ) : (
           <TouchableOpacity
             style={styles.mediaArea}
@@ -256,25 +363,7 @@ export default function CreatePostScreen() {
             disabled={picking || publishing}
             activeOpacity={0.7}
           >
-            {mediaPreview ? (
-              <View style={styles.previewWrap}>
-                <Image
-                  source={{ uri: mediaPreview }}
-                  style={styles.previewImage}
-                  contentFit="cover"
-                />
-                <View style={styles.previewOverlay}>
-                  {picking ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <View style={styles.changeBadge}>
-                      <Icon name="camera" size={14} tintColor={colors.white} />
-                      <Text style={styles.changeBadgeText}>Aendern</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            ) : picking ? (
+            {picking ? (
               <View style={styles.emptyMedia}>
                 <ActivityIndicator size="large" color={colors.gray400} />
                 <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
@@ -340,6 +429,8 @@ const styles = StyleSheet.create({
   publishBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, gap: spacing.lg },
+
+  // Empty state
   mediaArea: {
     borderRadius: radius.md,
     overflow: "hidden",
@@ -349,25 +440,6 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     minHeight: 260,
   },
-  previewWrap: { position: "relative", minHeight: 260 },
-  previewImage: { width: "100%", height: 300, borderRadius: radius.md },
-  previewOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.2)",
-    borderRadius: radius.md,
-  },
-  changeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-  },
-  changeBadgeText: { color: colors.white, fontSize: 13, fontWeight: "600" },
   emptyMedia: {
     alignItems: "center",
     justifyContent: "center",
@@ -377,7 +449,7 @@ const styles = StyleSheet.create({
   emptyLabel: { fontSize: 16, fontWeight: "600", color: colors.gray500 },
   emptyHint: { fontSize: 13, color: colors.gray400 },
 
-  // Aspect mode toggle
+  // Aspect toggle
   aspectToggleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -405,17 +477,54 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 8,
   },
-  aspectBtnActive: {
-    backgroundColor: colors.black,
+  aspectBtnActive: { backgroundColor: colors.black },
+  aspectBtnText: { fontSize: 13, fontWeight: "600", color: colors.gray600 },
+  aspectBtnTextActive: { color: colors.white },
+
+  // Crop preview
+  cropContainer: {
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    borderCurve: "continuous",
   },
-  aspectBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.gray600,
+  cropImage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
   },
-  aspectBtnTextActive: {
-    color: colors.white,
+  dragOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
   },
+  dragHandle: {
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  cropHint: {
+    fontSize: 12,
+    color: colors.gray400,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  // Original preview
+  originalContainer: {
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    borderCurve: "continuous",
+  },
+  originalImage: {
+    borderRadius: 16,
+  },
+
   aspectHint: {
     fontSize: 12,
     color: colors.gray400,
@@ -423,18 +532,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  // Video preview
-  videoPreviewWrap: {
-    width: "100%",
-    borderRadius: radius.md,
-    overflow: "hidden",
-    backgroundColor: colors.black,
-  },
-  videoPreviewOriginal: {
-    backgroundColor: colors.gray100,
-  },
-
-  changeVideoBtn: {
+  // Change button
+  changeBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -444,12 +543,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     borderRadius: radius.sm,
   },
-  changeVideoBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.black,
-  },
+  changeBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
 
+  // Caption
   captionSection: { gap: 8 },
   sectionLabel: {
     fontSize: 13,
@@ -468,6 +564,8 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: "top",
   },
+
+  // Success
   successWrap: {
     flex: 1,
     backgroundColor: colors.white,

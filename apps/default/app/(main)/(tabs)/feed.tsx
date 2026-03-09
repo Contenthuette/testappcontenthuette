@@ -17,9 +17,7 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import { useIsFocused } from "@react-navigation/native";
 
 const HEADER_HEIGHT = 56;
-const POST_HEADER_HEIGHT = 62;
-const POST_ACTIONS_HEIGHT = 100;
-const FEED_ASPECT = 4 / 3;
+const FEED_ASPECT = 3 / 4; // 3:4 portrait
 
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();
@@ -29,7 +27,7 @@ export default function FeedScreen() {
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const isFocused = useIsFocused();
 
-  // 4:3 is the standard feed height
+  // 3:4 feed media height
   const feedMediaHeight = screenWidth / FEED_ASPECT;
 
   const viewabilityConfig = useRef({
@@ -46,6 +44,26 @@ export default function FeedScreen() {
     [],
   );
 
+  /** Calculate video height from stored aspect ratio */
+  const getVideoNativeHeight = (item: NonNullable<typeof feed>[number]) => {
+    const ar = item.mediaAspectRatio ?? 9 / 16; // default 9:16
+    return screenWidth / ar;
+  };
+
+  /** Calculate translateY for cropped videos */
+  const getCropTranslateY = (item: NonNullable<typeof feed>[number]) => {
+    const nativeHeight = getVideoNativeHeight(item);
+    const overflow = Math.max(0, nativeHeight - feedMediaHeight);
+    const offset = item.cropOffsetY ?? 0.5;
+    return -offset * overflow;
+  };
+
+  /** Get content position for cropped images */
+  const getImagePosition = (item: NonNullable<typeof feed>[number]) => {
+    const offset = item.cropOffsetY ?? 0.5;
+    return { top: `${offset * 100}%` as const };
+  };
+
   const renderAnnouncement = (item: NonNullable<typeof feed>[number]) => (
     <View style={styles.announcementCard} key={item._id}>
       <View style={styles.announcementHeader}>
@@ -61,6 +79,75 @@ export default function FeedScreen() {
       {item.caption && <Text style={styles.announcementText}>{item.caption}</Text>}
     </View>
   );
+
+  const renderMedia = (item: NonNullable<typeof feed>[number]) => {
+    if (!item.mediaUrl) return null;
+
+    const isOriginal = item.aspectMode === "original";
+    const isVideo = item.type === "video";
+
+    if (isVideo) {
+      if (isOriginal) {
+        // Original: video fits inside 3:4 container with contain
+        return (
+          <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
+            <VideoPlayer
+              uri={item.mediaUrl}
+              height={feedMediaHeight}
+              width={screenWidth}
+              autoPlay
+              loop
+              hideControls
+              isVisible={isFocused && visibleVideoId === item._id}
+              contentFit="contain"
+            />
+          </View>
+        );
+      }
+      // Cropped: video fills 3:4 container, positioned with offset
+      const nativeHeight = getVideoNativeHeight(item);
+      const translateY = getCropTranslateY(item);
+      return (
+        <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
+          <View style={{ transform: [{ translateY }] }}>
+            <VideoPlayer
+              uri={item.mediaUrl}
+              height={nativeHeight}
+              width={screenWidth}
+              autoPlay
+              loop
+              hideControls
+              isVisible={isFocused && visibleVideoId === item._id}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    // Photo
+    if (isOriginal) {
+      return (
+        <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
+          <Image
+            source={{ uri: item.mediaUrl }}
+            style={{ width: screenWidth, height: feedMediaHeight }}
+            contentFit="contain"
+            transition={200}
+          />
+        </View>
+      );
+    }
+    // Cropped photo: use contentPosition for precise placement
+    return (
+      <Image
+        source={{ uri: item.mediaUrl }}
+        style={[styles.postImage, { width: screenWidth, height: feedMediaHeight }]}
+        contentFit="cover"
+        contentPosition={getImagePosition(item)}
+        transition={200}
+      />
+    );
+  };
 
   const renderPost = ({ item }: { item: NonNullable<typeof feed>[number] }) => {
     if (item.isAnnouncement) return renderAnnouncement(item);
@@ -83,42 +170,7 @@ export default function FeedScreen() {
         </TouchableOpacity>
 
         {/* Media */}
-        {item.mediaUrl && (
-          item.type === "video" ? (
-            item.aspectMode === "original" ? (
-              // Original mode: show full video centered in 4:3 container with gray bg
-              <View style={[styles.videoWrapOriginal, { width: screenWidth, height: feedMediaHeight }]}>
-                <VideoPlayer
-                  uri={item.mediaUrl}
-                  height={feedMediaHeight}
-                  autoPlay
-                  loop
-                  hideControls
-                  isVisible={isFocused && visibleVideoId === item._id}
-                />
-              </View>
-            ) : (
-              // Cropped mode (default): video fills 4:3 container, overflow hidden
-              <View style={[styles.videoWrapCropped, { width: screenWidth, height: feedMediaHeight }]}>
-                <VideoPlayer
-                  uri={item.mediaUrl}
-                  height={screenWidth * (16 / 9)}
-                  autoPlay
-                  loop
-                  hideControls
-                  isVisible={isFocused && visibleVideoId === item._id}
-                />
-              </View>
-            )
-          ) : (
-            <Image
-              source={{ uri: item.mediaUrl }}
-              style={[styles.postImage, { width: screenWidth, height: screenWidth }]}
-              contentFit="cover"
-              transition={200}
-            />
-          )
-        )}
+        {renderMedia(item)}
 
         {/* Actions */}
         <View style={styles.postActions}>
@@ -209,7 +261,7 @@ export default function FeedScreen() {
             <EmptyState
               icon="photo.on.rectangle"
               title="Dein Feed ist leer"
-              subtitle="Folge Gruppen und Personen, um hier Beiträge zu sehen."
+              subtitle="Folge Gruppen und Personen, um hier Beitraege zu sehen."
             />
           )
         }
@@ -285,21 +337,23 @@ const styles = StyleSheet.create({
   },
   postAuthor: { fontSize: 15, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
   postTime: { fontSize: 12, color: colors.gray400 },
+
+  // Media containers
   postImage: {
     backgroundColor: colors.gray100,
   },
-  videoWrapOriginal: {
+  mediaContainerOriginal: {
     backgroundColor: colors.gray100,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
-  videoWrapCropped: {
+  mediaContainerCropped: {
     backgroundColor: "#000",
     overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
   },
+
+  // Actions
   postActions: {
     flexDirection: "row",
     alignItems: "center",

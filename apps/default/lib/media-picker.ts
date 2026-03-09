@@ -14,6 +14,8 @@ interface PickerResult {
   uri: string;
   mimeType: string;
   fileName: string;
+  width: number;
+  height: number;
 }
 
 function getMediaType(t: MediaType): ImagePicker.MediaType[] {
@@ -45,7 +47,7 @@ export async function pickImage(opts?: PickerOptions): Promise<PickerResult | nu
   if (!ok) return null;
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: getMediaType(opts?.mediaType ?? "images"),
-    allowsEditing: opts?.allowsEditing ?? true,
+    allowsEditing: opts?.allowsEditing ?? false,
     quality: opts?.quality ?? 0.8,
     ...(opts?.aspect ? { aspect: opts.aspect } : {}),
   });
@@ -55,6 +57,8 @@ export async function pickImage(opts?: PickerOptions): Promise<PickerResult | nu
     uri: asset.uri,
     mimeType: asset.mimeType ?? "image/jpeg",
     fileName: asset.fileName ?? "photo.jpg",
+    width: asset.width,
+    height: asset.height,
   };
 }
 
@@ -72,6 +76,8 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     uri: asset.uri,
     mimeType: asset.mimeType ?? "video/mp4",
     fileName: asset.fileName ?? "video.mp4",
+    width: asset.width,
+    height: asset.height,
   };
 }
 
