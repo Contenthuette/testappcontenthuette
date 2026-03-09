@@ -9,7 +9,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 export default function SignupScreen() {
   const [name, setName] = useState("");

@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import type { Id } from "@/convex/_generated/dataModel";
 

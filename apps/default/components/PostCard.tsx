@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import type { Id } from "@/convex/_generated/dataModel";

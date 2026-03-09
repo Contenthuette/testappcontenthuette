@@ -1,7 +1,7 @@
 import React from "react";
 import { View, StyleSheet, Platform } from "react-native";
 import { Tabs } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { colors } from "@/lib/theme";
 import { BlurView } from "expo-blur";
 

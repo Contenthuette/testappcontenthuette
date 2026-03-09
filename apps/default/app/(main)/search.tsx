@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { COUNTIES, CITIES, INTERESTS } from "@/lib/constants";
 
 export default function SearchScreen() {

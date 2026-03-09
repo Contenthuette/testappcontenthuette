@@ -9,7 +9,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 

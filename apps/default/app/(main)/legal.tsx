@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { colors, spacing } from "@/lib/theme";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 const CONTENT: Record<string, { title: string; text: string }> = {
   imprint: {

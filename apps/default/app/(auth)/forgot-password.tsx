@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");

@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { COUNTIES } from "@/lib/constants";
 
 export default function CreateGroupScreen() {

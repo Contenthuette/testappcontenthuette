@@ -8,7 +8,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 const ICON_MAP: Record<string, string> = {
   message: "bubble.left.fill",

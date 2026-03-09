@@ -9,7 +9,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 
 export default function EventsScreen() {

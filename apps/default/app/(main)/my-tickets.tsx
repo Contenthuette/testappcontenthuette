@@ -8,7 +8,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 export default function MyTicketsScreen() {
   const tickets = useQuery(api.events.getMyTickets, {});

@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { Button } from "@/components/Button";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 
 export default function PartnerDetailScreen() {

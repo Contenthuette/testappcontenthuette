@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { colors, spacing, radius } from "@/lib/theme";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 const sections = [
   {

@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View } from "react-native";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,8 +14,8 @@ import {
   SlidersHorizontal,
   Bell,
   BellDot,
+  BellRing,
   MessageCircle,
-  MessageSquare,
   MessagesSquare,
   Send,
   MoreHorizontal,
@@ -23,7 +23,7 @@ import {
   Bookmark,
   Share,
   Camera,
-  Image,
+  Image as ImageIcon,
   Video,
   Mic,
   Phone,
@@ -39,6 +39,7 @@ import {
   User,
   Settings,
   Shield,
+  ShieldCheck,
   Grid3X3,
   Layers,
   ArrowUp,
@@ -57,17 +58,22 @@ import {
   Trash2,
   Flag,
   Ban,
-  ImageOff,
   FileText,
   HelpCircle,
   Info,
   Mail,
   Pencil,
+  PencilLine,
   UserPlus,
   UserMinus,
+  Play,
+  Hand,
+  Images,
+  FileSearch,
   type LucideProps,
 } from "lucide-react-native";
 
+// Map SF Symbol names to Lucide icons
 const iconMap: Record<string, React.FC<LucideProps>> = {
   // Navigation
   "chevron.left": ChevronLeft,
@@ -95,6 +101,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
 
   // Communication
   bell: Bell,
+  "bell.fill": BellRing,
   "bell.badge": BellDot,
   "bubble.right": MessageCircle,
   "bubble.left.and.bubble.right": MessagesSquare,
@@ -117,14 +124,19 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   // Media
   camera: Camera,
   "camera.fill": Camera,
-  photo: Image,
-  "photo.on.rectangle.angled": Image,
+  photo: ImageIcon,
+  "photo.fill": ImageIcon,
+  "photo.on.rectangle.angled": ImageIcon,
+  "photo.on.rectangle": ImageIcon,
+  "photo.stack": Images,
   video: Video,
+  "play.rectangle": Play,
   qrcode: QrCode,
   "square.grid.3x3": Grid3X3,
 
   // People
   "person.circle": UserCircle,
+  "person.circle.fill": UserCircle,
   "person.2": Users,
   "person.3": Users,
   "person.3.fill": Users,
@@ -132,6 +144,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "person.fill": User,
   "person.badge.plus": UserPlus,
   "person.badge.minus": UserMinus,
+  "person.badge.shield.checkmark": ShieldCheck,
 
   // Places & Time
   calendar: Calendar,
@@ -146,28 +159,33 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   // Settings & Security
   gearshape: Settings,
   "shield.checkered": Shield,
+  "lock.shield": Lock,
   lock: Lock,
   "lock.fill": Lock,
   eye: Eye,
   "eye.slash": EyeOff,
+  "hand.raised": Hand,
 
-  // Buildings & Places
+  // Buildings
   "building.2": Building2,
   "building.2.fill": Building2,
 
   // Misc
   "rectangle.stack": Layers,
-  "creditcard": CreditCard,
+  "rectangle.stack.fill": Layers,
+  creditcard: CreditCard,
   trash: Trash2,
   "trash.fill": Trash2,
-  "nosign": Ban,
-  "photo.fill": Image,
+  nosign: Ban,
   "doc.text": FileText,
+  "doc.plaintext": FileText,
+  "doc.text.magnifyingglass": FileSearch,
   "questionmark.circle": HelpCircle,
   "info.circle": Info,
   "exclamationmark.triangle.fill": AlertTriangle,
-  "envelope": Mail,
-  "pencil": Pencil,
+  envelope: Mail,
+  pencil: Pencil,
+  "pencil.circle": PencilLine,
 };
 
 interface SymbolViewProps {
@@ -187,6 +205,7 @@ export function SymbolView({
 }: SymbolViewProps) {
   const LucideIcon = iconMap[name];
 
+  // Fallback: render a visible circle with a question mark instead of empty
   if (!LucideIcon) {
     return (
       <View
@@ -201,7 +220,9 @@ export function SymbolView({
           },
           style,
         ]}
-      />
+      >
+        <HelpCircle size={size * 0.7} color={tintColor} strokeWidth={1.5} />
+      </View>
     );
   }
 

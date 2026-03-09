@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { colors, spacing } from "@/lib/theme";
 
 interface EmptyStateProps {

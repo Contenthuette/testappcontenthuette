@@ -9,7 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 export default function ConversationsScreen() {
   const conversations = useQuery(api.messaging.listConversations, {});

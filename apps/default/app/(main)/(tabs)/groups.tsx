@@ -11,7 +11,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
 import { EmptyState } from "@/components/EmptyState";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 

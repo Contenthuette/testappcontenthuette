@@ -8,7 +8,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Avatar } from "@/components/Avatar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 export default function EditProfileScreen() {
   const me = useQuery(api.users.me);

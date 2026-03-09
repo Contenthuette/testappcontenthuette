@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 
 export default function AdminUsersScreen() {
   const users = useQuery(api.admin.listUsers, {});

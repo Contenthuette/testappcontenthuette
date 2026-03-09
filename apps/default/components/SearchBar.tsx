@@ -1,6 +1,6 @@
 import React from "react";
 import { View, TextInput, StyleSheet, TouchableOpacity } from "react-native";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 
 interface SearchBarProps {

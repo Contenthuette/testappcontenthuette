@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 
 export default function ModerationScreen() {
