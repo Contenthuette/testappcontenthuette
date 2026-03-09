@@ -24,11 +24,14 @@ import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 
 type PostType = "photo" | "video";
+type AspectMode = "original" | "cropped";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
   photo: { title: "Foto posten", pickLabel: "Foto auswaehlen", icon: "photo" },
   video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
 };
+
+const FEED_ASPECT = 4 / 3;
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type?: string }>();
@@ -46,8 +49,11 @@ export default function CreatePostScreen() {
   const [picking, setPicking] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
+  const [aspectMode, setAspectMode] = useState<AspectMode>("cropped");
 
-  const videoPreviewHeight = (width - spacing.lg * 2) * (16 / 9);
+  const previewWidth = width - spacing.lg * 2;
+  const croppedPreviewHeight = previewWidth / FEED_ASPECT;
+  const originalPreviewHeight = previewWidth * (16 / 9);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -76,6 +82,13 @@ export default function CreatePostScreen() {
     }
   };
 
+  const handleAspectToggle = (mode: AspectMode) => {
+    setAspectMode(mode);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
   const handlePublish = async () => {
     if (!mediaFile) return;
     setPublishing(true);
@@ -87,6 +100,7 @@ export default function CreatePostScreen() {
         type: postType,
         caption: caption.trim() || undefined,
         mediaStorageId: storageId as never,
+        aspectMode: postType === "video" ? aspectMode : undefined,
       });
 
       if (Platform.OS !== "web") {
@@ -116,6 +130,88 @@ export default function CreatePostScreen() {
       </View>
     );
   }
+
+  const renderVideoPreview = () => {
+    if (!mediaPreview) return null;
+    const isCropped = aspectMode === "cropped";
+    const containerHeight = isCropped ? croppedPreviewHeight : originalPreviewHeight;
+
+    return (
+      <View>
+        {/* Aspect mode toggle */}
+        <View style={styles.aspectToggleRow}>
+          <Text style={styles.aspectLabel}>Format</Text>
+          <View style={styles.aspectToggle}>
+            <TouchableOpacity
+              style={[
+                styles.aspectBtn,
+                isCropped && styles.aspectBtnActive,
+              ]}
+              onPress={() => handleAspectToggle("cropped")}
+              activeOpacity={0.7}
+            >
+              <Icon name="crop" size={14} tintColor={isCropped ? colors.white : colors.gray600} />
+              <Text style={[styles.aspectBtnText, isCropped && styles.aspectBtnTextActive]}>
+                4:3 anpassen
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.aspectBtn,
+                !isCropped && styles.aspectBtnActive,
+              ]}
+              onPress={() => handleAspectToggle("original")}
+              activeOpacity={0.7}
+            >
+              <Icon name="arrow.up.left.and.arrow.down.right" size={14} tintColor={!isCropped ? colors.white : colors.gray600} />
+              <Text style={[styles.aspectBtnText, !isCropped && styles.aspectBtnTextActive]}>
+                Original
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Video preview */}
+        <View
+          style={[
+            styles.videoPreviewWrap,
+            { height: containerHeight },
+            !isCropped && styles.videoPreviewOriginal,
+          ]}
+        >
+          <VideoPlayer
+            uri={mediaPreview}
+            height={isCropped ? containerHeight : originalPreviewHeight}
+            autoPlay={false}
+            muted={false}
+          />
+        </View>
+
+        <Text style={styles.aspectHint}>
+          {isCropped
+            ? "Das Video wird auf 4:3 zugeschnitten und fuellt den Feed."
+            : "Das Video wird im Originalformat mit seitlichen Raendern angezeigt."}
+        </Text>
+
+        {/* Change button */}
+        <TouchableOpacity
+          style={styles.changeVideoBtn}
+          onPress={handlePick}
+          disabled={picking || publishing}
+          activeOpacity={0.7}
+        >
+          {picking ? (
+            <ActivityIndicator size="small" color={colors.black} />
+          ) : (
+            <>
+              <Icon name="arrow.triangle.2.circlepath" size={16} tintColor={colors.black} />
+              <Text style={styles.changeVideoBtnText}>Anderes Video</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -151,42 +247,16 @@ export default function CreatePostScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          style={[
-            styles.mediaArea,
-            postType === "video" && mediaPreview ? styles.mediaAreaVideo : undefined,
-          ]}
-          onPress={handlePick}
-          disabled={picking || publishing}
-          activeOpacity={0.7}
-        >
-          {mediaPreview ? (
-            postType === "video" ? (
-              <View style={[styles.videoPreviewWrap, { height: videoPreviewHeight }]}>
-                <VideoPlayer
-                  uri={mediaPreview}
-                  height={videoPreviewHeight}
-                  autoPlay={false}
-                  muted={false}
-                />
-                <View style={styles.videoChangeBtnWrap}>
-                  <TouchableOpacity
-                    style={styles.changeBadge}
-                    onPress={handlePick}
-                    disabled={picking || publishing}
-                  >
-                    {picking ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <>
-                        <Icon name="camera" size={14} tintColor={colors.white} />
-                        <Text style={styles.changeBadgeText}>Aendern</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
+        {postType === "video" && mediaPreview ? (
+          renderVideoPreview()
+        ) : (
+          <TouchableOpacity
+            style={styles.mediaArea}
+            onPress={handlePick}
+            disabled={picking || publishing}
+            activeOpacity={0.7}
+          >
+            {mediaPreview ? (
               <View style={styles.previewWrap}>
                 <Image
                   source={{ uri: mediaPreview }}
@@ -204,20 +274,20 @@ export default function CreatePostScreen() {
                   )}
                 </View>
               </View>
-            )
-          ) : picking ? (
-            <View style={styles.emptyMedia}>
-              <ActivityIndicator size="large" color={colors.gray400} />
-              <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
-            </View>
-          ) : (
-            <View style={styles.emptyMedia}>
-              <Icon name={config.icon} size={40} tintColor={colors.gray400} />
-              <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
-              <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwaehlen</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            ) : picking ? (
+              <View style={styles.emptyMedia}>
+                <ActivityIndicator size="large" color={colors.gray400} />
+                <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyMedia}>
+                <Icon name={config.icon} size={40} tintColor={colors.gray400} />
+                <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
+                <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwaehlen</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View style={styles.captionSection}>
           <Text style={styles.sectionLabel}>Beschreibung</Text>
@@ -279,10 +349,6 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     minHeight: 260,
   },
-  mediaAreaVideo: {
-    borderStyle: "solid",
-    borderColor: colors.gray200,
-  },
   previewWrap: { position: "relative", minHeight: 260 },
   previewImage: { width: "100%", height: 300, borderRadius: radius.md },
   previewOverlay: {
@@ -291,21 +357,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.2)",
     borderRadius: radius.md,
-  },
-  videoPreviewWrap: {
-    position: "relative",
-    width: "100%",
-    borderRadius: radius.md,
-    overflow: "hidden",
-    backgroundColor: colors.black,
-  },
-  videoChangeBtnWrap: {
-    position: "absolute",
-    bottom: 16,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 10,
   },
   changeBadge: {
     flexDirection: "row",
@@ -325,6 +376,80 @@ const styles = StyleSheet.create({
   },
   emptyLabel: { fontSize: 16, fontWeight: "600", color: colors.gray500 },
   emptyHint: { fontSize: 13, color: colors.gray400 },
+
+  // Aspect mode toggle
+  aspectToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  aspectLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  aspectToggle: {
+    flexDirection: "row",
+    backgroundColor: colors.gray100,
+    borderRadius: 10,
+    padding: 3,
+  },
+  aspectBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  aspectBtnActive: {
+    backgroundColor: colors.black,
+  },
+  aspectBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray600,
+  },
+  aspectBtnTextActive: {
+    color: colors.white,
+  },
+  aspectHint: {
+    fontSize: 12,
+    color: colors.gray400,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  // Video preview
+  videoPreviewWrap: {
+    width: "100%",
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: colors.black,
+  },
+  videoPreviewOriginal: {
+    backgroundColor: colors.gray100,
+  },
+
+  changeVideoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+  },
+  changeVideoBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.black,
+  },
+
   captionSection: { gap: 8 },
   sectionLabel: {
     fontSize: 13,

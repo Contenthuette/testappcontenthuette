@@ -94,6 +94,7 @@ export default defineSchema({
     mediaUrl: v.optional(v.string()),
     thumbnailStorageId: v.optional(v.id("_storage")),
     thumbnailUrl: v.optional(v.string()),
+    aspectMode: v.optional(v.union(v.literal("original"), v.literal("cropped"))),
     likeCount: v.number(),
     commentCount: v.number(),
     isPinned: v.boolean(),

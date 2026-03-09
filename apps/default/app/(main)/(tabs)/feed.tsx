@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   useWindowDimensions, ActivityIndicator, ViewToken,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -19,19 +19,18 @@ import { useIsFocused } from "@react-navigation/native";
 const HEADER_HEIGHT = 56;
 const POST_HEADER_HEIGHT = 62;
 const POST_ACTIONS_HEIGHT = 100;
+const FEED_ASPECT = 4 / 3;
 
 export default function FeedScreen() {
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const feed = useQuery(api.posts.feed, {});
   const toggleLike = useMutation(api.posts.toggleLike);
   const toggleSave = useMutation(api.posts.toggleSave);
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const isFocused = useIsFocused();
 
-  // Calculate max video height so the full video + header + actions fit on screen
-  const maxVideoHeight = screenHeight - insets.top - insets.bottom - HEADER_HEIGHT - POST_HEADER_HEIGHT - POST_ACTIONS_HEIGHT;
-  const videoHeight = Math.min(screenWidth * (16 / 9), maxVideoHeight);
+  // 4:3 is the standard feed height
+  const feedMediaHeight = screenWidth / FEED_ASPECT;
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 60,
@@ -86,16 +85,31 @@ export default function FeedScreen() {
         {/* Media */}
         {item.mediaUrl && (
           item.type === "video" ? (
-            <View style={[styles.videoWrap, { width: screenWidth }]}>
-              <VideoPlayer
-                uri={item.mediaUrl}
-                height={videoHeight}
-                autoPlay
-                loop
-                hideControls
-                isVisible={isFocused && visibleVideoId === item._id}
-              />
-            </View>
+            item.aspectMode === "original" ? (
+              // Original mode: show full video centered in 4:3 container with gray bg
+              <View style={[styles.videoWrapOriginal, { width: screenWidth, height: feedMediaHeight }]}>
+                <VideoPlayer
+                  uri={item.mediaUrl}
+                  height={feedMediaHeight}
+                  autoPlay
+                  loop
+                  hideControls
+                  isVisible={isFocused && visibleVideoId === item._id}
+                />
+              </View>
+            ) : (
+              // Cropped mode (default): video fills 4:3 container, overflow hidden
+              <View style={[styles.videoWrapCropped, { width: screenWidth, height: feedMediaHeight }]}>
+                <VideoPlayer
+                  uri={item.mediaUrl}
+                  height={screenWidth * (16 / 9)}
+                  autoPlay
+                  loop
+                  hideControls
+                  isVisible={isFocused && visibleVideoId === item._id}
+                />
+              </View>
+            )
           ) : (
             <Image
               source={{ uri: item.mediaUrl }}
@@ -274,9 +288,17 @@ const styles = StyleSheet.create({
   postImage: {
     backgroundColor: colors.gray100,
   },
-  videoWrap: {
+  videoWrapOriginal: {
+    backgroundColor: colors.gray100,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoWrapCropped: {
     backgroundColor: "#000",
     overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
   postActions: {
     flexDirection: "row",
