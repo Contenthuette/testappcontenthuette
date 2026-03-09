@@ -3,6 +3,14 @@ import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 
+export const generateUploadUrl = authMutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 async function getMyUserId(ctx: any): Promise<Id<"users"> | null> {
   const authId = ctx.user._id;
   const user = await ctx.db.query("users").withIndex("by_authId", (q: any) => q.eq("authId", authId)).unique();

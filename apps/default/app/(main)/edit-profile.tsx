@@ -1,292 +1,315 @@
 import React, { useState, useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
+  View, Text, StyleSheet, TouchableOpacity, TextInput,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
-import { safeBack } from "@/lib/navigation";
-import { Button } from "@/components/Button";
-import { Input } from "@/components/Input";
+import { colors, spacing, radius, shadows, theme } from "@/lib/theme";
+import { SymbolView } from "@/components/Icon";
 import { Avatar } from "@/components/Avatar";
-import { Icon } from "@/components/Icon";
-import { pickImage, type MediaResult } from "@/lib/media-picker";
+import { safeBack } from "@/lib/navigation";
+import { pickImage, uploadToConvex } from "@/lib/media-picker";
+import type { MediaResult } from "@/lib/media-picker";
 
 export default function EditProfileScreen() {
-  const me = useQuery(api.users.me);
-  const updateProfile = useMutation(api.users.updateProfile);
+  const router = useRouter();
+  const user = useQuery(api.users.me);
   const generateUploadUrl = useMutation(api.users.generateUploadUrl);
+  const updateProfile = useMutation(api.users.updateProfile);
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(false);
 
-  // Media states
-  const [avatarLocal, setAvatarLocal] = useState<MediaResult | null>(null);
-  const [bannerLocal, setBannerLocal] = useState<MediaResult | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarMedia, setAvatarMedia] = useState<MediaResult | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [bannerMedia, setBannerMedia] = useState<MediaResult | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (me) {
-      setName(me.name ?? "");
-      setBio(me.bio ?? "");
-      setCity(me.city ?? "");
+    if (user) {
+      setName(user.name ?? "");
+      setBio(user.bio ?? "");
+      setCounty(user.county ?? "");
+      setCity(user.city ?? "");
+      if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
+      if (user.bannerUrl) setBannerPreview(user.bannerUrl);
     }
-  }, [me?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]);
 
-  const handlePickAvatar = async () => {
+  async function handlePickAvatar() {
     try {
-      const result = await pickImage({ aspect: [1, 1] });
-      if (result) setAvatarLocal(result);
-    } catch (e) {
-      if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Bild konnte nicht ausgewählt werden.");
+      const result = await pickImage();
+      if (result) {
+        setAvatarMedia(result);
+        setAvatarPreview(result.uri);
       }
+    } catch {
+      // user cancelled
     }
-  };
+  }
 
-  const handlePickBanner = async () => {
+  async function handlePickBanner() {
     try {
-      const result = await pickImage({ aspect: [16, 5] });
-      if (result) setBannerLocal(result);
-    } catch (e) {
-      if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Bannerbild konnte nicht ausgewählt werden.");
+      const result = await pickImage();
+      if (result) {
+        setBannerMedia(result);
+        setBannerPreview(result.uri);
       }
+    } catch {
+      // user cancelled
     }
-  };
+  }
 
-  const uploadFile = async (media: MediaResult): Promise<string> => {
-    const uploadUrl = await generateUploadUrl();
-    const response = await fetch(media.uri);
-    const blob = await response.blob();
-    const result = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { "Content-Type": media.mimeType || "image/jpeg" },
-      body: blob,
-    });
-    if (!result.ok) throw new Error("Upload fehlgeschlagen");
-    const { storageId } = await result.json();
-    return storageId;
-  };
-
-  const handleSave = async () => {
-    setLoading(true);
+  async function handleSave() {
+    setIsSaving(true);
     try {
-      const updates: Record<string, unknown> = {
+      let avatarStorageId: string | undefined;
+      let bannerStorageId: string | undefined;
+
+      if (avatarMedia) {
+        avatarStorageId = await uploadToConvex(
+          () => generateUploadUrl(),
+          avatarMedia.uri,
+          avatarMedia.mimeType
+        );
+      }
+      if (bannerMedia) {
+        bannerStorageId = await uploadToConvex(
+          () => generateUploadUrl(),
+          bannerMedia.uri,
+          bannerMedia.mimeType
+        );
+      }
+
+      await updateProfile({
         name: name.trim() || undefined,
         bio: bio.trim() || undefined,
+        county: county.trim() || undefined,
         city: city.trim() || undefined,
-      };
+        ...(avatarStorageId ? { avatarStorageId: avatarStorageId as unknown as ReturnType<typeof updateProfile> extends Promise<unknown> ? string : string } : {}),
+        ...(bannerStorageId ? { bannerStorageId: bannerStorageId as unknown as ReturnType<typeof updateProfile> extends Promise<unknown> ? string : string } : {}),
+      });
 
-      // Upload avatar if changed
-      if (avatarLocal) {
-        setUploadingAvatar(true);
-        const storageId = await uploadFile(avatarLocal);
-        updates.avatarStorageId = storageId;
-        setUploadingAvatar(false);
-      }
-
-      // Upload banner if changed
-      if (bannerLocal) {
-        setUploadingBanner(true);
-        const storageId = await uploadFile(bannerLocal);
-        updates.bannerStorageId = storageId;
-        setUploadingBanner(false);
-      }
-
-      await updateProfile(updates as Parameters<typeof updateProfile>[0]);
-      setSaved(true);
-      setTimeout(() => safeBack("edit-profile"), 600);
-    } catch (e) {
+      safeBack(router, "/(main)/(tabs)/profile");
+    } catch {
       if (Platform.OS !== "web") {
+        const { Alert } = require("react-native");
         Alert.alert("Fehler", "Profil konnte nicht gespeichert werden.");
       }
-    } finally {
-      setLoading(false);
-      setUploadingAvatar(false);
-      setUploadingBanner(false);
+      setIsSaving(false);
     }
-  };
+  }
 
-  const avatarUri = avatarLocal?.uri ?? me?.avatarUrl;
-  const bannerUri = bannerLocal?.uri ?? me?.bannerUrl;
+  if (user === undefined) {
+    return (
+      <View style={s.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.black} />
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => safeBack("edit-profile")} hitSlop={12}>
-            <Text style={styles.cancelText}>Abbrechen</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Profil bearbeiten</Text>
-          <View style={{ width: 70 }} />
-        </View>
-
-        {/* Banner */}
+    <KeyboardAvoidingView
+      style={s.root}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      {/* Header */}
+      <View style={s.header}>
         <TouchableOpacity
-          style={styles.bannerContainer}
-          onPress={handlePickBanner}
-          activeOpacity={0.7}
+          onPress={() => safeBack(router, "/(main)/(tabs)/profile")}
+          style={s.headerBtn}
         >
-          {bannerUri ? (
-            <Image source={{ uri: bannerUri }} style={styles.bannerImage} contentFit="cover" />
+          <SymbolView name="xmark" size={20} tintColor={theme.text} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Profil bearbeiten</Text>
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={isSaving}
+          style={[s.saveBtn, isSaving && s.saveBtnDisabled]}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <View style={styles.bannerPlaceholder}>
-              <Icon name="panorama" size={28} color={colors.textTertiary} />
+            <Text style={s.saveText}>Speichern</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={s.bodyContent}>
+        {/* Banner */}
+        <TouchableOpacity style={s.bannerArea} onPress={handlePickBanner} activeOpacity={0.7}>
+          {bannerPreview ? (
+            <Image source={{ uri: bannerPreview }} style={s.bannerImage} contentFit="cover" />
+          ) : (
+            <View style={s.bannerPlaceholder}>
+              <SymbolView name="photo.fill" size={28} tintColor={colors.gray400} />
+              <Text style={s.bannerHint}>Banner antippen zum Ändern</Text>
             </View>
           )}
-          <View style={styles.bannerOverlay}>
-            {uploadingBanner ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Icon name="camera.fill" size={16} color="#fff" />
-            )}
+          <View style={s.bannerOverlay}>
+            <SymbolView name="camera.fill" size={16} tintColor={colors.white} />
           </View>
         </TouchableOpacity>
 
         {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity
-            onPress={handlePickAvatar}
-            activeOpacity={0.7}
-            style={styles.avatarTouchable}
-          >
-            {avatarUri ? (
-              <Image
-                source={{ uri: avatarUri }}
-                style={styles.avatarImage}
-                contentFit="cover"
-              />
-            ) : (
-              <Avatar uri={undefined} name={me?.name} size={90} />
-            )}
-            <View style={styles.avatarBadge}>
-              {uploadingAvatar ? (
-                <ActivityIndicator size="small" color="#fff" />
+        <View style={s.avatarSection}>
+          <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.7}>
+            <View style={s.avatarWrapper}>
+              {avatarPreview ? (
+                <Image
+                  source={{ uri: avatarPreview }}
+                  style={s.avatar}
+                  contentFit="cover"
+                />
               ) : (
-                <Icon name="camera.fill" size={14} color="#fff" />
+                <Avatar name={name || "?"} size={90} />
               )}
+              <View style={s.avatarBadge}>
+                <SymbolView name="camera.fill" size={14} tintColor={colors.white} />
+              </View>
             </View>
           </TouchableOpacity>
-          <Text style={styles.changePhotoHint}>Tippe zum Ändern</Text>
+          <Text style={s.avatarHint}>Tippe zum Ändern</Text>
         </View>
 
-        <Input label="Name" value={name} onChangeText={setName} placeholder="Dein Name" />
-        <Input
-          label="Bio"
-          value={bio}
-          onChangeText={setBio}
-          placeholder="Erzähle etwas über dich"
-          multiline
-          numberOfLines={3}
-          style={{ minHeight: 80, textAlignVertical: "top" }}
-        />
-        <Input label="Stadt" value={city} onChangeText={setCity} placeholder="z.B. Schwerin" />
+        {/* Form fields */}
+        <View style={s.formSection}>
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>Name</Text>
+            <TextInput
+              style={s.fieldInput}
+              value={name}
+              onChangeText={setName}
+              placeholder="Dein Name"
+              placeholderTextColor={colors.gray400}
+            />
+          </View>
 
-        <Button
-          title={saved ? "✓ Gespeichert" : "Speichern"}
-          onPress={handleSave}
-          loading={loading}
-          fullWidth
-          size="lg"
-          style={{ marginTop: spacing.xl }}
-        />
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>Bio</Text>
+            <TextInput
+              style={[s.fieldInput, s.fieldInputMulti]}
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Erzähle etwas über dich..."
+              placeholderTextColor={colors.gray400}
+              multiline
+              maxLength={200}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>Landkreis</Text>
+            <TextInput
+              style={s.fieldInput}
+              value={county}
+              onChangeText={setCounty}
+              placeholder="z.B. Rostock"
+              placeholderTextColor={colors.gray400}
+            />
+          </View>
+
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>Stadt</Text>
+            <TextInput
+              style={s.fieldInput}
+              value={city}
+              onChangeText={setCity}
+              placeholder="z.B. Warnemünde"
+              placeholderTextColor={colors.gray400}
+            />
+          </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {isSaving && (
+        <View style={s.overlay}>
+          <View style={s.overlayCard}>
+            <ActivityIndicator size="large" color={colors.black} />
+            <Text style={s.overlayText}>Profil wird gespeichert...</Text>
+          </View>
+        </View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingHorizontal: spacing.xl, paddingBottom: 40 },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.white },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.lg,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: spacing.lg, paddingTop: 60, paddingBottom: spacing.md,
+    backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.gray200,
   },
-  cancelText: { fontSize: 16, color: colors.textSecondary },
-  title: { fontSize: 17, fontWeight: "600", color: colors.textPrimary },
-
-  // Banner
-  bannerContainer: {
-    width: "100%",
-    height: 120,
-    borderRadius: 16,
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.gray100,
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
+  saveBtn: {
+    backgroundColor: colors.black,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+    borderRadius: radius.full, minWidth: 90, alignItems: "center",
+  },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveText: { color: colors.white, fontWeight: "600", fontSize: 15 },
+  bodyContent: { paddingBottom: 40 },
+  bannerArea: {
+    width: "100%", height: 160, backgroundColor: colors.gray100,
     overflow: "hidden",
-    backgroundColor: colors.surface,
-    marginBottom: -40,
-    ...shadows.sm,
   },
-  bannerImage: {
-    width: "100%",
-    height: "100%",
-  },
+  bannerImage: { width: "100%", height: "100%" },
   bannerPlaceholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
+    flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.xs,
   },
+  bannerHint: { fontSize: 13, color: colors.gray400 },
   bannerOverlay: {
-    position: "absolute",
-    bottom: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
+    position: "absolute", bottom: spacing.sm, right: spacing.sm,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center",
   },
-
-  // Avatar
-  avatarSection: {
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.xxl,
-    zIndex: 2,
-  },
-  avatarTouchable: {
-    position: "relative",
-  },
-  avatarImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 3,
-    borderColor: colors.background,
-  },
+  avatarSection: { alignItems: "center", marginTop: -45, gap: spacing.xs },
+  avatarWrapper: { position: "relative" },
+  avatar: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: colors.white },
   avatarBadge: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.textPrimary,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: colors.background,
+    position: "absolute", bottom: 0, right: 0,
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: colors.black, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: colors.white,
   },
-  changePhotoHint: {
-    fontSize: 13,
-    color: colors.textTertiary,
+  avatarHint: { fontSize: 12, color: colors.gray400 },
+  formSection: { padding: spacing.lg, gap: spacing.lg },
+  fieldGroup: { gap: spacing.xs },
+  fieldLabel: {
+    fontSize: 13, fontWeight: "600", color: colors.gray500,
+    textTransform: "uppercase", letterSpacing: 0.5,
   },
+  fieldInput: {
+    backgroundColor: colors.gray50, borderRadius: radius.md,
+    padding: spacing.md, fontSize: 16, color: colors.black,
+    borderWidth: 1, borderColor: colors.gray200,
+  },
+  fieldInputMulti: { minHeight: 80 },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlay,
+    alignItems: "center", justifyContent: "center",
+  },
+  overlayCard: {
+    backgroundColor: colors.white, borderRadius: radius.xl,
+    padding: spacing.xxl, alignItems: "center", gap: spacing.lg,
+    ...shadows.lg,
+  },
+  overlayText: { fontSize: 16, fontWeight: "600", color: colors.black },
 });

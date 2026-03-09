@@ -1,122 +1,91 @@
 import { Platform, Alert } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
-/**
- * Cross-platform media picker using expo-image-picker.
- * Handles permissions, selection, and error states.
- */
-
-interface PickMediaOptions {
-  /** "image" | "video" | "both" */
-  type?: "image" | "video" | "both";
-  /** Allow editing/cropping */
-  allowsEditing?: boolean;
-  /** Quality 0-1 */
-  quality?: number;
-  /** Aspect ratio for editing */
-  aspect?: [number, number];
-}
-
-interface PickedMedia {
+export interface MediaResult {
   uri: string;
   type: "image" | "video";
   mimeType: string;
   width?: number;
   height?: number;
   duration?: number;
-  fileName?: string;
 }
 
-/**
- * Pick media from the device library.
- * Returns null if the user cancels.
- */
-export async function pickMedia(
-  options: PickMediaOptions = {}
-): Promise<PickedMedia | null> {
-  try {
-    const ImagePicker = await import("expo-image-picker");
-
-    // Request permission
-    const { status } =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      if (Platform.OS !== "web") {
-        Alert.alert(
-          "Berechtigung benötigt",
-          "Bitte erlaube den Zugriff auf deine Fotos in den Einstellungen."
-        );
-      }
-      return null;
-    }
-
-    const mediaTypes =
-      options.type === "video"
-        ? ImagePicker.MediaTypeOptions.Videos
-        : options.type === "both"
-          ? ImagePicker.MediaTypeOptions.All
-          : ImagePicker.MediaTypeOptions.Images;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes,
-      allowsEditing: options.allowsEditing ?? true,
-      quality: options.quality ?? 0.8,
-      aspect: options.aspect,
-    });
-
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      return null;
-    }
-
-    const asset = result.assets[0];
-    const isVideo = asset.type === "video";
-
-    return {
-      uri: asset.uri,
-      type: isVideo ? "video" : "image",
-      mimeType: asset.mimeType ?? (isVideo ? "video/mp4" : "image/jpeg"),
-      width: asset.width,
-      height: asset.height,
-      duration: asset.duration ?? undefined,
-      fileName: asset.fileName ?? undefined,
-    };
-  } catch (error) {
-    console.error("Media picker error:", error);
+async function ensurePermission(): Promise<boolean> {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== "granted") {
     if (Platform.OS !== "web") {
-      Alert.alert("Fehler", "Medien konnten nicht geladen werden.");
+      Alert.alert(
+        "Zugriff benötigt",
+        "Bitte erlaube den Zugriff auf deine Fotos in den Einstellungen."
+      );
     }
-    return null;
+    return false;
   }
+  return true;
 }
 
-/**
- * Upload a picked media file to Convex file storage.
- * Returns the storageId on success, null on failure.
- */
-export async function uploadMedia(
-  uploadUrl: string,
-  media: PickedMedia
-): Promise<string | null> {
-  try {
-    const response = await fetch(media.uri);
-    const blob = await response.blob();
+export async function pickImage(): Promise<MediaResult | null> {
+  const ok = await ensurePermission();
+  if (!ok) return null;
 
-    const uploadResponse = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { "Content-Type": media.mimeType },
-      body: blob,
-    });
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    allowsEditing: true,
+    quality: 0.8,
+  });
 
-    if (!uploadResponse.ok) {
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
-    }
+  if (result.canceled || !result.assets?.[0]) return null;
 
-    const result = (await uploadResponse.json()) as { storageId: string };
-    return result.storageId;
-  } catch (error) {
-    console.error("Upload error:", error);
-    if (Platform.OS !== "web") {
-      Alert.alert("Upload fehlgeschlagen", "Das Medium konnte nicht hochgeladen werden. Bitte versuche es erneut.");
-    }
-    return null;
+  const asset = result.assets[0];
+  return {
+    uri: asset.uri,
+    type: "image",
+    mimeType: asset.mimeType ?? "image/jpeg",
+    width: asset.width,
+    height: asset.height,
+  };
+}
+
+export async function pickVideo(): Promise<MediaResult | null> {
+  const ok = await ensurePermission();
+  if (!ok) return null;
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["videos"],
+    allowsEditing: true,
+    quality: 0.7,
+    videoMaxDuration: 120,
+  });
+
+  if (result.canceled || !result.assets?.[0]) return null;
+
+  const asset = result.assets[0];
+  return {
+    uri: asset.uri,
+    type: "video",
+    mimeType: asset.mimeType ?? "video/mp4",
+    width: asset.width,
+    height: asset.height,
+    duration: asset.duration ?? undefined,
+  };
+}
+
+export async function uploadToConvex(
+  generateUrl: () => Promise<string>,
+  uri: string,
+  mimeType: string
+): Promise<string> {
+  const uploadUrl = await generateUrl();
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { "Content-Type": mimeType },
+    body: blob,
+  });
+  if (!uploadResponse.ok) {
+    throw new Error("Upload fehlgeschlagen");
   }
+  const { storageId } = (await uploadResponse.json()) as { storageId: string };
+  return storageId;
 }
