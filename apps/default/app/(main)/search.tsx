@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { COUNTIES, CITIES, INTERESTS } from "@/lib/constants";
 
@@ -23,7 +24,7 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeBack("search")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <SymbolView name="slider.horizontal.3" size={20} tintColor={colors.black} />
@@ -77,7 +78,7 @@ export default function SearchScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.applyBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.applyBtn} onPress={() => safeBack("search")}>
           <Text style={styles.applyText}>Filter anwenden</Text>
         </TouchableOpacity>
       </ScrollView>

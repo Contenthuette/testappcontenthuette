@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
@@ -24,7 +25,7 @@ export default function UserProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.banner}>
           <View style={styles.bannerPlaceholder} />
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("user-profile")}>
             <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
         </View>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { SymbolView } from "@/components/Icon";
@@ -21,7 +22,7 @@ export default function ForgotPasswordScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeBack("forgot-password")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
 

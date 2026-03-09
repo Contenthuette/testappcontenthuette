@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -15,7 +16,7 @@ export default function ModerationScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeBack("moderation")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>Moderation</Text>

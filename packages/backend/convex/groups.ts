@@ -248,3 +248,54 @@ export const getMyMembership = authQuery({
     return { _id: membership._id, role: membership.role, status: membership.status };
   },
 });
+
+export const update = authMutation({
+  args: {
+    groupId: v.id("groups"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    county: v.optional(v.string()),
+    city: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("invite_only"))),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
+    const group = await ctx.db.get(args.groupId);
+    if (!group) throw new Error("Group not found");
+
+    // Verify user is admin of this group
+    const membership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", (q: any) => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (!membership || membership.role !== "admin") {
+      throw new Error("Only group admins can edit this group");
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (args.name !== undefined) patch.name = args.name;
+    if (args.description !== undefined) patch.description = args.description;
+    if (args.county !== undefined) patch.county = args.county;
+    if (args.city !== undefined) patch.city = args.city;
+    if (args.topic !== undefined) patch.topic = args.topic;
+    if (args.visibility !== undefined) patch.visibility = args.visibility;
+    if (args.thumbnailStorageId !== undefined) patch.thumbnailStorageId = args.thumbnailStorageId;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.groupId, patch);
+    }
+    return null;
+  },
+});
+
+export const generateUploadUrl = authMutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});

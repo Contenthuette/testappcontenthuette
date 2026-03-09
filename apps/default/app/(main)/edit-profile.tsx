@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Avatar } from "@/components/Avatar";
@@ -36,7 +37,7 @@ export default function EditProfileScreen() {
         city: city.trim() || undefined,
       });
       setSaved(true);
-      setTimeout(() => router.back(), 600);
+      setTimeout(() => safeBack("edit-profile"), 600);
     } catch (e) {
       // handle error
     } finally {
@@ -49,7 +50,7 @@ export default function EditProfileScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <TouchableOpacity onPress={() => safeBack("edit-profile")} style={styles.backBtn} hitSlop={12}>
             <Text style={styles.cancelText}>Abbrechen</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Profil bearbeiten</Text>

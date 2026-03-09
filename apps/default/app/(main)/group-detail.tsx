@@ -7,10 +7,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
+import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
 
 export default function GroupDetailScreen() {
@@ -29,10 +30,11 @@ export default function GroupDetailScreen() {
   }
 
   const isMember = membership?.status === "active";
+  const isAdmin = membership?.role === "admin";
 
   const handleJoin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try { await joinGroup({ groupId: id as Id<"groups"> }); } catch (e) { /* already member */ }
+    try { await joinGroup({ groupId: id as Id<"groups"> }); } catch { /* already member */ }
   };
 
   return (
@@ -48,9 +50,18 @@ export default function GroupDetailScreen() {
             </View>
           )}
           <View style={styles.heroOverlay} />
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("group-detail")}>
             <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
+          {/* Admin edit button */}
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => router.push({ pathname: "/(main)/edit-group", params: { id: id! } })}
+            >
+              <SymbolView name="pencil" size={16} tintColor={colors.black} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.content}>
@@ -72,6 +83,19 @@ export default function GroupDetailScreen() {
 
           {group.description && (
             <Text style={styles.desc}>{group.description}</Text>
+          )}
+
+          {/* Admin quick action */}
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.adminEditRow}
+              onPress={() => router.push({ pathname: "/(main)/edit-group", params: { id: id! } })}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="pencil" size={16} tintColor={colors.black} />
+              <Text style={styles.adminEditText}>Gruppe bearbeiten</Text>
+              <SymbolView name="chevron.right" size={13} tintColor={colors.gray300} />
+            </TouchableOpacity>
           )}
 
           {/* Actions */}
@@ -150,6 +174,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     boxShadow: "0px 2px 8px rgba(0,0,0,0.08)",
   },
+  editBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0px 2px 8px rgba(0,0,0,0.08)",
+  },
 
   content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
   groupName: {
@@ -166,6 +202,24 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: spacing.lg,
     letterSpacing: -0.1,
+  },
+
+  adminEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+  },
+  adminEditText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
   },
 
   actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xl },

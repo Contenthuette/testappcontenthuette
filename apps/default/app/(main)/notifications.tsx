@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 
@@ -28,7 +29,7 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <TouchableOpacity onPress={() => safeBack("notifications")} style={styles.backBtn} hitSlop={12}>
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>Benachrichtigungen</Text>

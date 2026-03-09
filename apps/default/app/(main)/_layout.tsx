@@ -7,6 +7,7 @@ export default function MainLayout() {
       <Stack.Screen name="group-detail" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="group-chat" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="create-group" options={{ presentation: "modal" }} />
+      <Stack.Screen name="edit-group" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="event-detail" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="ticket" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="partner-detail" options={{ animation: "slide_from_right" }} />

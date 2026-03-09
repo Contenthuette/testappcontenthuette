@@ -5,7 +5,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
@@ -29,7 +30,7 @@ export default function PartnerDetailScreen() {
               <SymbolView name="building.2" size={40} tintColor={colors.gray300} />
             </View>
           )}
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("partner-detail")}>
             <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
         </View>

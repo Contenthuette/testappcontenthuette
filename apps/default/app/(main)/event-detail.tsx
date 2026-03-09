@@ -9,6 +9,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
@@ -61,7 +62,7 @@ export default function EventDetailScreen() {
               <SymbolView name="sparkles" size={40} tintColor={colors.gray300} />
             </View>
           )}
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("event-detail")}>
             <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
           {isSoldOut && (

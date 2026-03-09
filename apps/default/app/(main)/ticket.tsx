@@ -6,7 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 
@@ -35,7 +36,7 @@ export default function TicketScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Close */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <TouchableOpacity onPress={() => safeBack("ticket")} hitSlop={12}>
           <SymbolView name="xmark" size={18} tintColor={colors.gray500} />
         </TouchableOpacity>
       </View>

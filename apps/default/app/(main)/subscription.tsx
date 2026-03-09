@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { Button } from "@/components/Button";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
@@ -23,7 +24,7 @@ export default function SubscriptionScreen() {
     setLoading(true);
     try {
       await updateSubscription({ status: "canceled", plan: me?.subscriptionPlan ?? "monthly" });
-      router.back();
+      safeBack("subscription");
     } catch (e) {
       // handle
     } finally {
@@ -34,7 +35,7 @@ export default function SubscriptionScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <TouchableOpacity onPress={() => safeBack("subscription")} style={styles.backBtn} hitSlop={12}>
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Abonnement</Text>

@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 
@@ -22,7 +23,7 @@ export default function CreatePostScreen() {
     setLoading(true);
     try {
       await createPost({ caption: caption.trim(), type: "photo" });
-      router.back();
+      safeBack("create-post");
     } catch (e) {
       if (Platform.OS !== "web") Alert.alert("Fehler", "Beitrag konnte nicht veröffentlicht werden.");
     } finally {
@@ -34,7 +35,7 @@ export default function CreatePostScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <TouchableOpacity onPress={() => safeBack("create-post")} hitSlop={12}>
           <Text style={styles.cancelText}>Abbrechen</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Neuer Beitrag</Text>

@@ -5,7 +5,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 
 const sections = [
@@ -57,7 +58,7 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <TouchableOpacity onPress={() => safeBack("settings")} style={styles.backBtn} hitSlop={12}>
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>Einstellungen</Text>

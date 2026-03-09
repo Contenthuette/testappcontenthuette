@@ -4,7 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 
@@ -25,7 +26,7 @@ export default function AdminDashboard() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => safeBack("dashboard")} style={styles.backBtn}>
             <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
           <ZLogo size={28} />

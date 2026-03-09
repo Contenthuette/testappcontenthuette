@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
+import { safeBack } from "@/lib/navigation";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { SymbolView } from "@/components/Icon";
@@ -55,7 +56,7 @@ export default function CreateGroupScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <TouchableOpacity onPress={() => safeBack("create-group")} hitSlop={12}>
             <SymbolView name="xmark" size={20} tintColor={colors.gray500} />
           </TouchableOpacity>
           <Text style={styles.title}>Neue Gruppe</Text>
