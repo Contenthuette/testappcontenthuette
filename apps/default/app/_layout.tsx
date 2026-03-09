@@ -2,15 +2,22 @@ import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { authClient } from "@/lib/auth-client";
+import { StatusBar } from "expo-status-bar";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
-    unsavedChangesWarning: false,
+  unsavedChangesWarning: false,
 });
 
 export default function RootLayout() {
-    return (
-        <ConvexBetterAuthProvider client={convex} authClient={authClient}>
-            <Stack screenOptions={{ headerShown: false }} />
-        </ConvexBetterAuthProvider>
-    );
+  return (
+    <ConvexBetterAuthProvider client={convex} authClient={authClient}>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(main)" />
+        <Stack.Screen name="(admin)" />
+      </Stack>
+    </ConvexBetterAuthProvider>
+  );
 }

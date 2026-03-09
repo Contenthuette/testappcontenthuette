@@ -1,0 +1,250 @@
+import { v } from "convex/values";
+import { query } from "./_generated/server";
+import { authQuery, authMutation } from "./functions";
+import type { Id } from "./_generated/dataModel";
+
+// Helper to get userId from authId
+async function getMyUserId(ctx: any): Promise<Id<"users"> | null> {
+  const authId = ctx.user._id;
+  const user = await ctx.db.query("users").withIndex("by_authId", (q: any) => q.eq("authId", authId)).unique();
+  return user?._id ?? null;
+}
+
+export const list = authQuery({
+  args: {
+    county: v.optional(v.string()),
+    city: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    searchQuery: v.optional(v.string()),
+  },
+  returns: v.array(v.object({
+    _id: v.id("groups"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
+    county: v.optional(v.string()),
+    city: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    memberCount: v.number(),
+    isMember: v.boolean(),
+    createdAt: v.number(),
+  })),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    let groups;
+    const searchQuery = args.searchQuery;
+    if (searchQuery && searchQuery.trim()) {
+      groups = await ctx.db.query("groups")
+        .withSearchIndex("search_name", q => q.search("name", searchQuery))
+        .take(50);
+    } else {
+      const county = args.county;
+      const city = args.city;
+      if (county || city) {
+        let q2 = ctx.db.query("groups").withIndex("by_county_and_city", (q: any) => {
+          let chain = q;
+          if (county) chain = chain.eq("county", county);
+          if (city && county) chain = chain.eq("city", city);
+          return chain;
+        });
+        groups = await q2.take(50);
+      } else {
+        groups = await ctx.db.query("groups").order("desc").take(50);
+      }
+    }
+
+    const results = [];
+    for (const g of groups) {
+      let isMember = false;
+      if (myUserId) {
+        const membership = await ctx.db.query("groupMembers")
+          .withIndex("by_groupId_and_userId", q => q.eq("groupId", g._id).eq("userId", myUserId))
+          .unique();
+        isMember = membership?.status === "active";
+      }
+      results.push({
+        _id: g._id,
+        name: g.name,
+        description: g.description,
+        thumbnailUrl: g.thumbnailStorageId ? await ctx.storage.getUrl(g.thumbnailStorageId) ?? undefined : g.thumbnailUrl,
+        county: g.county,
+        city: g.city,
+        topic: g.topic,
+        visibility: g.visibility,
+        memberCount: g.memberCount,
+        isMember,
+        createdAt: g.createdAt,
+      });
+    }
+    return results;
+  },
+});
+
+export const getById = query({
+  args: { groupId: v.id("groups") },
+  returns: v.union(v.null(), v.object({
+    _id: v.id("groups"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
+    county: v.optional(v.string()),
+    city: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    memberCount: v.number(),
+    creatorId: v.id("users"),
+    createdAt: v.number(),
+  })),
+  handler: async (ctx, args) => {
+    const g = await ctx.db.get(args.groupId);
+    if (!g) return null;
+    return {
+      _id: g._id,
+      name: g.name,
+      description: g.description,
+      thumbnailUrl: g.thumbnailStorageId ? await ctx.storage.getUrl(g.thumbnailStorageId) ?? undefined : g.thumbnailUrl,
+      county: g.county,
+      city: g.city,
+      topic: g.topic,
+      visibility: g.visibility,
+      memberCount: g.memberCount,
+      creatorId: g.creatorId,
+      createdAt: g.createdAt,
+    };
+  },
+});
+
+export const create = authMutation({
+  args: {
+    name: v.string(),
+    description: v.optional(v.string()),
+    county: v.optional(v.string()),
+    city: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+  },
+  returns: v.id("groups"),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    const groupId = await ctx.db.insert("groups", {
+      ...args,
+      creatorId: myUserId,
+      memberCount: 1,
+      createdAt: Date.now(),
+    });
+    // Create conversation for group
+    const convId = await ctx.db.insert("conversations", {
+      type: "group",
+      groupId,
+      createdAt: Date.now(),
+    });
+    // Creator is admin member
+    await ctx.db.insert("groupMembers", {
+      groupId,
+      userId: myUserId,
+      role: "admin",
+      status: "active",
+      joinedAt: Date.now(),
+    });
+    return groupId;
+  },
+});
+
+export const join = authMutation({
+  args: { groupId: v.id("groups") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    const existing = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (existing) return null;
+    const group = await ctx.db.get(args.groupId);
+    if (!group) throw new Error("Group not found");
+    const status = group.visibility === "invite_only" ? "pending" as const : "active" as const;
+    await ctx.db.insert("groupMembers", {
+      groupId: args.groupId,
+      userId: myUserId,
+      role: "member",
+      status,
+      joinedAt: Date.now(),
+    });
+    if (status === "active") {
+      await ctx.db.patch(args.groupId, { memberCount: group.memberCount + 1 });
+    }
+    return null;
+  },
+});
+
+export const leave = authMutation({
+  args: { groupId: v.id("groups") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    const membership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (!membership) return null;
+    await ctx.db.delete(membership._id);
+    const group = await ctx.db.get(args.groupId);
+    if (group && group.memberCount > 0) {
+      await ctx.db.patch(args.groupId, { memberCount: group.memberCount - 1 });
+    }
+    return null;
+  },
+});
+
+export const getMembers = query({
+  args: { groupId: v.id("groups") },
+  returns: v.array(v.object({
+    _id: v.id("groupMembers"),
+    userId: v.id("users"),
+    name: v.string(),
+    avatarUrl: v.optional(v.string()),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    status: v.union(v.literal("active"), v.literal("pending")),
+  })),
+  handler: async (ctx, args) => {
+    const members = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId", q => q.eq("groupId", args.groupId))
+      .collect();
+    const results = [];
+    for (const m of members) {
+      const user = await ctx.db.get(m.userId);
+      if (user) {
+        results.push({
+          _id: m._id,
+          userId: m.userId,
+          name: user.name,
+          avatarUrl: user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) ?? undefined : user.avatarUrl,
+          role: m.role,
+          status: m.status,
+        });
+      }
+    }
+    return results;
+  },
+});
+
+export const getMyMembership = authQuery({
+  args: { groupId: v.id("groups") },
+  returns: v.union(v.null(), v.object({
+    _id: v.id("groupMembers"),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    status: v.union(v.literal("active"), v.literal("pending")),
+  })),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) return null;
+    const membership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (!membership) return null;
+    return { _id: membership._id, role: membership.role, status: membership.status };
+  },
+});

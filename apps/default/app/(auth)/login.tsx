@@ -1,0 +1,131 @@
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { authClient } from "@/lib/auth-client";
+import { colors, spacing, radius } from "@/lib/theme";
+import { Button } from "@/components/Button";
+import { Input } from "@/components/Input";
+import { ZLogo } from "@/components/ZLogo";
+import { SymbolView } from "expo-symbols";
+
+export default function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleEmailLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError("Bitte E-Mail und Passwort eingeben");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const result = await authClient.signIn.email({ email: email.trim(), password });
+      if (result.error) {
+        setError("Ungültige Anmeldedaten. Konto noch nicht vorhanden?");
+      } else {
+        router.replace("/");
+      }
+    } catch (e: unknown) {
+      setError("Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      await authClient.signIn.social({ provider: "google" });
+    } catch (e: unknown) {
+      setError("Google-Anmeldung fehlgeschlagen");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setAppleLoading(true);
+    try {
+      await authClient.signIn.social({ provider: "apple" });
+    } catch (e: unknown) {
+      setError("Apple-Anmeldung fehlgeschlagen");
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
+        </TouchableOpacity>
+
+        <View style={styles.header}>
+          <ZLogo size={40} />
+          <Text style={styles.title}>Willkommen zurück</Text>
+          <Text style={styles.subtitle}>Melde dich in deinem Konto an</Text>
+        </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Input label="E-Mail" placeholder="name@email.de" value={email}
+          onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <Input label="Passwort" placeholder="••••••••" value={password}
+          onChangeText={setPassword} isPassword />
+
+        <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password")}>
+          <Text style={styles.forgotText}>Passwort vergessen?</Text>
+        </TouchableOpacity>
+
+        <Button title="Anmelden" onPress={handleEmailLogin} loading={loading} fullWidth style={{ marginTop: spacing.xl }} />
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>oder</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <View style={styles.socialBtns}>
+          <Button title="Mit Google anmelden" onPress={handleGoogleLogin} variant="outline" fullWidth loading={googleLoading} />
+          {Platform.OS === "ios" && (
+            <Button title="Mit Apple anmelden" onPress={handleAppleLogin} variant="outline" fullWidth loading={appleLoading} />
+          )}
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Noch kein Konto? </Text>
+          <TouchableOpacity onPress={() => router.replace("/(auth)/signup")}>
+            <Text style={styles.footerLink}>Registrieren</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.white },
+  scroll: { paddingHorizontal: spacing.xxl, paddingBottom: 40 },
+  backBtn: { marginTop: spacing.md, marginBottom: spacing.lg, width: 40, height: 40, justifyContent: "center" },
+  header: { gap: spacing.sm, marginBottom: spacing.xxl },
+  title: { fontSize: 28, fontWeight: "700", color: colors.black },
+  subtitle: { fontSize: 16, color: colors.gray500 },
+  error: { fontSize: 14, color: colors.danger, marginBottom: spacing.lg, padding: spacing.md, backgroundColor: "#FEF2F2", borderRadius: radius.sm, overflow: "hidden" },
+  forgotText: { fontSize: 14, color: colors.gray600, fontWeight: "500", textAlign: "right", marginTop: -spacing.sm },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.xxl },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.gray200 },
+  dividerText: { marginHorizontal: spacing.lg, fontSize: 14, color: colors.gray400 },
+  socialBtns: { gap: spacing.md },
+  footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xxl },
+  footerText: { fontSize: 15, color: colors.gray500 },
+  footerLink: { fontSize: 15, fontWeight: "600", color: colors.black },
+});
