@@ -1,100 +1,142 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from "react-native";
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  TextInput, ActivityIndicator, Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "expo-symbols";
 import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 
 export default function GroupsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const groups = useQuery(api.groups.list, { searchQuery: searchQuery || undefined });
+  const joinGroup = useMutation(api.groups.join);
+
+  const handleJoin = async (groupId: Id<"groups">) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await joinGroup({ groupId });
+    } catch (e) {
+      // already member or error
+    }
+  };
 
   const renderGroup = ({ item }: { item: NonNullable<typeof groups>[number] }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => router.push({ pathname: "/(main)/group-detail", params: { id: item._id } })}
-      activeOpacity={0.7}
+      activeOpacity={0.65}
     >
       <View style={styles.cardThumb}>
         {item.thumbnailUrl ? (
-          <Image source={{ uri: item.thumbnailUrl }} style={styles.thumbImage} contentFit="cover" />
+          <Image source={{ uri: item.thumbnailUrl }} style={styles.thumbImage} contentFit="cover" transition={200} />
         ) : (
-          <SymbolView name="person.3.fill" size={24} tintColor={colors.gray400} />
+          <View style={styles.thumbPlaceholder}>
+            <SymbolView name="person.3.fill" size={22} tintColor={colors.gray300} />
+          </View>
         )}
       </View>
-      <View style={styles.cardContent}>
+      <View style={styles.cardBody}>
         <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.cardMeta} numberOfLines={1}>
-          {item.city || item.county || "MV"} {item.topic ? `• ${item.topic}` : ""}
+          {[item.city || item.county, item.topic].filter(Boolean).join(" · ")}
         </Text>
-        <Text style={styles.cardMembers}>{item.memberCount} Mitglieder</Text>
+        <Text style={styles.cardMembers}>
+          {item.memberCount} {item.memberCount === 1 ? "Mitglied" : "Mitglieder"}
+        </Text>
       </View>
       {item.isMember ? (
-        <View style={styles.joinedBadge}>
-          <Text style={styles.joinedText}>Beigetreten</Text>
+        <View style={styles.joinedPill}>
+          <SymbolView name="checkmark" size={12} tintColor={colors.gray500} />
+          <Text style={styles.joinedText}>Dabei</Text>
         </View>
       ) : (
-        <View style={styles.joinBtn}>
-          <Text style={styles.joinBtnText}>Beitreten</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.joinPill}
+          onPress={() => handleJoin(item._id)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.joinText}>Beitreten</Text>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* Header */}
       <View style={styles.header}>
-        <ZLogo size={32} />
+        <ZLogo size={36} />
         <Text style={styles.headerTitle}>Gruppen</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
-            <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
-            <SymbolView name="bell" size={22} tintColor={colors.black} />
-          </TouchableOpacity>
-        </View>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
+          <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
+          <SymbolView name="bell" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.searchRow}>
+      {/* Search */}
+      <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
           <SymbolView name="magnifyingglass" size={16} tintColor={colors.gray400} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Gruppen suchen..."
+            placeholder="Gruppen oder Personen suchen"
             placeholderTextColor={colors.gray400}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <SymbolView name="xmark.circle.fill" size={16} tintColor={colors.gray300} />
+            </TouchableOpacity>
+          )}
         </View>
         <TouchableOpacity onPress={() => router.push("/(main)/search")} style={styles.filterBtn}>
           <SymbolView name="slider.horizontal.3" size={18} tintColor={colors.black} />
         </TouchableOpacity>
       </View>
 
+      {/* List */}
       <FlatList
         data={groups}
         renderItem={renderGroup}
         keyExtractor={item => item._id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          groups === undefined ? null : (
-            <EmptyState icon="person.3" title="Keine Gruppen" subtitle="Erstelle die erste Gruppe für deine Community" />
+          groups === undefined ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={colors.gray300} />
+            </View>
+          ) : (
+            <EmptyState
+              icon="person.3"
+              title="Noch keine Gruppen"
+              subtitle="Erstelle die erste Gruppe und vernetze deine Community in MV."
+            />
           )
         }
       />
 
+      {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push("/(main)/create-group")}
         activeOpacity={0.8}
       >
-        <SymbolView name="plus" size={24} tintColor={colors.white} />
+        <SymbolView name="plus" size={22} tintColor={colors.white} />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -106,13 +148,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     gap: spacing.sm,
   },
-  headerTitle: { fontSize: 22, fontWeight: "700", color: colors.black, flex: 1 },
-  headerIcons: { flexDirection: "row", gap: spacing.xs },
-  iconBtn: { padding: spacing.sm },
-  searchRow: {
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.black,
+    letterSpacing: -0.5,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchWrap: {
     flexDirection: "row",
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
@@ -123,64 +176,72 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.gray100,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
-    height: 40,
+    height: 42,
     gap: spacing.sm,
   },
-  searchInput: { flex: 1, fontSize: 15, color: colors.black },
+  searchInput: { flex: 1, fontSize: 15, color: colors.black, letterSpacing: -0.2 },
   filterBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
+    width: 42,
+    height: 42,
+    borderRadius: radius.sm,
     backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
-  list: { paddingHorizontal: spacing.xl, paddingBottom: 100 },
+  list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
+  loadingWrap: { paddingVertical: 60, alignItems: "center" },
   card: {
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.md,
     backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.gray100,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
     borderCurve: "continuous",
-    ...shadows.sm,
+    gap: spacing.md,
   },
   cardThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
+    width: 54,
+    height: 54,
+    borderRadius: radius.sm,
+    overflow: "hidden",
     backgroundColor: colors.gray100,
+  },
+  thumbImage: { width: 54, height: 54 },
+  thumbPlaceholder: {
+    width: 54,
+    height: 54,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
   },
-  thumbImage: { width: 56, height: 56 },
-  cardContent: { flex: 1, marginLeft: spacing.md },
-  cardName: { fontSize: 16, fontWeight: "600", color: colors.black },
-  cardMeta: { fontSize: 13, color: colors.gray500, marginTop: 2 },
-  cardMembers: { fontSize: 12, color: colors.gray400, marginTop: 2 },
-  joinedBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  cardBody: { flex: 1, gap: 2 },
+  cardName: { fontSize: 16, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
+  cardMeta: { fontSize: 13, color: colors.gray500, letterSpacing: -0.1 },
+  cardMembers: { fontSize: 12, color: colors.gray400, marginTop: 1 },
+  joinedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: radius.full,
     backgroundColor: colors.gray100,
   },
-  joinedText: { fontSize: 12, fontWeight: "600", color: colors.gray500 },
-  joinBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  joinedText: { fontSize: 13, fontWeight: "600", color: colors.gray500 },
+  joinPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: radius.full,
     backgroundColor: colors.black,
   },
-  joinBtnText: { fontSize: 12, fontWeight: "600", color: colors.white },
+  joinText: { fontSize: 13, fontWeight: "600", color: colors.white },
   fab: {
     position: "absolute",
-    bottom: 100,
+    bottom: 110,
     right: spacing.xl,
     width: 56,
     height: 56,

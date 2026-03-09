@@ -1,5 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from "react-native";
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  Dimensions, ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -11,7 +14,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "expo-symbols";
 import { Image } from "expo-image";
 
-const { width } = Dimensions.get("window");
+const { width: screenWidth } = Dimensions.get("window");
 
 export default function FeedScreen() {
   const feed = useQuery(api.posts.feed, {});
@@ -21,13 +24,14 @@ export default function FeedScreen() {
   const renderAnnouncement = (item: NonNullable<typeof feed>[number]) => (
     <View style={styles.announcementCard} key={item._id}>
       <View style={styles.announcementHeader}>
-        <View style={styles.announcementBadge}>
-          <ZLogo size={18} color={colors.white} />
-          <Text style={styles.announcementLabel}>Z Announcement</Text>
+        <ZLogo size={28} withBackground color={colors.white} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.announcementTitle}>Z Announcement</Text>
+          <Text style={styles.announcementSub}>Offiziell</Text>
         </View>
       </View>
       {item.mediaUrl && (
-        <Image source={{ uri: item.mediaUrl }} style={styles.announcementImage} contentFit="cover" />
+        <Image source={{ uri: item.mediaUrl }} style={styles.announcementImage} contentFit="cover" transition={300} />
       )}
       {item.caption && <Text style={styles.announcementText}>{item.caption}</Text>}
     </View>
@@ -37,41 +41,85 @@ export default function FeedScreen() {
     if (item.isAnnouncement) return renderAnnouncement(item);
     return (
       <View style={styles.postCard}>
+        {/* Author */}
         <TouchableOpacity
           style={styles.postHeader}
           onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
+          activeOpacity={0.7}
         >
-          <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={36} />
+          <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={38} />
           <View style={{ flex: 1 }}>
             <Text style={styles.postAuthor}>{item.authorName}</Text>
             <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
           </View>
+          <TouchableOpacity hitSlop={12}>
+            <SymbolView name="ellipsis" size={18} tintColor={colors.gray400} />
+          </TouchableOpacity>
         </TouchableOpacity>
+
+        {/* Media */}
         {item.mediaUrl && (
-          <Image source={{ uri: item.mediaUrl }} style={styles.postImage} contentFit="cover" />
+          <Image
+            source={{ uri: item.mediaUrl }}
+            style={styles.postImage}
+            contentFit="cover"
+            transition={200}
+          />
         )}
+
+        {/* Actions */}
         <View style={styles.postActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike({ postId: item._id })}>
-            <SymbolView name={item.isLiked ? "heart.fill" : "heart"} size={22} tintColor={item.isLiked ? colors.danger : colors.black} />
-            <Text style={styles.actionCount}>{item.likeCount}</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike({ postId: item._id })} hitSlop={8}>
+            <SymbolView
+              name={item.isLiked ? "heart.fill" : "heart"}
+              size={24}
+              tintColor={item.isLiked ? colors.danger : colors.black}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}>
-            <SymbolView name="bubble.right" size={22} tintColor={colors.black} />
-            <Text style={styles.actionCount}>{item.commentCount}</Text>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}
+            hitSlop={8}
+          >
+            <SymbolView name="bubble.right" size={24} tintColor={colors.black} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => toggleSave({ postId: item._id })}>
-            <SymbolView name={item.isSaved ? "bookmark.fill" : "bookmark"} size={22} tintColor={colors.black} />
+          <TouchableOpacity style={styles.actionBtn} hitSlop={8}>
+            <SymbolView name="paperplane" size={24} tintColor={colors.black} />
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
-          <TouchableOpacity style={styles.actionBtn}>
-            <SymbolView name="paperplane" size={22} tintColor={colors.black} />
+          <TouchableOpacity onPress={() => toggleSave({ postId: item._id })} hitSlop={8}>
+            <SymbolView
+              name={item.isSaved ? "bookmark.fill" : "bookmark"}
+              size={24}
+              tintColor={colors.black}
+            />
           </TouchableOpacity>
         </View>
-        {item.caption && (
-          <View style={styles.captionRow}>
+
+        {/* Counts */}
+        {item.likeCount > 0 && (
+          <Text style={styles.likeCount}>
+            {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
+          </Text>
+        )}
+
+        {/* Caption */}
+        {item.caption ? (
+          <Text style={styles.captionRow}>
             <Text style={styles.captionAuthor}>{item.authorName} </Text>
             <Text style={styles.captionText}>{item.caption}</Text>
-          </View>
+          </Text>
+        ) : null}
+
+        {/* View comments */}
+        {item.commentCount > 0 && (
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}
+          >
+            <Text style={styles.viewComments}>
+              Alle {item.commentCount} Kommentare ansehen
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -80,14 +128,17 @@ export default function FeedScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <ZLogo size={32} />
+        <ZLogo size={36} />
         <Text style={styles.headerTitle}>Feed</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
-            <SymbolView name="paperplane" size={22} tintColor={colors.black} />
-          </TouchableOpacity>
-        </View>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
+          <SymbolView name="heart" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
+          <SymbolView name="paperplane" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
       </View>
+
       <FlatList
         data={feed}
         renderItem={renderPost}
@@ -95,8 +146,16 @@ export default function FeedScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          feed === undefined ? null : (
-            <EmptyState icon="photo.on.rectangle" title="Kein Content" subtitle="Sei der Erste, der etwas postet!" />
+          feed === undefined ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={colors.gray300} />
+            </View>
+          ) : (
+            <EmptyState
+              icon="photo.on.rectangle"
+              title="Dein Feed ist leer"
+              subtitle="Folge Gruppen und Personen, um hier Beiträge zu sehen."
+            />
           )
         }
       />
@@ -112,33 +171,97 @@ function formatTime(ts: number): string {
   const hrs = Math.floor(min / 60);
   if (hrs < 24) return `vor ${hrs} Std.`;
   const days = Math.floor(hrs / 24);
-  return `vor ${days} T.`;
+  if (days < 7) return `vor ${days} T.`;
+  return new Date(ts).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.md, gap: spacing.sm },
-  headerTitle: { fontSize: 22, fontWeight: "700", color: colors.black, flex: 1 },
-  headerIcons: { flexDirection: "row", gap: spacing.xs },
-  iconBtn: { padding: spacing.sm },
-  list: { paddingBottom: 100 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  headerTitle: { fontSize: 26, fontWeight: "800", color: colors.black, letterSpacing: -0.5 },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  list: { paddingBottom: 120 },
+  loadingWrap: { paddingVertical: 60, alignItems: "center" },
+
   // Announcement
-  announcementCard: { marginHorizontal: spacing.xl, marginBottom: spacing.lg, backgroundColor: colors.black, borderRadius: radius.lg, overflow: "hidden", borderCurve: "continuous" },
-  announcementHeader: { padding: spacing.md },
-  announcementBadge: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  announcementLabel: { fontSize: 14, fontWeight: "700", color: colors.white },
+  announcementCard: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.black,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderCurve: "continuous",
+  },
+  announcementHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
+  },
+  announcementTitle: { fontSize: 15, fontWeight: "700", color: colors.white },
+  announcementSub: { fontSize: 12, color: "rgba(255,255,255,0.5)" },
   announcementImage: { width: "100%", height: 200 },
-  announcementText: { padding: spacing.md, fontSize: 15, color: colors.white, lineHeight: 22 },
+  announcementText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    fontSize: 15,
+    color: colors.white,
+    lineHeight: 22,
+    letterSpacing: -0.1,
+  },
+
   // Post
-  postCard: { marginBottom: spacing.sm },
-  postHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.md, gap: spacing.md },
-  postAuthor: { fontSize: 15, fontWeight: "600", color: colors.black },
+  postCard: { marginBottom: spacing.lg },
+  postHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  postAuthor: { fontSize: 15, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
   postTime: { fontSize: 12, color: colors.gray400 },
-  postImage: { width, height: width, backgroundColor: colors.gray100 },
-  postActions: { flexDirection: "row", paddingHorizontal: spacing.xl, paddingVertical: spacing.md, gap: spacing.lg },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  actionCount: { fontSize: 14, fontWeight: "500", color: colors.black },
-  captionRow: { flexDirection: "row", paddingHorizontal: spacing.xl, paddingBottom: spacing.md, flexWrap: "wrap" },
+  postImage: {
+    width: screenWidth,
+    height: screenWidth,
+    backgroundColor: colors.gray100,
+  },
+  postActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    gap: spacing.lg,
+  },
+  actionBtn: { padding: 2 },
+  likeCount: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.black,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+  },
+  captionRow: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
+    lineHeight: 20,
+  },
   captionAuthor: { fontSize: 14, fontWeight: "600", color: colors.black },
-  captionText: { fontSize: 14, color: colors.gray700, flex: 1 },
+  captionText: { fontSize: 14, color: colors.gray700 },
+  viewComments: {
+    fontSize: 14,
+    color: colors.gray400,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
 });

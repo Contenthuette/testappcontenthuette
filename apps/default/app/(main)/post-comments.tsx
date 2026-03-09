@@ -1,12 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from "react-native";
+import {
+  View, Text, StyleSheet, FlatList, TextInput,
+  TouchableOpacity, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
+} from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
-import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "expo-symbols";
 
 export default function PostCommentsScreen() {
@@ -23,7 +26,11 @@ export default function PostCommentsScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      {/* Grabber */}
       <View style={styles.grabber} />
       <Text style={styles.title}>Kommentare</Text>
 
@@ -31,46 +38,125 @@ export default function PostCommentsScreen() {
         data={comments}
         keyExtractor={item => item._id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <View style={styles.commentRow}>
-            <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={32} />
-            <View style={{ flex: 1 }}>
+            <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
+            <View style={styles.commentBody}>
               <Text style={styles.commentAuthor}>{item.authorName}</Text>
               <Text style={styles.commentText}>{item.text}</Text>
+              <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
             </View>
           </View>
         )}
         ListEmptyComponent={
-          comments === undefined ? null : (
-            <EmptyState icon="text.bubble" title="Keine Kommentare" subtitle="Schreib den ersten Kommentar" />
+          comments === undefined ? (
+            <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+          ) : (
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyText}>Noch keine Kommentare</Text>
+              <Text style={styles.emptySub}>Sei der Erste!</Text>
+            </View>
           )
         }
       />
 
-      <View style={styles.inputRow}>
+      {/* Input */}
+      <View style={styles.inputBar}>
         <TextInput
           style={styles.input}
           placeholder="Kommentar schreiben..."
           placeholderTextColor={colors.gray400}
           value={text}
           onChangeText={setText}
+          multiline
+          maxLength={1000}
         />
-        <TouchableOpacity onPress={handleSend}>
-          <SymbolView name="arrow.up.circle.fill" size={32} tintColor={text.trim() ? colors.black : colors.gray300} />
-        </TouchableOpacity>
+        {text.trim().length > 0 && (
+          <TouchableOpacity onPress={handleSend} hitSlop={8}>
+            <View style={styles.sendBtn}>
+              <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
 }
 
+function formatTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "Gerade eben";
+  if (min < 60) return `${min} Min.`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs} Std.`;
+  return `${Math.floor(hrs / 24)} T.`;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  grabber: { width: 36, height: 5, borderRadius: 3, backgroundColor: colors.gray300, alignSelf: "center", marginTop: spacing.md },
-  title: { fontSize: 18, fontWeight: "600", color: colors.black, textAlign: "center", paddingVertical: spacing.md },
-  list: { paddingHorizontal: spacing.xl, paddingBottom: 20 },
-  commentRow: { flexDirection: "row", gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.gray100 },
+  grabber: {
+    width: 36,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.gray300,
+    alignSelf: "center",
+    marginTop: spacing.sm,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.black,
+    textAlign: "center",
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  list: { paddingBottom: spacing.lg },
+  loadingWrap: { paddingVertical: 40, alignItems: "center" },
+  emptyWrap: { alignItems: "center", paddingVertical: 48 },
+  emptyText: { fontSize: 15, fontWeight: "600", color: colors.gray500 },
+  emptySub: { fontSize: 13, color: colors.gray400, marginTop: 4 },
+
+  commentRow: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  commentBody: { flex: 1 },
   commentAuthor: { fontSize: 14, fontWeight: "600", color: colors.black },
-  commentText: { fontSize: 14, color: colors.gray700, marginTop: 2 },
-  inputRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.gray100, gap: spacing.sm },
-  input: { flex: 1, fontSize: 16, color: colors.black, backgroundColor: colors.gray100, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  commentText: { fontSize: 14, color: colors.gray700, lineHeight: 20, marginTop: 2 },
+  commentTime: { fontSize: 12, color: colors.gray400, marginTop: 4 },
+
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingBottom: Platform.OS === "ios" ? spacing.md : spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
+    gap: spacing.sm,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.gray100,
+    borderRadius: 22,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: colors.black,
+    maxHeight: 100,
+  },
+  sendBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
 });

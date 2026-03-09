@@ -1,31 +1,59 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { SymbolView } from "expo-symbols";
+import * as Haptics from "expo-haptics";
+
+const createOptions = [
+  {
+    icon: "camera.fill" as const,
+    label: "Foto posten",
+    desc: "Teile einen Moment mit deiner Community",
+    route: "/(main)/create-post" as const,
+  },
+  {
+    icon: "video.fill" as const,
+    label: "Video posten",
+    desc: "Lade ein Video oder Reel hoch",
+    route: "/(main)/create-post" as const,
+  },
+  {
+    icon: "person.3.fill" as const,
+    label: "Gruppe erstellen",
+    desc: "Starte eine neue Gruppe in MV",
+    route: "/(main)/create-group" as const,
+  },
+];
 
 export default function CreateScreen() {
-  const options = [
-    { icon: "camera", label: "Foto posten", desc: "Teile ein Foto mit der Community", action: () => router.push("/(main)/create-post") },
-    { icon: "video", label: "Video posten", desc: "Lade ein Video hoch", action: () => router.push("/(main)/create-post") },
-    { icon: "person.3", label: "Gruppe erstellen", desc: "Starte eine neue Gruppe", action: () => router.push("/(main)/create-group") },
-  ];
+  const handlePress = (route: string) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(route as "/");
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <Text style={styles.title}>Erstellen</Text>
+      <Text style={styles.subtitle}>Was möchtest du teilen?</Text>
+
       <View style={styles.options}>
-        {options.map((opt, i) => (
-          <TouchableOpacity key={i} style={styles.optionCard} onPress={opt.action} activeOpacity={0.7}>
-            <View style={styles.optionIcon}>
-              <SymbolView name={opt.icon as any} size={24} tintColor={colors.black} />
+        {createOptions.map((opt, i) => (
+          <TouchableOpacity
+            key={i}
+            style={styles.card}
+            onPress={() => handlePress(opt.route)}
+            activeOpacity={0.65}
+          >
+            <View style={styles.iconWrap}>
+              <SymbolView name={opt.icon} size={22} tintColor={colors.black} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.optionLabel}>{opt.label}</Text>
-              <Text style={styles.optionDesc}>{opt.desc}</Text>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardLabel}>{opt.label}</Text>
+              <Text style={styles.cardDesc}>{opt.desc}</Text>
             </View>
-            <SymbolView name="chevron.right" size={16} tintColor={colors.gray400} />
+            <SymbolView name="chevron.right" size={14} tintColor={colors.gray300} />
           </TouchableOpacity>
         ))}
       </View>
@@ -35,21 +63,43 @@ export default function CreateScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
-  title: { fontSize: 28, fontWeight: "700", color: colors.black, paddingHorizontal: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.xl },
+  title: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: colors.black,
+    letterSpacing: -0.5,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxl,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.gray400,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxl,
+    letterSpacing: -0.2,
+  },
   options: { paddingHorizontal: spacing.xl, gap: spacing.md },
-  optionCard: {
+  card: {
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.lg,
     backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.gray100,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
     gap: spacing.lg,
     borderCurve: "continuous",
-    ...shadows.sm,
   },
-  optionIcon: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.gray100, alignItems: "center", justifyContent: "center" },
-  optionLabel: { fontSize: 16, fontWeight: "600", color: colors.black },
-  optionDesc: { fontSize: 13, color: colors.gray500, marginTop: 2 },
+  iconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardBody: { flex: 1 },
+  cardLabel: { fontSize: 16, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
+  cardDesc: { fontSize: 13, color: colors.gray500, marginTop: 2, letterSpacing: -0.1 },
 });

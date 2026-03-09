@@ -1,5 +1,8 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
+import React from "react";
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
@@ -14,33 +17,44 @@ export default function EventsScreen() {
 
   const renderEvent = ({ item }: { item: NonNullable<typeof events>[number] }) => {
     const isSoldOut = item.soldTickets >= item.totalTickets;
+    const available = item.totalTickets - item.soldTickets;
     return (
       <TouchableOpacity
         style={styles.card}
         onPress={() => router.push({ pathname: "/(main)/event-detail", params: { id: item._id } })}
-        activeOpacity={0.7}
+        activeOpacity={0.65}
       >
-        <View style={styles.cardImage}>
+        <View style={styles.cardImageWrap}>
           {item.thumbnailUrl ? (
-            <Image source={{ uri: item.thumbnailUrl }} style={styles.image} contentFit="cover" />
+            <Image source={{ uri: item.thumbnailUrl }} style={styles.cardImage} contentFit="cover" transition={200} />
           ) : (
-            <View style={styles.imagePlaceholder}>
-              <SymbolView name="calendar" size={32} tintColor={colors.gray300} />
+            <View style={styles.cardImagePlaceholder}>
+              <SymbolView name="sparkles" size={32} tintColor={colors.gray300} />
             </View>
           )}
           {isSoldOut && (
-            <View style={styles.soldOutBadge}><Text style={styles.soldOutText}>Ausverkauft</Text></View>
+            <View style={styles.soldOutBadge}>
+              <Text style={styles.soldOutText}>Ausverkauft</Text>
+            </View>
           )}
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceText}>€{item.ticketPrice.toFixed(0)}</Text>
+          </View>
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.cardInfo}>{item.date} • {item.startTime} Uhr</Text>
-          <Text style={styles.cardInfo}>{item.venue}, {item.city}</Text>
+          <Text style={styles.cardName} numberOfLines={2}>{item.name}</Text>
+          <View style={styles.infoRow}>
+            <SymbolView name="mappin" size={13} tintColor={colors.gray400} />
+            <Text style={styles.infoText}>{item.venue}, {item.city}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <SymbolView name="calendar" size={13} tintColor={colors.gray400} />
+            <Text style={styles.infoText}>{item.date} · {item.startTime} Uhr</Text>
+          </View>
           <View style={styles.cardFooter}>
-            <Text style={styles.ticketInfo}>
-              {item.totalTickets - item.soldTickets} Tickets verfügbar
+            <Text style={[styles.ticketCount, isSoldOut && styles.ticketCountDim]}>
+              {isSoldOut ? "Ausverkauft" : `${available} Ticket${available !== 1 ? "s" : ""} verfügbar`}
             </Text>
-            <Text style={styles.price}>€{item.ticketPrice.toFixed(2)}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -51,11 +65,13 @@ export default function EventsScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Events</Text>
-        <TouchableOpacity onPress={() => router.push("/(main)/my-tickets")} style={styles.ticketBtn}>
-          <SymbolView name="ticket" size={20} tintColor={colors.black} />
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => router.push("/(main)/my-tickets")} style={styles.ticketBtn} activeOpacity={0.7}>
+          <SymbolView name="ticket" size={18} tintColor={colors.black} />
           <Text style={styles.ticketBtnText}>Meine Tickets</Text>
         </TouchableOpacity>
       </View>
+
       <FlatList
         data={events}
         renderItem={renderEvent}
@@ -63,8 +79,16 @@ export default function EventsScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          events === undefined ? null : (
-            <EmptyState icon="calendar" title="Keine Events" subtitle="Events in MV werden hier angezeigt" />
+          events === undefined ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={colors.gray300} />
+            </View>
+          ) : (
+            <EmptyState
+              icon="sparkles"
+              title="Keine Events gerade"
+              subtitle="Neue Events in Schwerin, Rostock und ganz MV erscheinen hier."
+            />
           )
         }
       />
@@ -77,41 +101,67 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
-  headerTitle: { fontSize: 22, fontWeight: "700", color: colors.black },
-  ticketBtn: { flexDirection: "row", alignItems: "center", gap: spacing.xs, padding: spacing.sm },
-  ticketBtnText: { fontSize: 14, fontWeight: "500", color: colors.black },
-  list: { paddingHorizontal: spacing.xl, paddingBottom: 100 },
+  headerTitle: { fontSize: 26, fontWeight: "800", color: colors.black, letterSpacing: -0.5 },
+  ticketBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  ticketBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
+  list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
+  loadingWrap: { paddingVertical: 60, alignItems: "center" },
+
   card: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
     marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.gray100,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
     overflow: "hidden",
     borderCurve: "continuous",
-    ...shadows.sm,
   },
-  cardImage: { height: 180, backgroundColor: colors.gray100 },
-  image: { width: "100%", height: "100%" },
-  imagePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+  cardImageWrap: { height: 180, backgroundColor: colors.gray100, position: "relative" },
+  cardImage: { width: "100%", height: "100%" },
+  cardImagePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
   soldOutBadge: {
     position: "absolute",
     top: spacing.md,
-    right: spacing.md,
-    backgroundColor: colors.danger,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
+    left: spacing.md,
+    backgroundColor: colors.black,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  soldOutText: { fontSize: 12, fontWeight: "700", color: colors.white },
+  soldOutText: { fontSize: 11, fontWeight: "700", color: colors.white, letterSpacing: 0.5 },
+  priceBadge: {
+    position: "absolute",
+    bottom: spacing.md,
+    right: spacing.md,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  priceText: { fontSize: 16, fontWeight: "800", color: colors.white },
   cardBody: { padding: spacing.lg },
-  cardName: { fontSize: 18, fontWeight: "700", color: colors.black, marginBottom: spacing.xs },
-  cardInfo: { fontSize: 14, color: colors.gray500, marginTop: 2 },
-  cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.md },
-  ticketInfo: { fontSize: 13, color: colors.gray500 },
-  price: { fontSize: 18, fontWeight: "700", color: colors.black },
+  cardName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.black,
+    letterSpacing: -0.3,
+    marginBottom: spacing.sm,
+  },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  infoText: { fontSize: 14, color: colors.gray500, letterSpacing: -0.1, flex: 1 },
+  cardFooter: { marginTop: spacing.sm },
+  ticketCount: { fontSize: 13, fontWeight: "600", color: colors.black },
+  ticketCountDim: { color: colors.gray400 },
 });

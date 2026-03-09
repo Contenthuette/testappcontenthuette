@@ -10,32 +10,54 @@ interface AvatarProps {
 }
 
 export function Avatar({ uri, name = "?", size = 40 }: AvatarProps) {
-  const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .map(w => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   if (uri) {
     return (
       <Image
         source={{ uri }}
-        style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
+        style={[
+          styles.image,
+          { width: size, height: size, borderRadius: size / 2 },
+        ]}
         contentFit="cover"
+        transition={200}
       />
     );
   }
+
   return (
-    <View style={[styles.placeholder, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[styles.initials, { fontSize: size * 0.38 }]}>{initials}</Text>
+    <View
+      style={[
+        styles.placeholder,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    >
+      <Text style={[styles.initials, { fontSize: size * 0.36 }]}>
+        {initials || "?"}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  image: { backgroundColor: colors.gray200 },
+  image: {
+    backgroundColor: colors.gray100,
+  },
   placeholder: {
-    backgroundColor: colors.gray200,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
   initials: {
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.gray500,
+    letterSpacing: 0.5,
   },
 });

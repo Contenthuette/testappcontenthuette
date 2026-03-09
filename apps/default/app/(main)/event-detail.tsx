@@ -1,89 +1,148 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import React, { useState } from "react";
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, Alert, Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
-import { Button } from "@/components/Button";
+import { colors, spacing, radius } from "@/lib/theme";
 import { SymbolView } from "expo-symbols";
 import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useQuery(api.events.getById, id ? { eventId: id as Id<"events"> } : "skip");
   const buyTicket = useMutation(api.events.buyTicket);
+  const [buying, setBuying] = useState(false);
 
   if (!event) {
-    return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View></SafeAreaView>;
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loading}><ActivityIndicator color={colors.gray300} /></View>
+      </SafeAreaView>
+    );
   }
 
   const isSoldOut = event.soldTickets >= event.totalTickets;
-  const availableTickets = event.totalTickets - event.soldTickets;
+  const available = event.totalTickets - event.soldTickets;
 
   const handleBuy = async () => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setBuying(true);
     try {
       const result = await buyTicket({ eventId: event._id });
       router.push({ pathname: "/(main)/ticket", params: { id: result.ticketId } });
     } catch (e) {
-      // handle
+      if (Platform.OS !== "web") Alert.alert("Fehler", "Ticket konnte nicht gekauft werden.");
+    } finally {
+      setBuying(false);
     }
+  };
+
+  const formatDuration = (min: number) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return h > 0 ? `${h} Std.${m > 0 ? ` ${m} Min.` : ""}` : `${m} Min.`;
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.imageHeader}>
+        {/* Hero */}
+        <View style={styles.hero}>
           {event.thumbnailUrl ? (
-            <Image source={{ uri: event.thumbnailUrl }} style={styles.headerImage} contentFit="cover" />
+            <Image source={{ uri: event.thumbnailUrl }} style={styles.heroImage} contentFit="cover" transition={300} />
           ) : (
-            <View style={styles.headerPlaceholder}>
-              <SymbolView name="calendar" size={40} tintColor={colors.gray300} />
+            <View style={styles.heroPlaceholder}>
+              <SymbolView name="sparkles" size={40} tintColor={colors.gray300} />
             </View>
           )}
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
+            <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
+          {isSoldOut && (
+            <View style={styles.soldOutOverlay}>
+              <Text style={styles.soldOutLabel}>Ausverkauft</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.content}>
           <Text style={styles.eventName}>{event.name}</Text>
-          <View style={styles.detailRow}>
-            <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
-            <Text style={styles.detailText}>{event.date} • {event.startTime} Uhr</Text>
-          </View>
-          {event.durationMinutes ? (
-            <View style={styles.detailRow}>
-              <SymbolView name="clock" size={18} tintColor={colors.gray500} />
-              <Text style={styles.detailText}>{Math.floor(event.durationMinutes / 60)}h {event.durationMinutes % 60 > 0 ? `${event.durationMinutes % 60}min` : ""}</Text>
+
+          {/* Info rows */}
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
+              </View>
+              <View>
+                <Text style={styles.infoLabel}>{event.date}</Text>
+                <Text style={styles.infoSub}>{event.startTime} Uhr</Text>
+              </View>
             </View>
-          ) : null}
-          <View style={styles.detailRow}>
-            <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />
-            <Text style={styles.detailText}>{event.venue}, {event.city}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
-            <Text style={styles.detailText}>{availableTickets} von {event.totalTickets} Tickets verfügbar</Text>
+            {event.durationMinutes ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoIcon}>
+                  <SymbolView name="clock" size={18} tintColor={colors.gray500} />
+                </View>
+                <View>
+                  <Text style={styles.infoLabel}>Dauer</Text>
+                  <Text style={styles.infoSub}>{formatDuration(event.durationMinutes)}</Text>
+                </View>
+              </View>
+            ) : null}
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoLabel}>{event.venue}</Text>
+                <Text style={styles.infoSub}>{event.city}</Text>
+              </View>
+            </View>
+            <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.infoIcon}>
+                <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
+              </View>
+              <View>
+                <Text style={styles.infoLabel}>
+                  {isSoldOut ? "Ausverkauft" : `${available} Tickets verfügbar`}
+                </Text>
+                <Text style={styles.infoSub}>von {event.totalTickets} gesamt</Text>
+              </View>
+            </View>
           </View>
 
           {event.description && <Text style={styles.desc}>{event.description}</Text>}
-
-          <View style={styles.priceBox}>
-            <View>
-              <Text style={styles.priceLabel}>Ticketpreis</Text>
-              <Text style={styles.price}>€{event.ticketPrice.toFixed(2)}</Text>
-            </View>
-            <Button
-              title={isSoldOut ? "Ausverkauft" : "Ticket kaufen"}
-              onPress={handleBuy}
-              disabled={isSoldOut}
-              size="lg"
-            />
-          </View>
         </View>
       </ScrollView>
+
+      {/* Bottom bar */}
+      <View style={styles.bottomBar}>
+        <View>
+          <Text style={styles.priceLabel}>Preis</Text>
+          <Text style={styles.price}>€{event.ticketPrice.toFixed(2)}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.buyBtn, (isSoldOut || buying) && styles.buyBtnDisabled]}
+          onPress={handleBuy}
+          disabled={isSoldOut || buying}
+          activeOpacity={0.7}
+        >
+          {buying ? (
+            <ActivityIndicator color={colors.white} size="small" />
+          ) : (
+            <Text style={styles.buyBtnText}>
+              {isSoldOut ? "Ausverkauft" : "Ticket kaufen"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -91,30 +150,96 @@ export default function EventDetailScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  imageHeader: { height: 260, backgroundColor: colors.gray100, position: "relative" },
-  headerImage: { width: "100%", height: "100%" },
-  headerPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  hero: { height: 280, backgroundColor: colors.gray100, position: "relative" },
+  heroImage: { width: "100%", height: "100%" },
+  heroPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
   backBtn: {
-    position: "absolute", top: spacing.md, left: spacing.md,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center",
-  },
-  content: { padding: spacing.xl },
-  eventName: { fontSize: 26, fontWeight: "700", color: colors.black, marginBottom: spacing.lg },
-  detailRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.md },
-  detailText: { fontSize: 15, color: colors.gray600 },
-  desc: { fontSize: 15, color: colors.gray700, lineHeight: 22, marginTop: spacing.lg },
-  priceBox: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.92)",
     alignItems: "center",
-    marginTop: spacing.xxl,
-    padding: spacing.lg,
-    backgroundColor: colors.gray50,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.gray100,
+    justifyContent: "center",
+    boxShadow: "0px 2px 8px rgba(0,0,0,0.08)",
   },
-  priceLabel: { fontSize: 13, color: colors.gray500 },
-  price: { fontSize: 28, fontWeight: "800", color: colors.black },
+  soldOutOverlay: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: colors.black,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  soldOutLabel: { fontSize: 12, fontWeight: "700", color: colors.white },
+
+  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: 120 },
+  eventName: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.black,
+    letterSpacing: -0.4,
+    marginBottom: spacing.lg,
+  },
+
+  infoCard: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    overflow: "hidden",
+    marginBottom: spacing.lg,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  infoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoLabel: { fontSize: 15, fontWeight: "600", color: colors.black },
+  infoSub: { fontSize: 13, color: colors.gray500, marginTop: 1 },
+
+  desc: { fontSize: 15, color: colors.gray600, lineHeight: 23, letterSpacing: -0.1 },
+
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: Platform.OS === "ios" ? 40 : spacing.lg,
+    backgroundColor: colors.white,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
+  },
+  priceLabel: { fontSize: 12, color: colors.gray500 },
+  price: { fontSize: 24, fontWeight: "800", color: colors.black, fontVariant: ["tabular-nums"] },
+  buyBtn: {
+    paddingHorizontal: 28,
+    height: 50,
+    borderRadius: radius.md,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buyBtnDisabled: { opacity: 0.35 },
+  buyBtnText: { fontSize: 16, fontWeight: "700", color: colors.white },
 });

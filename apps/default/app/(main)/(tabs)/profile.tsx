@@ -1,85 +1,136 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Dimensions, ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "expo-symbols";
 import { Image } from "expo-image";
+
+const { width: screenWidth } = Dimensions.get("window");
+const GRID_GAP = 2;
+const GRID_COL = 3;
+const GRID_SIZE = (screenWidth - GRID_GAP * (GRID_COL - 1)) / GRID_COL;
 
 export default function ProfileScreen() {
   const me = useQuery(api.users.me);
   const myPosts = useQuery(api.posts.getUserPosts, me ? { userId: me._id } : "skip");
 
+  if (me === undefined) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+      </SafeAreaView>
+    );
+  }
+
   if (!me) return null;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Banner */}
         <View style={styles.banner}>
           {me.bannerUrl ? (
-            <Image source={{ uri: me.bannerUrl }} style={styles.bannerImage} contentFit="cover" />
+            <Image source={{ uri: me.bannerUrl }} style={styles.bannerImage} contentFit="cover" transition={200} />
           ) : (
-            <View style={styles.bannerPlaceholder} />
+            <View style={styles.bannerGradient} />
           )}
           <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push("/(main)/settings")}>
-            <SymbolView name="gearshape" size={22} tintColor={colors.black} />
+            <SymbolView name="gearshape" size={20} tintColor={colors.black} />
           </TouchableOpacity>
         </View>
 
-        {/* Profile Info */}
-        <View style={styles.profileInfo}>
+        {/* Profile header */}
+        <View style={styles.profileSection}>
           <View style={styles.avatarRow}>
-            <Avatar uri={me.avatarUrl} name={me.name} size={80} />
-            <TouchableOpacity style={styles.editBtn} onPress={() => router.push("/(main)/edit-profile")}>
-              <Text style={styles.editBtnText}>Bearbeiten</Text>
-            </TouchableOpacity>
+            <View style={styles.avatarBorder}>
+              <Avatar uri={me.avatarUrl} name={me.name} size={84} />
+            </View>
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{myPosts?.length ?? 0}</Text>
+                <Text style={styles.statLabel}>Beiträge</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statLabel}>Freunde</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statLabel}>Gruppen</Text>
+              </View>
+            </View>
           </View>
-          <Text style={styles.name}>{me.name}</Text>
-          {me.city && <Text style={styles.location}>{me.city}{me.county ? `, ${me.county}` : ""}</Text>}
-          {me.bio && <Text style={styles.bio}>{me.bio}</Text>}
 
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{myPosts?.length ?? 0}</Text>
-              <Text style={styles.statLabel}>Beiträge</Text>
+          <Text style={styles.name}>{me.name}</Text>
+          {(me.city || me.county) && (
+            <View style={styles.locationRow}>
+              <SymbolView name="mappin" size={12} tintColor={colors.gray400} />
+              <Text style={styles.location} numberOfLines={1}>
+                {[me.city, me.county].filter(Boolean).join(", ")}
+              </Text>
             </View>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>Freunde</Text>
-            </View>
+          )}
+          {me.bio ? <Text style={styles.bio}>{me.bio}</Text> : null}
+
+          {/* Action buttons */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.editBtn} onPress={() => router.push("/(main)/edit-profile")} activeOpacity={0.7}>
+              <Text style={styles.editBtnText}>Profil bearbeiten</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.shareBtn} activeOpacity={0.7}>
+              <SymbolView name="square.and.arrow.up" size={16} tintColor={colors.black} />
+            </TouchableOpacity>
           </View>
 
           {/* Interests */}
           {me.interests && me.interests.length > 0 && (
-            <View style={styles.interestsSection}>
-              <Text style={styles.sectionTitle}>Interessen</Text>
-              <View style={styles.chipContainer}>
-                {me.interests.slice(0, 10).map((interest: string) => (
-                  <View key={interest} style={styles.chip}>
-                    <Text style={styles.chipText}>{interest}</Text>
-                  </View>
-                ))}
-              </View>
+            <View style={styles.interestsWrap}>
+              {me.interests.slice(0, 8).map((interest: string) => (
+                <View key={interest} style={styles.chip}>
+                  <Text style={styles.chipText}>{interest}</Text>
+                </View>
+              ))}
+              {me.interests.length > 8 && (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>+{me.interests.length - 8}</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
 
-        {/* Media Grid */}
-        {myPosts && myPosts.length > 0 && (
-          <View style={styles.mediaGrid}>
+        {/* Posts grid */}
+        <View style={styles.gridHeader}>
+          <View style={styles.gridTab}>
+            <SymbolView name="square.grid.3x3" size={20} tintColor={colors.black} />
+          </View>
+        </View>
+
+        {myPosts && myPosts.length > 0 ? (
+          <View style={styles.grid}>
             {myPosts.map(post => (
-              <View key={post._id} style={styles.mediaItem}>
+              <View key={post._id} style={styles.gridItem}>
                 {post.mediaUrl ? (
-                  <Image source={{ uri: post.mediaUrl }} style={styles.mediaImage} contentFit="cover" />
+                  <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} contentFit="cover" transition={200} />
                 ) : (
-                  <View style={styles.mediaPlaceholder} />
+                  <View style={styles.gridPlaceholder}>
+                    <SymbolView name="text.quote" size={18} tintColor={colors.gray300} />
+                  </View>
                 )}
               </View>
             ))}
+          </View>
+        ) : (
+          <View style={styles.emptyGrid}>
+            <SymbolView name="camera" size={32} tintColor={colors.gray300} />
+            <Text style={styles.emptyGridText}>Noch keine Beiträge</Text>
           </View>
         )}
 
@@ -88,8 +139,9 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.adminBtn}
             onPress={() => router.push("/(admin)/dashboard")}
+            activeOpacity={0.7}
           >
-            <SymbolView name="shield.checkered" size={20} tintColor={colors.white} />
+            <SymbolView name="shield.checkered" size={18} tintColor={colors.white} />
             <Text style={styles.adminBtnText}>Admin Dashboard</Text>
           </TouchableOpacity>
         )}
@@ -100,57 +152,120 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
-  banner: { height: 160, backgroundColor: colors.gray200, position: "relative" },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  banner: { height: 150, backgroundColor: colors.gray100, position: "relative" },
   bannerImage: { width: "100%", height: "100%" },
-  bannerPlaceholder: { flex: 1, backgroundColor: colors.gray200 },
+  bannerGradient: { flex: 1, backgroundColor: colors.gray200 },
   settingsBtn: {
     position: "absolute",
-    top: spacing.md,
-    right: spacing.md,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.9)",
+    top: 12,
+    right: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0px 2px 8px rgba(0,0,0,0.08)",
+  },
+
+  profileSection: { paddingHorizontal: spacing.xl, marginTop: -32 },
+  avatarRow: { flexDirection: "row", alignItems: "flex-end", gap: spacing.lg },
+  avatarBorder: {
+    padding: 3,
+    borderRadius: 48,
+    backgroundColor: colors.white,
+  },
+  statsRow: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingBottom: 6,
+  },
+  stat: { alignItems: "center" },
+  statValue: { fontSize: 18, fontWeight: "800", color: colors.black, fontVariant: ["tabular-nums"] },
+  statLabel: { fontSize: 12, color: colors.gray500, marginTop: 1 },
+
+  name: { fontSize: 20, fontWeight: "700", color: colors.black, marginTop: spacing.md, letterSpacing: -0.3 },
+  locationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  location: { fontSize: 14, color: colors.gray500, flex: 1 },
+  bio: { fontSize: 15, color: colors.gray700, marginTop: spacing.sm, lineHeight: 22, letterSpacing: -0.1 },
+
+  actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
+  editBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
-  profileInfo: { paddingHorizontal: spacing.xl, marginTop: -40 },
-  avatarRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
-  editBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.gray300,
-    backgroundColor: colors.white,
-  },
   editBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
-  name: { fontSize: 24, fontWeight: "700", color: colors.black, marginTop: spacing.md },
-  location: { fontSize: 15, color: colors.gray500, marginTop: spacing.xs },
-  bio: { fontSize: 15, color: colors.gray700, marginTop: spacing.sm, lineHeight: 22 },
-  statsRow: { flexDirection: "row", gap: spacing.xxl, marginTop: spacing.lg },
-  stat: { alignItems: "center" },
-  statValue: { fontSize: 18, fontWeight: "700", color: colors.black },
-  statLabel: { fontSize: 13, color: colors.gray500 },
-  interestsSection: { marginTop: spacing.xl },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.black, marginBottom: spacing.md },
-  chipContainer: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.full, backgroundColor: colors.gray100 },
-  chipText: { fontSize: 13, color: colors.gray700 },
-  mediaGrid: { flexDirection: "row", flexWrap: "wrap", paddingTop: spacing.xl },
-  mediaItem: { width: "33.33%", aspectRatio: 1, padding: 1 },
-  mediaImage: { flex: 1, backgroundColor: colors.gray100 },
-  mediaPlaceholder: { flex: 1, backgroundColor: colors.gray100 },
+  shareBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  interestsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  chipText: { fontSize: 13, color: colors.gray700, fontWeight: "500" },
+
+  gridHeader: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.xxl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
+  },
+  gridTab: {
+    paddingVertical: spacing.md,
+    borderTopWidth: 1.5,
+    borderTopColor: colors.black,
+    marginTop: -StyleSheet.hairlineWidth,
+  },
+
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
+  gridItem: { width: GRID_SIZE, height: GRID_SIZE },
+  gridImage: { width: "100%", height: "100%" },
+  gridPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyGrid: {
+    alignItems: "center",
+    paddingVertical: 48,
+    gap: spacing.md,
+  },
+  emptyGridText: { fontSize: 14, color: colors.gray400 },
+
   adminBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
     marginHorizontal: spacing.xl,
-    marginVertical: spacing.xxl,
+    marginTop: spacing.xxl,
     padding: spacing.lg,
     backgroundColor: colors.black,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
   },
-  adminBtnText: { fontSize: 16, fontWeight: "600", color: colors.white },
+  adminBtnText: { fontSize: 15, fontWeight: "600", color: colors.white },
 });

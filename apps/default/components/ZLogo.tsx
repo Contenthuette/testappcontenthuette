@@ -5,18 +5,35 @@ import { colors } from "@/lib/theme";
 interface ZLogoProps {
   size?: number;
   color?: string;
+  withBackground?: boolean;
 }
 
-export function ZLogo({ size = 32, color = colors.black }: ZLogoProps) {
+export function ZLogo({ size = 32, color = colors.black, withBackground = false }: ZLogoProps) {
+  if (withBackground) {
+    return (
+      <View style={[
+        styles.bgContainer,
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.28,
+          backgroundColor: color,
+        },
+      ]}>
+        <Text style={[
+          styles.text,
+          { fontSize: size * 0.52, color: color === colors.black ? colors.white : colors.black },
+        ]}>Z</Text>
+      </View>
+    );
+  }
   return (
-    <View style={[styles.container, { width: size, height: size, borderRadius: size * 0.25 }]}>
-      <Text style={[styles.text, { fontSize: size * 0.6, color }]}>Z</Text>
-    </View>
+    <Text style={[styles.text, { fontSize: size * 0.65, color }]}>Z</Text>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  bgContainer: {
     alignItems: "center",
     justifyContent: "center",
   },

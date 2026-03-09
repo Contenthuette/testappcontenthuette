@@ -1,59 +1,74 @@
 import React from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
-import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "expo-symbols";
+
+const ICON_MAP: Record<string, string> = {
+  message: "bubble.left.fill",
+  like: "heart.fill",
+  comment: "text.bubble.fill",
+  event: "calendar",
+  ticket: "ticket.fill",
+  announcement: "megaphone.fill",
+  group: "person.3.fill",
+  call: "phone.fill",
+};
 
 export default function NotificationsScreen() {
   const notifications = useQuery(api.notifications.list, {});
   const markRead = useMutation(api.notifications.markRead);
 
-  const iconMap: Record<string, string> = {
-    message: "bubble.left.fill",
-    like: "heart.fill",
-    comment: "text.bubble.fill",
-    event: "calendar",
-    ticket: "ticket.fill",
-    announcement: "megaphone.fill",
-    group: "person.3.fill",
-    call: "phone.fill",
-  };
-
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+          <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>Benachrichtigungen</Text>
+        <View style={{ width: 36 }} />
       </View>
 
       <FlatList
         data={notifications}
         keyExtractor={item => item._id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={[styles.notifRow, !item.isRead && styles.notifUnread]}
+            style={[styles.row, !item.isRead && styles.rowUnread]}
             onPress={() => markRead({ notificationId: item._id })}
+            activeOpacity={0.6}
           >
-            <View style={styles.notifIcon}>
-              <SymbolView name={(iconMap[item.type] || "bell.fill") as any} size={18} tintColor={colors.gray600} />
+            <View style={[styles.iconWrap, !item.isRead && styles.iconWrapActive]}>
+              <SymbolView
+                name={(ICON_MAP[item.type] || "bell.fill") as Parameters<typeof SymbolView>[0]["name"]}
+                size={16}
+                tintColor={!item.isRead ? colors.white : colors.gray500}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.notifText}>{item.body}</Text>
-              <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
+              <Text style={styles.body}>{item.body}</Text>
+              <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
             </View>
+            {!item.isRead && <View style={styles.dot} />}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          notifications === undefined ? <ActivityIndicator style={{ marginTop: 40 }} color={colors.gray400} /> : (
-            <EmptyState icon="bell" title="Keine Benachrichtigungen" subtitle="Hier erscheinen deine Benachrichtigungen" />
+          notifications === undefined ? (
+            <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+          ) : (
+            <EmptyState
+              icon="bell"
+              title="Alles ruhig"
+              subtitle="Hier erscheinen deine Benachrichtigungen."
+            />
           )
         }
       />
@@ -73,13 +88,41 @@ function formatTime(ts: number): string {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
-  backBtn: { padding: spacing.xs },
-  title: { fontSize: 22, fontWeight: "700", color: colors.black },
-  list: { paddingHorizontal: spacing.xl, paddingBottom: 40 },
-  notifRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.gray100, gap: spacing.md },
-  notifUnread: { backgroundColor: colors.gray50 },
-  notifIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gray100, alignItems: "center", justifyContent: "center" },
-  notifText: { fontSize: 14, color: colors.black, lineHeight: 20 },
-  notifTime: { fontSize: 12, color: colors.gray400, marginTop: 2 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  backBtn: { width: 36, height: 36, justifyContent: "center" },
+  title: { fontSize: 17, fontWeight: "600", color: colors.black },
+  list: { paddingBottom: 40 },
+  loadingWrap: { paddingVertical: 60, alignItems: "center" },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: 14,
+    gap: spacing.md,
+  },
+  rowUnread: { backgroundColor: colors.gray50 },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconWrapActive: { backgroundColor: colors.black },
+  body: { fontSize: 14, color: colors.black, lineHeight: 20, letterSpacing: -0.1 },
+  time: { fontSize: 12, color: colors.gray400, marginTop: 2 },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.black,
+  },
 });

@@ -12,7 +12,9 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
   return (
     <View style={styles.container}>
-      <SymbolView name={icon as any} size={48} tintColor={colors.gray300} />
+      <View style={styles.iconWrap}>
+        <SymbolView name={icon as Parameters<typeof SymbolView>[0]["name"]} size={32} tintColor={colors.gray300} />
+      </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
     </View>
@@ -21,24 +23,31 @@ export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing.xxxl,
-    paddingVertical: 80,
+    paddingHorizontal: 48,
+    paddingVertical: 100,
+  },
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xl,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "600",
-    color: colors.gray600,
-    marginTop: spacing.lg,
+    color: colors.gray700,
     textAlign: "center",
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.gray400,
     marginTop: spacing.sm,
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
   },
 });
