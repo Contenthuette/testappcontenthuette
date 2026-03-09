@@ -4,14 +4,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
-import { ZLogo } from "@/components/ZLogo";
 
 export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.hero}>
-          <ZLogo size={80} />
           <Text style={styles.title}>Z</Text>
           <Text style={styles.subtitle}>Dein soziales Netzwerk{"\n"}für Mecklenburg-Vorpommern</Text>
         </View>
