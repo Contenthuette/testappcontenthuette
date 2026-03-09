@@ -15,23 +15,23 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import Icon from "@/components/Icon";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 
-type PostType = "photo" | "video" | "reel";
+type PostType = "photo" | "video";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
   photo: { title: "Foto posten", pickLabel: "Foto auswaehlen", icon: "photo" },
   video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
-  reel: { title: "Reel posten", pickLabel: "Reel auswaehlen", icon: "play.rectangle" },
 };
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type?: string }>();
-  const postType: PostType = (type === "video" || type === "reel") ? type : "photo";
+  const postType: PostType = type === "video" ? "video" : "photo";
   const config = typeConfig[postType];
   const router = useRouter();
 
@@ -45,6 +45,10 @@ export default function CreatePostScreen() {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
 
+  const videoPlayer = useVideoPlayer(mediaPreview ?? "", (player: { loop: boolean }) => {
+    player.loop = false;
+  });
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       handlePick();
@@ -55,7 +59,7 @@ export default function CreatePostScreen() {
   const handlePick = async () => {
     setPicking(true);
     try {
-      const isVideo = postType === "video" || postType === "reel";
+      const isVideo = postType === "video";
       const result = isVideo
         ? await pickVideo({ quality: 0.8 })
         : await pickImage({ quality: 0.8, allowsEditing: true });
@@ -148,29 +152,60 @@ export default function CreatePostScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <TouchableOpacity
-          style={styles.mediaArea}
+          style={[
+            styles.mediaArea,
+            postType === "video" && mediaPreview ? styles.mediaAreaVideo : undefined,
+          ]}
           onPress={handlePick}
           disabled={picking || publishing}
           activeOpacity={0.7}
         >
           {mediaPreview ? (
-            <View style={styles.previewWrap}>
-              <Image
-                source={{ uri: mediaPreview }}
-                style={styles.previewImage}
-                contentFit="cover"
-              />
-              <View style={styles.previewOverlay}>
-                {picking ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <View style={styles.changeBadge}>
-                    <Icon name="camera" size={14} tintColor={colors.white} />
-                    <Text style={styles.changeBadgeText}>Aendern</Text>
-                  </View>
-                )}
+            postType === "video" ? (
+              <View style={styles.videoPreviewWrap}>
+                <VideoView
+                  player={videoPlayer}
+                  style={styles.videoPlayer}
+                  allowsFullscreen
+                  allowsPictureInPicture={false}
+                  contentFit="cover"
+                />
+                <View style={styles.videoChangeBtnWrap}>
+                  <TouchableOpacity
+                    style={styles.changeBadge}
+                    onPress={handlePick}
+                    disabled={picking || publishing}
+                  >
+                    {picking ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : (
+                      <>
+                        <Icon name="camera" size={14} tintColor={colors.white} />
+                        <Text style={styles.changeBadgeText}>Aendern</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={styles.previewWrap}>
+                <Image
+                  source={{ uri: mediaPreview }}
+                  style={styles.previewImage}
+                  contentFit="cover"
+                />
+                <View style={styles.previewOverlay}>
+                  {picking ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <View style={styles.changeBadge}>
+                      <Icon name="camera" size={14} tintColor={colors.white} />
+                      <Text style={styles.changeBadgeText}>Aendern</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )
           ) : picking ? (
             <View style={styles.emptyMedia}>
               <ActivityIndicator size="large" color={colors.gray400} />
@@ -245,6 +280,10 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     minHeight: 260,
   },
+  mediaAreaVideo: {
+    borderStyle: "solid",
+    borderColor: colors.gray200,
+  },
   previewWrap: { position: "relative", minHeight: 260 },
   previewImage: { width: "100%", height: 300, borderRadius: radius.md },
   previewOverlay: {
@@ -253,6 +292,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.2)",
     borderRadius: radius.md,
+  },
+  videoPreviewWrap: {
+    position: "relative",
+    width: "100%",
+    aspectRatio: 9 / 16,
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: colors.black,
+  },
+  videoPlayer: {
+    width: "100%",
+    height: "100%",
+  },
+  videoChangeBtnWrap: {
+    position: "absolute",
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: "center",
   },
   changeBadge: {
     flexDirection: "row",

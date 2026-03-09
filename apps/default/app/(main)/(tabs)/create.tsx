@@ -20,12 +20,6 @@ const createOptions = [
     route: "/(main)/create-post?type=video" as const,
   },
   {
-    icon: "play.rectangle" as const,
-    label: "Reel posten",
-    desc: "Erstelle ein kurzes Reel f\u00fcr deinen Feed",
-    route: "/(main)/create-post?type=reel" as const,
-  },
-  {
     icon: "person.3.fill" as const,
     label: "Gruppe erstellen",
     desc: "Starte eine neue Gruppe in MV",

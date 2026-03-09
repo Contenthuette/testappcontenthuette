@@ -88,7 +88,7 @@ export default defineSchema({
   // ── Posts / Feed ───────────────────────────────────────────────
   posts: defineTable({
     authorId: v.id("users"),
-    type: v.union(v.literal("photo"), v.literal("video"), v.literal("reel")),
+    type: v.union(v.literal("photo"), v.literal("video")),
     caption: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaUrl: v.optional(v.string()),

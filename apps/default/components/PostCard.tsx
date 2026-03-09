@@ -1,6 +1,7 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
@@ -12,7 +13,7 @@ interface PostCardProps {
     authorId: Id<"users">;
     authorName: string;
     authorAvatarUrl?: string;
-    type: "photo" | "video" | "reel";
+    type: "photo" | "video";
     caption?: string;
     mediaUrl?: string;
     likeCount: number;
@@ -30,8 +31,79 @@ interface PostCardProps {
   onProfile?: () => void;
 }
 
+function VideoPost({ mediaUrl }: { mediaUrl: string }) {
+  const { width } = useWindowDimensions();
+  const videoHeight = width * (16 / 9);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const player = useVideoPlayer(mediaUrl, (p: { loop: boolean }) => {
+    p.loop = true;
+  });
+
+  const handleTogglePlay = useCallback(() => {
+    if (isPlaying) {
+      player.pause();
+    } else {
+      player.play();
+    }
+    setIsPlaying(!isPlaying);
+  }, [isPlaying, player]);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.95}
+      onPress={handleTogglePlay}
+      style={[vs.container, { height: videoHeight }]}
+    >
+      <VideoView
+        player={player}
+        style={vs.video}
+        allowsFullscreen
+        allowsPictureInPicture={false}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      {!isPlaying && (
+        <View style={vs.playOverlay}>
+          <View style={vs.playBtn}>
+            <SymbolView name="play.fill" size={28} tintColor="#fff" />
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+const vs = StyleSheet.create({
+  container: {
+    width: "100%",
+    backgroundColor: "#000",
+    position: "relative",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.15)",
+  },
+  playBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
 export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }: PostCardProps) {
   const timeAgo = formatTimeAgo(post.createdAt);
+  const isVideo = post.type === "video";
+
   return (
     <View style={[s.container, post.isAnnouncement && s.announcement]}>
       {post.isAnnouncement && (
@@ -49,9 +121,15 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
           </View>
         </TouchableOpacity>
       </View>
+
       {post.mediaUrl ? (
-        <Image source={{ uri: post.mediaUrl }} style={s.media} contentFit="cover" />
+        isVideo ? (
+          <VideoPost mediaUrl={post.mediaUrl} />
+        ) : (
+          <Image source={{ uri: post.mediaUrl }} style={s.media} contentFit="cover" />
+        )
       ) : null}
+
       <View style={s.actions}>
         <TouchableOpacity style={s.actionBtn} onPress={onLike}>
           <SymbolView name={post.isLiked ? "heart.fill" : "heart"} size={22} tintColor={post.isLiked ? "#FF3B30" : theme.text} />

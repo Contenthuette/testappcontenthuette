@@ -25,7 +25,7 @@ export const feed = authQuery({
     authorId: v.id("users"),
     authorName: v.string(),
     authorAvatarUrl: v.optional(v.string()),
-    type: v.union(v.literal("photo"), v.literal("video"), v.literal("reel")),
+    type: v.union(v.literal("photo"), v.literal("video")),
     caption: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     likeCount: v.number(),
@@ -95,7 +95,7 @@ export const feed = authQuery({
 // Create post
 export const create = authMutation({
   args: {
-    type: v.union(v.literal("photo"), v.literal("video"), v.literal("reel")),
+    type: v.union(v.literal("photo"), v.literal("video")),
     caption: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
     isAnnouncement: v.optional(v.boolean()),
@@ -215,7 +215,7 @@ export const getSavedPosts = authQuery({
   args: {},
   returns: v.array(v.object({
     _id: v.id("posts"),
-    type: v.union(v.literal("photo"), v.literal("video"), v.literal("reel")),
+    type: v.union(v.literal("photo"), v.literal("video")),
     caption: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     authorName: v.string(),
@@ -251,7 +251,7 @@ export const getUserPosts = query({
   args: { userId: v.id("users") },
   returns: v.array(v.object({
     _id: v.id("posts"),
-    type: v.union(v.literal("photo"), v.literal("video"), v.literal("reel")),
+    type: v.union(v.literal("photo"), v.literal("video")),
     mediaUrl: v.optional(v.string()),
     likeCount: v.number(),
     commentCount: v.number(),
