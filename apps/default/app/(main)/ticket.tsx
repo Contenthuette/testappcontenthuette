@@ -40,7 +40,7 @@ export default function TicketScreen() {
           </View>
 
           <Text style={styles.eventName}>{ticket.eventName}</Text>
-          <Text style={styles.eventInfo}>{ticket.eventDate} • {ticket.eventTime}</Text>
+          <Text style={styles.eventInfo}>{ticket.eventDate}</Text>
           <Text style={styles.eventInfo}>{ticket.eventVenue}, {ticket.eventCity}</Text>
 
           <View style={styles.divider} />
@@ -57,7 +57,6 @@ export default function TicketScreen() {
 
           <View style={styles.ticketFooter}>
             <Text style={styles.ticketId}>Ticket #{ticket._id.slice(-8)}</Text>
-            <Text style={styles.holderName}>{ticket.holderName}</Text>
           </View>
         </View>
       </View>

@@ -9,6 +9,7 @@ import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { SymbolView } from "expo-symbols";
 import { Image } from "expo-image";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,11 +23,7 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.banner}>
-          {profile.bannerUrl ? (
-            <Image source={{ uri: profile.bannerUrl }} style={styles.bannerImage} contentFit="cover" />
-          ) : (
-            <View style={styles.bannerPlaceholder} />
-          )}
+          <View style={styles.bannerPlaceholder} />
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>

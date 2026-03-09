@@ -47,14 +47,8 @@ export default function GroupDetailScreen() {
           {group.description && <Text style={styles.desc}>{group.description}</Text>}
 
           <View style={styles.actionRow}>
-            {group.isMember ? (
-              <>
-                <Button title="Chat" onPress={() => router.push({ pathname: "/(main)/group-chat", params: { id: id! } })} fullWidth />
-                <Button title="Verlassen" onPress={() => leaveGroup({ groupId: id as Id<"groups"> })} variant="outline" size="sm" />
-              </>
-            ) : (
-              <Button title="Beitreten" onPress={() => joinGroup({ groupId: id as Id<"groups"> })} fullWidth />
-            )}
+            <Button title="Chat" onPress={() => router.push({ pathname: "/(main)/group-chat", params: { id: id! } })} fullWidth />
+            <Button title="Beitreten" onPress={() => joinGroup({ groupId: id as Id<"groups"> })} variant="outline" size="sm" />
           </View>
 
           {/* Members */}

@@ -27,9 +27,9 @@ export default function BlockedUsersScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <View style={styles.row}>
-            <Avatar uri={item.avatarUrl} name={item.name} size={44} />
-            <Text style={styles.name}>{item.name}</Text>
-            <TouchableOpacity style={styles.unblockBtn} onPress={() => unblockUser({ blockedUserId: item.userId })}>
+            <Avatar uri={undefined} name={item.blockedName} size={44} />
+            <Text style={styles.name}>{item.blockedName}</Text>
+            <TouchableOpacity style={styles.unblockBtn} onPress={() => unblockUser({ blockId: item._id })}>
               <Text style={styles.unblockText}>Entsperren</Text>
             </TouchableOpacity>
           </View>

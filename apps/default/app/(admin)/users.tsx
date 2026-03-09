@@ -25,7 +25,7 @@ export default function AdminUsersScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <View style={styles.row}>
-            <Avatar uri={item.avatarUrl} name={item.name} size={44} />
+            <Avatar uri={undefined} name={item.name} size={44} />
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
               <Text style={styles.email}>{item.email}</Text>

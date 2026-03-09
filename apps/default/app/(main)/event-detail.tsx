@@ -24,8 +24,8 @@ export default function EventDetailScreen() {
 
   const handleBuy = async () => {
     try {
-      const ticketId = await buyTicket({ eventId: event._id });
-      router.push({ pathname: "/(main)/ticket", params: { id: ticketId } });
+      const result = await buyTicket({ eventId: event._id });
+      router.push({ pathname: "/(main)/ticket", params: { id: result.ticketId } });
     } catch (e) {
       // handle
     }
@@ -53,12 +53,12 @@ export default function EventDetailScreen() {
             <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
             <Text style={styles.detailText}>{event.date} • {event.startTime} Uhr</Text>
           </View>
-          {event.duration && (
+          {event.durationMinutes ? (
             <View style={styles.detailRow}>
               <SymbolView name="clock" size={18} tintColor={colors.gray500} />
-              <Text style={styles.detailText}>{event.duration}</Text>
+              <Text style={styles.detailText}>{Math.floor(event.durationMinutes / 60)}h {event.durationMinutes % 60 > 0 ? `${event.durationMinutes % 60}min` : ""}</Text>
             </View>
-          )}
+          ) : null}
           <View style={styles.detailRow}>
             <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />
             <Text style={styles.detailText}>{event.venue}, {event.city}</Text>

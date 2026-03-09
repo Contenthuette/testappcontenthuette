@@ -35,10 +35,10 @@ export default function ModerationScreen() {
             <Text style={styles.reason}>{item.reason}</Text>
             {item.status === "pending" && (
               <View style={styles.actions}>
-                <TouchableOpacity style={styles.resolveBtn} onPress={() => resolveReport({ id: item._id, resolution: "dismissed" })}>
+                <TouchableOpacity style={styles.resolveBtn} onPress={() => resolveReport({ reportId: item._id, status: "reviewed" })}>
                   <Text style={styles.resolveText}>Abweisen</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.resolveBtn, styles.actionBtn]} onPress={() => resolveReport({ id: item._id, resolution: "action_taken" })}>
+                <TouchableOpacity style={[styles.resolveBtn, styles.actionBtn]} onPress={() => resolveReport({ reportId: item._id, status: "resolved" })}>
                   <Text style={[styles.resolveText, styles.actionText]}>Ma\u00dfnahme ergreifen</Text>
                 </TouchableOpacity>
               </View>
