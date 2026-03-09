@@ -1,13 +1,13 @@
-import { router, usePathname } from "expo-router";
+import { router } from "expo-router";
 
 /**
  * Fallback map: screen path segment → safe parent route.
- * When router.back() has nowhere to go, we push to this fallback.
+ * When router.back() has nowhere to go, we navigate to this fallback.
  */
 const FALLBACK_ROUTES: Record<string, string> = {
   // Groups
   "group-detail": "/(main)/(tabs)/groups",
-  "group-chat": "/(main)/group-detail",
+  "group-chat": "/(main)/(tabs)/groups",
   "create-group": "/(main)/(tabs)/groups",
   "edit-group": "/(main)/(tabs)/groups",
 
@@ -57,36 +57,27 @@ const FALLBACK_ROUTES: Record<string, string> = {
 
 /**
  * Navigate back safely. If the router has history, go back.
- * Otherwise use the fallback route for the given (or auto-detected) screen.
+ * Otherwise use the fallback route for the given screen.
  */
 export function safeBack(screenName?: string) {
-  if (router.canGoBack()) {
-    router.back();
-    return;
-  }
-
-  // Auto-detect screen name from the current URL path
-  const key = screenName ?? extractScreenName();
-  if (key && FALLBACK_ROUTES[key]) {
-    router.replace(FALLBACK_ROUTES[key] as "/");
-    return;
-  }
-
-  // Absolute fallback
-  router.replace("/(main)/(tabs)/groups" as "/");
-}
-
-/** Extract the last path segment from window.location or a best-effort guess */
-function extractScreenName(): string | null {
   try {
-    // In Expo Router, we can read the global navigation state
-    // but the simplest cross-platform way is to inspect the pathname
-    if (typeof window !== "undefined" && window.location?.pathname) {
-      const segments = window.location.pathname.split("/").filter(Boolean);
-      return segments[segments.length - 1] ?? null;
+    if (router.canGoBack()) {
+      router.back();
+      return;
     }
   } catch {
-    // Ignore on native where window may not exist
+    // router.back() failed, fall through to fallback
   }
-  return null;
+
+  // Use fallback route
+  const key = screenName;
+  const fallback = key ? FALLBACK_ROUTES[key] : undefined;
+  const target = fallback ?? "/(main)/(tabs)/groups";
+
+  try {
+    router.navigate(target as "/");
+  } catch {
+    // Last resort: hard navigate to home
+    router.replace("/(main)/(tabs)/groups" as "/");
+  }
 }
