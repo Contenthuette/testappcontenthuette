@@ -167,7 +167,7 @@ export default function CreatePostScreen() {
                   uri={mediaPreview}
                   height={videoPreviewHeight}
                   autoPlay={false}
-                  showControls
+                  muted={false}
                 />
                 <View style={styles.videoChangeBtnWrap}>
                   <TouchableOpacity

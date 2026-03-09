@@ -1,62 +1,36 @@
-import React from "react";
-import { View, StyleSheet } from "react-native";
-import WebView from "react-native-webview";
+import React, { useCallback, useRef, useEffect } from "react";
+import { View, StyleSheet, Platform } from "react-native";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 interface VideoPlayerProps {
   uri: string;
   height: number;
   autoPlay?: boolean;
   loop?: boolean;
-  showControls?: boolean;
+  muted?: boolean;
 }
 
-export function VideoPlayer({ uri, height, autoPlay = false, loop = false, showControls = true }: VideoPlayerProps) {
-  const autoPlayAttr = autoPlay ? "autoplay" : "";
-  const loopAttr = loop ? "loop" : "";
-  const controlsAttr = showControls ? "controls" : "";
-
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-        video {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-      </style>
-    </head>
-    <body>
-      <video
-        src="${uri}"
-        ${controlsAttr}
-        ${autoPlayAttr}
-        ${loopAttr}
-        playsinline
-        webkit-playsinline
-        preload="metadata"
-        poster=""
-      />
-    </body>
-    </html>
-  `;
+export function VideoPlayer({
+  uri,
+  height,
+  autoPlay = true,
+  loop = true,
+  muted = true,
+}: VideoPlayerProps) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = loop;
+    p.muted = muted;
+    if (autoPlay) {
+      p.play();
+    }
+  });
 
   return (
     <View style={[styles.container, { height }]}>
-      <WebView
-        source={{ html }}
-        style={styles.webview}
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        scrollEnabled={false}
-        bounces={false}
-        javaScriptEnabled
-        originWhitelist={["*"]}
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit="cover"
       />
     </View>
   );
@@ -66,10 +40,10 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     backgroundColor: "#000",
+    borderRadius: 16,
     overflow: "hidden",
   },
-  webview: {
+  video: {
     flex: 1,
-    backgroundColor: "#000",
   },
 });

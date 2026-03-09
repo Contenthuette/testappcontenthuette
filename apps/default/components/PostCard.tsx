@@ -63,7 +63,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
               height={videoHeight}
               autoPlay={false}
               loop
-              showControls
+              muted={false}
             />
           </View>
         ) : (

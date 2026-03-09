@@ -13,6 +13,7 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
+import { VideoPlayer } from "@/components/VideoPlayer";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -59,12 +60,24 @@ export default function FeedScreen() {
 
         {/* Media */}
         {item.mediaUrl && (
-          <Image
-            source={{ uri: item.mediaUrl }}
-            style={styles.postImage}
-            contentFit="cover"
-            transition={200}
-          />
+          item.type === "video" ? (
+            <View style={styles.videoWrap}>
+              <VideoPlayer
+                uri={item.mediaUrl}
+                height={screenWidth * (16 / 9)}
+                autoPlay
+                loop
+                muted
+              />
+            </View>
+          ) : (
+            <Image
+              source={{ uri: item.mediaUrl }}
+              style={styles.postImage}
+              contentFit="cover"
+              transition={200}
+            />
+          )
         )}
 
         {/* Actions */}
@@ -234,6 +247,11 @@ const styles = StyleSheet.create({
     width: screenWidth,
     height: screenWidth,
     backgroundColor: colors.gray100,
+  },
+  videoWrap: {
+    width: screenWidth,
+    backgroundColor: "#000",
+    overflow: "hidden",
   },
   postActions: {
     flexDirection: "row",
