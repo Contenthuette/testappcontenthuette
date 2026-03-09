@@ -15,6 +15,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import Icon from "@/components/Icon";
+import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
@@ -22,9 +23,9 @@ import * as Haptics from "expo-haptics";
 type PostType = "photo" | "video" | "reel";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
-  photo: { title: "Foto posten", pickLabel: "Foto ausw\u00e4hlen", icon: "photo" },
-  video: { title: "Video posten", pickLabel: "Video ausw\u00e4hlen", icon: "video" },
-  reel: { title: "Reel posten", pickLabel: "Reel ausw\u00e4hlen", icon: "play.rectangle" },
+  photo: { title: "Foto posten", pickLabel: "Foto auswaehlen", icon: "photo" },
+  video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
+  reel: { title: "Reel posten", pickLabel: "Reel auswaehlen", icon: "play.rectangle" },
 };
 
 export default function CreatePostScreen() {
@@ -43,7 +44,6 @@ export default function CreatePostScreen() {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
 
-  // Auto-open picker on mount
   useEffect(() => {
     const timeout = setTimeout(() => {
       handlePick();
@@ -90,14 +90,14 @@ export default function CreatePostScreen() {
       }
       setPublished(true);
       setTimeout(() => {
-        router.replace("/(main)/(tabs)/feed" as "/");
+        router.replace("/(main)/(tabs)/feed" as never);
       }, 600);
     } catch (error) {
       console.error("Post creation failed:", error);
       setPublishing(false);
       if (Platform.OS !== "web") {
         const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Beitrag konnte nicht ver\u00f6ffentlicht werden.");
+        RNAlert.alert("Fehler", "Beitrag konnte nicht veroeffentlicht werden.");
       }
     }
   };
@@ -106,9 +106,9 @@ export default function CreatePostScreen() {
     return (
       <View style={styles.successWrap}>
         <View style={styles.successBadge}>
-          <Icon name="checkmark.circle.fill" size={48} color={colors.success} />
+          <Icon name="checkmark.circle.fill" size={48} tintColor={colors.success} />
         </View>
-        <Text style={styles.successTitle}>Ver\u00f6ffentlicht!</Text>
+        <Text style={styles.successTitle}>Veroeffentlicht!</Text>
         <Text style={styles.successSub}>Dein Beitrag ist jetzt im Feed sichtbar.</Text>
       </View>
     );
@@ -119,13 +119,12 @@ export default function CreatePostScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => safeBack("create-post")}
           style={styles.headerBtn}
         >
-          <Icon name="chevron.left" size={20} color={colors.black} />
+          <Icon name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{config.title}</Text>
         <TouchableOpacity
@@ -149,7 +148,6 @@ export default function CreatePostScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Media area */}
         <TouchableOpacity
           style={styles.mediaArea}
           onPress={handlePick}
@@ -168,8 +166,8 @@ export default function CreatePostScreen() {
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <View style={styles.changeBadge}>
-                    <Icon name="camera" size={14} color={colors.white} />
-                    <Text style={styles.changeBadgeText}>\u00c4ndern</Text>
+                    <Icon name="camera" size={14} tintColor={colors.white} />
+                    <Text style={styles.changeBadgeText}>Aendern</Text>
                   </View>
                 )}
               </View>
@@ -177,18 +175,17 @@ export default function CreatePostScreen() {
           ) : picking ? (
             <View style={styles.emptyMedia}>
               <ActivityIndicator size="large" color={colors.gray400} />
-              <Text style={styles.emptyLabel}>\u00d6ffne Galerie...</Text>
+              <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
             </View>
           ) : (
             <View style={styles.emptyMedia}>
-              <Icon name={config.icon} size={40} color={colors.gray400} />
+              <Icon name={config.icon} size={40} tintColor={colors.gray400} />
               <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
-              <Text style={styles.emptyHint}>Tippe hier, um Medien auszuw\u00e4hlen</Text>
+              <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwaehlen</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        {/* Caption */}
         <View style={styles.captionSection}>
           <Text style={styles.sectionLabel}>Beschreibung</Text>
           <TextInput
@@ -227,11 +224,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: colors.black,
-  },
+  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
   publishBtn: {
     backgroundColor: colors.black,
     paddingHorizontal: spacing.lg,
@@ -240,14 +233,8 @@ const styles = StyleSheet.create({
     minWidth: 80,
     alignItems: "center",
   },
-  publishBtnDisabled: {
-    backgroundColor: colors.gray300,
-  },
-  publishBtnText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  publishBtnDisabled: { backgroundColor: colors.gray300 },
+  publishBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, gap: spacing.lg },
   mediaArea: {
@@ -259,15 +246,8 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     minHeight: 260,
   },
-  previewWrap: {
-    position: "relative",
-    minHeight: 260,
-  },
-  previewImage: {
-    width: "100%",
-    height: 300,
-    borderRadius: radius.md,
-  },
+  previewWrap: { position: "relative", minHeight: 260 },
+  previewImage: { width: "100%", height: 300, borderRadius: radius.md },
   previewOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -284,26 +264,15 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 16,
   },
-  changeBadgeText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  changeBadgeText: { color: colors.white, fontSize: 13, fontWeight: "600" },
   emptyMedia: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 60,
     gap: 10,
   },
-  emptyLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.gray500,
-  },
-  emptyHint: {
-    fontSize: 13,
-    color: colors.gray400,
-  },
+  emptyLabel: { fontSize: 16, fontWeight: "600", color: colors.gray500 },
+  emptyHint: { fontSize: 13, color: colors.gray400 },
   captionSection: { gap: 8 },
   sectionLabel: {
     fontSize: 13,
@@ -329,16 +298,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
-  successBadge: {
-    marginBottom: 8,
-  },
-  successTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: colors.black,
-  },
-  successSub: {
-    fontSize: 15,
-    color: colors.gray500,
-  },
+  successBadge: { marginBottom: 8 },
+  successTitle: { fontSize: 22, fontWeight: "700", color: colors.black },
+  successSub: { fontSize: 15, color: colors.gray500 },
 });

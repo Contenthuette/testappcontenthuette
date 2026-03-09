@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing, radius } from "@/lib/theme";
 import Icon from "@/components/Icon";
+import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
@@ -34,10 +34,11 @@ export default function EditGroupScreen() {
   const [city, setCity] = useState("");
   const [topic, setTopic] = useState("");
 
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-  const [thumbnailFile, setThumbnailFile] = useState<{ uri: string; mimeType: string } | null>(null);
-  const [pickingThumbnail, setPickingThumbnail] = useState(false);
+  const [thumbPreview, setThumbPreview] = useState<string | null>(null);
+  const [thumbFile, setThumbFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [pickingThumb, setPickingThumb] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (group) {
@@ -46,33 +47,32 @@ export default function EditGroupScreen() {
       setCounty(group.county ?? "");
       setCity(group.city ?? "");
       setTopic(group.topic ?? "");
-      if (group.thumbnailUrl) setThumbnailPreview(group.thumbnailUrl);
+      if (group.thumbnailUrl) setThumbPreview(group.thumbnailUrl);
     }
   }, [group]);
 
-  const handlePickThumbnail = async () => {
-    setPickingThumbnail(true);
+  const handlePickThumbnail = useCallback(async () => {
+    setPickingThumb(true);
     try {
       const result = await pickImage({ quality: 0.8, allowsEditing: true });
       if (result) {
-        setThumbnailPreview(result.uri);
-        setThumbnailFile({ uri: result.uri, mimeType: result.mimeType });
+        setThumbPreview(result.uri);
+        setThumbFile({ uri: result.uri, mimeType: result.mimeType });
         if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } finally {
-      setPickingThumbnail(false);
+      setPickingThumb(false);
     }
-  };
+  }, []);
 
   const handleSave = async () => {
     if (!id) return;
     setSaving(true);
     try {
       let thumbnailStorageId: string | undefined;
-
-      if (thumbnailFile) {
+      if (thumbFile) {
         const url = await generateUploadUrl();
-        thumbnailStorageId = await uploadToConvex(url, thumbnailFile.uri, thumbnailFile.mimeType);
+        thumbnailStorageId = await uploadToConvex(url, thumbFile.uri, thumbFile.mimeType);
       }
 
       await updateGroup({
@@ -88,14 +88,18 @@ export default function EditGroupScreen() {
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      safeBack("edit-group");
+      setSaved(true);
+      setTimeout(() => {
+        safeBack("edit-group");
+      }, 600);
     } catch (error) {
       console.error("Group update failed:", error);
-      setSaving(false);
       if (Platform.OS !== "web") {
         const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Gruppe konnte nicht gespeichert werden.");
+        RNAlert.alert("Fehler", "Gruppe konnte nicht aktualisiert werden.");
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -117,7 +121,7 @@ export default function EditGroupScreen() {
           onPress={() => safeBack("edit-group")}
           style={styles.headerBtn}
         >
-          <Icon name="chevron.left" size={20} color={colors.black} />
+          <Icon name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Gruppe bearbeiten</Text>
         <TouchableOpacity
@@ -127,6 +131,8 @@ export default function EditGroupScreen() {
         >
           {saving ? (
             <ActivityIndicator size="small" color={colors.white} />
+          ) : saved ? (
+            <Text style={styles.saveBtnText}>Gespeichert!</Text>
           ) : (
             <Text style={styles.saveBtnText}>Speichern</Text>
           )}
@@ -142,37 +148,37 @@ export default function EditGroupScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Gruppenbild</Text>
           <TouchableOpacity
-            style={styles.thumbnailArea}
+            style={styles.thumbArea}
             onPress={handlePickThumbnail}
-            disabled={pickingThumbnail || saving}
+            disabled={pickingThumb || saving}
             activeOpacity={0.7}
           >
-            {thumbnailPreview ? (
+            {thumbPreview ? (
               <View style={styles.thumbPreviewWrap}>
                 <Image
-                  source={{ uri: thumbnailPreview }}
+                  source={{ uri: thumbPreview }}
                   style={styles.thumbImage}
                   contentFit="cover"
                 />
                 <View style={styles.thumbOverlay}>
-                  {pickingThumbnail ? (
+                  {pickingThumb ? (
                     <ActivityIndicator size="small" color={colors.white} />
                   ) : (
                     <View style={styles.editBadge}>
-                      <Icon name="camera" size={14} color={colors.white} />
-                      <Text style={styles.editBadgeText}>Bild \u00e4ndern</Text>
+                      <Icon name="camera" size={14} tintColor={colors.white} />
+                      <Text style={styles.editBadgeText}>Aendern</Text>
                     </View>
                   )}
                 </View>
               </View>
-            ) : pickingThumbnail ? (
+            ) : pickingThumb ? (
               <View style={styles.thumbEmpty}>
                 <ActivityIndicator size="large" color={colors.gray400} />
               </View>
             ) : (
               <View style={styles.thumbEmpty}>
-                <Icon name="photo" size={36} color={colors.gray400} />
-                <Text style={styles.thumbEmptyText}>Tippe hier, um ein Gruppenbild auszuw\u00e4hlen</Text>
+                <Icon name="photo" size={36} tintColor={colors.gray400} />
+                <Text style={styles.thumbEmptyText}>Tippe, um ein Gruppenbild auszuwaehlen</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -191,7 +197,6 @@ export default function EditGroupScreen() {
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Beschreibung</Text>
             <TextInput
@@ -205,7 +210,6 @@ export default function EditGroupScreen() {
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Thema</Text>
             <TextInput
@@ -217,7 +221,6 @@ export default function EditGroupScreen() {
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Landkreis</Text>
             <TextInput
@@ -229,7 +232,6 @@ export default function EditGroupScreen() {
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Stadt</Text>
             <TextInput
@@ -249,7 +251,12 @@ export default function EditGroupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -268,27 +275,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: colors.black,
-  },
+  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
   saveBtn: {
     backgroundColor: colors.black,
     paddingHorizontal: spacing.lg,
     paddingVertical: 8,
     borderRadius: 20,
-    minWidth: 90,
+    minWidth: 100,
     alignItems: "center",
   },
-  saveBtnDisabled: {
-    backgroundColor: colors.gray300,
-  },
-  saveBtnText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  saveBtnDisabled: { backgroundColor: colors.gray300 },
+  saveBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, gap: spacing.xl },
   section: { gap: spacing.sm },
@@ -299,7 +296,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  thumbnailArea: {
+  thumbArea: {
     borderRadius: radius.md,
     overflow: "hidden",
     backgroundColor: colors.gray100,
@@ -355,8 +352,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.black,
   },
-  fieldInputMultiline: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
+  fieldInputMultiline: { minHeight: 80, textAlignVertical: "top" },
 });

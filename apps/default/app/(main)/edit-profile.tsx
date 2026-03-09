@@ -14,15 +14,15 @@ import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { colors, spacing, radius } from "@/lib/theme";
 import Icon from "@/components/Icon";
+import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const user = useQuery(api.users.me);
+  const me = useQuery(api.users.me);
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateUploadUrl);
 
@@ -31,29 +31,26 @@ export default function EditProfileScreen() {
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
 
-  // Avatar state
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<{ uri: string; mimeType: string } | null>(null);
-  const [pickingAvatar, setPickingAvatar] = useState(false);
-
-  // Banner state
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [bannerFile, setBannerFile] = useState<{ uri: string; mimeType: string } | null>(null);
+
+  const [pickingAvatar, setPickingAvatar] = useState(false);
   const [pickingBanner, setPickingBanner] = useState(false);
-
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  // Populate with current user data
   useEffect(() => {
-    if (user) {
-      setName(user.name ?? "");
-      setBio(user.bio ?? "");
-      setCounty(user.county ?? "");
-      setCity(user.city ?? "");
-      if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
-      if (user.bannerUrl) setBannerPreview(user.bannerUrl);
+    if (me) {
+      setName(me.name ?? "");
+      setBio(me.bio ?? "");
+      setCounty(me.county ?? "");
+      setCity(me.city ?? "");
+      if (me.avatarUrl) setAvatarPreview(me.avatarUrl);
+      if (me.bannerUrl) setBannerPreview(me.bannerUrl);
     }
-  }, [user]);
+  }, [me]);
 
   const handlePickAvatar = async () => {
     setPickingAvatar(true);
@@ -93,7 +90,6 @@ export default function EditProfileScreen() {
         const url = await generateUploadUrl();
         avatarStorageId = await uploadToConvex(url, avatarFile.uri, avatarFile.mimeType);
       }
-
       if (bannerFile) {
         const url = await generateUploadUrl();
         bannerStorageId = await uploadToConvex(url, bannerFile.uri, bannerFile.mimeType);
@@ -111,18 +107,22 @@ export default function EditProfileScreen() {
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      safeBack("edit-profile");
+      setSaved(true);
+      setTimeout(() => {
+        safeBack("edit-profile");
+      }, 600);
     } catch (error) {
       console.error("Profile update failed:", error);
-      setSaving(false);
       if (Platform.OS !== "web") {
         const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Profil konnte nicht gespeichert werden.");
+        RNAlert.alert("Fehler", "Profil konnte nicht aktualisiert werden.");
       }
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (user === undefined) {
+  if (me === undefined) {
     return (
       <View style={styles.loadingWrap}>
         <ActivityIndicator size="large" color={colors.gray400} />
@@ -135,13 +135,12 @@ export default function EditProfileScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => safeBack("edit-profile")}
           style={styles.headerBtn}
         >
-          <Icon name="chevron.left" size={20} color={colors.black} />
+          <Icon name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profil bearbeiten</Text>
         <TouchableOpacity
@@ -151,6 +150,8 @@ export default function EditProfileScreen() {
         >
           {saving ? (
             <ActivityIndicator size="small" color={colors.white} />
+          ) : saved ? (
+            <Text style={styles.saveBtnText}>Gespeichert!</Text>
           ) : (
             <Text style={styles.saveBtnText}>Speichern</Text>
           )}
@@ -164,7 +165,7 @@ export default function EditProfileScreen() {
       >
         {/* Banner */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Banner</Text>
+          <Text style={styles.sectionLabel}>Bannerbild</Text>
           <TouchableOpacity
             style={styles.bannerArea}
             onPress={handlePickBanner}
@@ -183,8 +184,8 @@ export default function EditProfileScreen() {
                     <ActivityIndicator size="small" color={colors.white} />
                   ) : (
                     <View style={styles.editBadge}>
-                      <Icon name="camera" size={14} color={colors.white} />
-                      <Text style={styles.editBadgeText}>\u00c4ndern</Text>
+                      <Icon name="camera" size={14} tintColor={colors.white} />
+                      <Text style={styles.editBadgeText}>Aendern</Text>
                     </View>
                   )}
                 </View>
@@ -195,8 +196,8 @@ export default function EditProfileScreen() {
               </View>
             ) : (
               <View style={styles.bannerEmpty}>
-                <Icon name="photo" size={28} color={colors.gray400} />
-                <Text style={styles.bannerEmptyText}>Banner ausw\u00e4hlen</Text>
+                <Icon name="photo" size={28} tintColor={colors.gray400} />
+                <Text style={styles.bannerEmptyText}>Bannerbild auswaehlen</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -205,37 +206,43 @@ export default function EditProfileScreen() {
         {/* Avatar */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Profilbild</Text>
-          <View style={styles.avatarRow}>
-            <TouchableOpacity
-              style={styles.avatarWrap}
-              onPress={handlePickAvatar}
-              disabled={pickingAvatar || saving}
-              activeOpacity={0.7}
-            >
-              {avatarPreview ? (
+          <TouchableOpacity
+            style={styles.avatarArea}
+            onPress={handlePickAvatar}
+            disabled={pickingAvatar || saving}
+            activeOpacity={0.7}
+          >
+            {avatarPreview ? (
+              <View style={styles.avatarWrap}>
                 <Image
                   source={{ uri: avatarPreview }}
                   style={styles.avatarImage}
                   contentFit="cover"
                 />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Icon name="person.fill" size={32} color={colors.gray400} />
+                <View style={styles.avatarOverlay}>
+                  {pickingAvatar ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Icon name="camera" size={16} tintColor={colors.white} />
+                  )}
                 </View>
-              )}
-              <View style={styles.avatarBadge}>
-                {pickingAvatar ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <Icon name="camera" size={12} color={colors.white} />
-                )}
               </View>
-            </TouchableOpacity>
-            <Text style={styles.avatarHint}>Tippe auf das Bild, um dein Profilbild zu \u00e4ndern</Text>
-          </View>
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Icon name="person.fill" size={32} tintColor={colors.gray400} />
+                <View style={styles.avatarOverlaySmall}>
+                  {pickingAvatar ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Icon name="camera" size={12} tintColor={colors.white} />
+                  )}
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Form fields */}
+        {/* Fields */}
         <View style={styles.section}>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Name</Text>
@@ -248,21 +255,19 @@ export default function EditProfileScreen() {
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Bio</Text>
             <TextInput
               style={[styles.fieldInput, styles.fieldInputMultiline]}
               value={bio}
               onChangeText={setBio}
-              placeholder="Erz\u00e4hle etwas \u00fcber dich"
+              placeholder="Erzaehle etwas ueber dich..."
               placeholderTextColor={colors.gray400}
               multiline
               maxLength={300}
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Landkreis</Text>
             <TextInput
@@ -274,14 +279,13 @@ export default function EditProfileScreen() {
               editable={!saving}
             />
           </View>
-
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Stadt</Text>
             <TextInput
               style={styles.fieldInput}
               value={city}
               onChangeText={setCity}
-              placeholder="z.B. Schwerin"
+              placeholder="z.B. Stralsund"
               placeholderTextColor={colors.gray400}
               editable={!saving}
             />
@@ -294,7 +298,12 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -313,27 +322,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: colors.black,
-  },
+  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
   saveBtn: {
     backgroundColor: colors.black,
     paddingHorizontal: spacing.lg,
     paddingVertical: 8,
     borderRadius: 20,
-    minWidth: 90,
+    minWidth: 100,
     alignItems: "center",
   },
-  saveBtnDisabled: {
-    backgroundColor: colors.gray300,
-  },
-  saveBtnText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  saveBtnDisabled: { backgroundColor: colors.gray300 },
+  saveBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, gap: spacing.xl },
   section: { gap: spacing.sm },
@@ -344,7 +343,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  // Banner
   bannerArea: {
     borderRadius: radius.md,
     overflow: "hidden",
@@ -363,6 +361,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.2)",
     borderRadius: radius.md,
   },
+  bannerEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 8,
+  },
+  bannerEmptyText: { fontSize: 14, color: colors.gray500 },
   editBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -373,36 +378,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   editBadgeText: { color: colors.white, fontSize: 13, fontWeight: "600" },
-  bannerEmpty: {
+  avatarArea: { alignSelf: "center" },
+  avatarWrap: { position: "relative", width: 100, height: 100 },
+  avatarImage: { width: 100, height: 100, borderRadius: 50 },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 50,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
-    gap: 8,
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
-  bannerEmptyText: { fontSize: 14, color: colors.gray500 },
-  // Avatar
-  avatarRow: {
-    flexDirection: "row",
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.gray200,
     alignItems: "center",
-    gap: spacing.lg,
-  },
-  avatarWrap: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    overflow: "hidden",
+    justifyContent: "center",
     position: "relative",
   },
-  avatarImage: { width: 90, height: 90, borderRadius: 45 },
-  avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarBadge: {
+  avatarOverlaySmall: {
     position: "absolute",
     bottom: 2,
     right: 2,
@@ -412,16 +407,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: colors.white,
   },
-  avatarHint: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.gray500,
-    lineHeight: 20,
-  },
-  // Fields
   fieldGroup: { gap: 6 },
   fieldLabel: {
     fontSize: 13,
@@ -438,8 +424,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.black,
   },
-  fieldInputMultiline: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
+  fieldInputMultiline: { minHeight: 80, textAlignVertical: "top" },
 });
