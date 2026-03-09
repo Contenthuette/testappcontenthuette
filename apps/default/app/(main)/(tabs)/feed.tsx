@@ -1,13 +1,13 @@
-import React from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Dimensions, ActivityIndicator,
+  useWindowDimensions, ActivityIndicator, ViewToken,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
@@ -15,12 +15,35 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { VideoPlayer } from "@/components/VideoPlayer";
 
-const { width: screenWidth } = Dimensions.get("window");
+const HEADER_HEIGHT = 56;
+const POST_HEADER_HEIGHT = 62;
+const POST_ACTIONS_HEIGHT = 100;
 
 export default function FeedScreen() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const feed = useQuery(api.posts.feed, {});
   const toggleLike = useMutation(api.posts.toggleLike);
   const toggleSave = useMutation(api.posts.toggleSave);
+  const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
+
+  // Calculate max video height so the full video + header + actions fit on screen
+  const maxVideoHeight = screenHeight - insets.top - insets.bottom - HEADER_HEIGHT - POST_HEADER_HEIGHT - POST_ACTIONS_HEIGHT;
+  const videoHeight = Math.min(screenWidth * (16 / 9), maxVideoHeight);
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 60,
+  }).current;
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const visibleVideo = viewableItems.find(
+        (v) => v.isViewable && v.item?.type === "video" && v.item?.mediaUrl,
+      );
+      setVisibleVideoId(visibleVideo ? visibleVideo.item._id : null);
+    },
+    [],
+  );
 
   const renderAnnouncement = (item: NonNullable<typeof feed>[number]) => (
     <View style={styles.announcementCard} key={item._id}>
@@ -61,19 +84,20 @@ export default function FeedScreen() {
         {/* Media */}
         {item.mediaUrl && (
           item.type === "video" ? (
-            <View style={styles.videoWrap}>
+            <View style={[styles.videoWrap, { width: screenWidth }]}>
               <VideoPlayer
                 uri={item.mediaUrl}
-                height={screenWidth * (16 / 9)}
+                height={videoHeight}
                 autoPlay
                 loop
                 hideControls
+                isVisible={visibleVideoId === item._id}
               />
             </View>
           ) : (
             <Image
               source={{ uri: item.mediaUrl }}
-              style={styles.postImage}
+              style={[styles.postImage, { width: screenWidth, height: screenWidth }]}
               contentFit="cover"
               transition={200}
             />
@@ -155,9 +179,11 @@ export default function FeedScreen() {
       <FlatList
         data={feed}
         renderItem={renderPost}
-        keyExtractor={item => item._id}
+        keyExtractor={(item) => item._id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         ListEmptyComponent={
           feed === undefined ? (
             <View style={styles.loadingWrap}>
@@ -244,12 +270,9 @@ const styles = StyleSheet.create({
   postAuthor: { fontSize: 15, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
   postTime: { fontSize: 12, color: colors.gray400 },
   postImage: {
-    width: screenWidth,
-    height: screenWidth,
     backgroundColor: colors.gray100,
   },
   videoWrap: {
-    width: screenWidth,
     backgroundColor: "#000",
     overflow: "hidden",
   },
