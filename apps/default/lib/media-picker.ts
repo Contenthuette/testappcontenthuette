@@ -18,6 +18,7 @@ interface PickerOptions {
   mediaType?: MediaType;
   quality?: number;
   allowsEditing?: boolean;
+  aspect?: [number, number];
 }
 
 let ImagePicker: typeof import("expo-image-picker") | null = null;
@@ -78,6 +79,7 @@ async function pickWithExpoImagePicker(
     mediaTypes: getMediaTypeFilter(options.mediaType ?? "all"),
     allowsEditing: options.allowsEditing ?? false,
     quality: options.quality ?? 0.8,
+    ...(options.aspect ? { aspect: options.aspect } : {}),
   });
 
   if (result.canceled || !result.assets || result.assets.length === 0) {
