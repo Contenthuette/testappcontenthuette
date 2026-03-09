@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { useIsFocused } from "@react-navigation/native";
 
 const HEADER_HEIGHT = 56;
 const POST_HEADER_HEIGHT = 62;
@@ -26,6 +27,7 @@ export default function FeedScreen() {
   const toggleLike = useMutation(api.posts.toggleLike);
   const toggleSave = useMutation(api.posts.toggleSave);
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
+  const isFocused = useIsFocused();
 
   // Calculate max video height so the full video + header + actions fit on screen
   const maxVideoHeight = screenHeight - insets.top - insets.bottom - HEADER_HEIGHT - POST_HEADER_HEIGHT - POST_ACTIONS_HEIGHT;
@@ -91,7 +93,7 @@ export default function FeedScreen() {
                 autoPlay
                 loop
                 hideControls
-                isVisible={visibleVideoId === item._id}
+                isVisible={isFocused && visibleVideoId === item._id}
               />
             </View>
           ) : (
