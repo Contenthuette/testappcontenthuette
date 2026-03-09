@@ -12,8 +12,8 @@ import { Image } from "expo-image";
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const event = useQuery(api.events.get, id ? { id: id as Id<"events"> } : "skip");
-  const purchaseTicket = useMutation(api.events.purchaseTicket);
+  const event = useQuery(api.events.getById, id ? { eventId: id as Id<"events"> } : "skip");
+  const buyTicket = useMutation(api.events.buyTicket);
 
   if (!event) {
     return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View></SafeAreaView>;
@@ -24,7 +24,7 @@ export default function EventDetailScreen() {
 
   const handleBuy = async () => {
     try {
-      const ticketId = await purchaseTicket({ eventId: event._id });
+      const ticketId = await buyTicket({ eventId: event._id });
       router.push({ pathname: "/(main)/ticket", params: { id: ticketId } });
     } catch (e) {
       // handle

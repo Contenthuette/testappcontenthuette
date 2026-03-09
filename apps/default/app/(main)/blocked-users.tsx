@@ -10,8 +10,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "expo-symbols";
 
 export default function BlockedUsersScreen() {
-  const blockedUsers = useQuery(api.reports.getBlockedUsers, {});
-  const unblock = useMutation(api.reports.unblockUser);
+  const blocked = useQuery(api.users.getBlockedUsers);
+  const unblockUser = useMutation(api.users.unblockUser);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -22,20 +22,20 @@ export default function BlockedUsersScreen() {
         <Text style={styles.title}>Blockierte Nutzer</Text>
       </View>
       <FlatList
-        data={blockedUsers}
+        data={blocked}
         keyExtractor={item => item._id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <View style={styles.row}>
             <Avatar uri={item.avatarUrl} name={item.name} size={44} />
             <Text style={styles.name}>{item.name}</Text>
-            <TouchableOpacity style={styles.unblockBtn} onPress={() => unblock({ blockedUserId: item.userId })}>
+            <TouchableOpacity style={styles.unblockBtn} onPress={() => unblockUser({ blockedUserId: item.userId })}>
               <Text style={styles.unblockText}>Entsperren</Text>
             </TouchableOpacity>
           </View>
         )}
         ListEmptyComponent={
-          blockedUsers === undefined ? null : (
+          blocked === undefined ? null : (
             <EmptyState icon="hand.raised" title="Niemand blockiert" subtitle="Blockierte Nutzer erscheinen hier" />
           )
         }

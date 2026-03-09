@@ -91,3 +91,6 @@ export const SUBSCRIPTION_PLANS = [
   { id: "monthly", name: "Monatlich", price: 4.99, interval: "month" },
   { id: "yearly", name: "Jährlich", price: 39.99, interval: "year", savings: "33%" },
 ] as const;
+
+// Alias for the interests array
+export const INTERESTS_CATALOG: readonly string[] = INTERESTS;

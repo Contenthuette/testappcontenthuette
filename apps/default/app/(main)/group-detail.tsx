@@ -13,7 +13,7 @@ import { Image } from "expo-image";
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const group = useQuery(api.groups.get, id ? { id: id as Id<"groups"> } : "skip");
+  const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
   const members = useQuery(api.groups.getMembers, id ? { groupId: id as Id<"groups"> } : "skip");
   const joinGroup = useMutation(api.groups.join);
   const leaveGroup = useMutation(api.groups.leave);

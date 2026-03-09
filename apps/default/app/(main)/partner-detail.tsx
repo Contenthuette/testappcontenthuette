@@ -12,7 +12,7 @@ import { Image } from "expo-image";
 
 export default function PartnerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const partner = useQuery(api.partners.get, id ? { id: id as Id<"partners"> } : "skip");
+  const partner = useQuery(api.partners.getById, id ? { partnerId: id as Id<"partners"> } : "skip");
 
   if (!partner) {
     return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View></SafeAreaView>;

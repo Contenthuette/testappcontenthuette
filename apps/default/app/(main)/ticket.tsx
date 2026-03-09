@@ -4,13 +4,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { SymbolView } from "expo-symbols";
 
 export default function TicketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const ticket = useQuery(api.events.getTicket, id ? { id: id as Id<"tickets"> } : "skip");
+  const tickets = useQuery(api.events.getMyTickets);
+  const ticket = tickets?.find(t => t._id === id);
 
   if (!ticket) {
     return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View></SafeAreaView>;

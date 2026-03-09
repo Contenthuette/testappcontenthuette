@@ -56,3 +56,16 @@ export const shadows = {
   md: { boxShadow: "0px 2px 8px rgba(0,0,0,0.08)" },
   lg: { boxShadow: "0px 4px 16px rgba(0,0,0,0.1)" },
 } as const;
+
+// Convenience shorthand used across the app
+export const theme = {
+  bg: colors.white,
+  card: colors.gray50,
+  border: colors.gray200,
+  text: colors.black,
+  textSecondary: colors.gray500,
+  textTertiary: colors.gray400,
+  danger: colors.danger,
+  success: colors.success,
+  overlay: colors.overlay,
+} as const;

@@ -40,13 +40,13 @@ export default function NotificationsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[styles.notifRow, !item.isRead && styles.notifUnread]}
-            onPress={() => markRead({ id: item._id })}
+            onPress={() => markRead({ notificationId: item._id })}
           >
             <View style={styles.notifIcon}>
               <SymbolView name={(iconMap[item.type] || "bell.fill") as any} size={18} tintColor={colors.gray600} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.notifText}>{item.message}</Text>
+              <Text style={styles.notifText}>{item.body}</Text>
               <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
             </View>
           </TouchableOpacity>

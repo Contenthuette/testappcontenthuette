@@ -38,7 +38,7 @@ export default function MyTicketsScreen() {
           >
             <View style={styles.cardLeft}>
               <Text style={styles.eventName}>{item.eventName}</Text>
-              <Text style={styles.eventInfo}>{item.eventDate} \u2022 {item.eventTime}</Text>
+              <Text style={styles.eventInfo}>{item.eventDate} \u2022 {item.eventCity}</Text>
               <Text style={styles.eventInfo}>{item.eventVenue}</Text>
             </View>
             <View style={[styles.statusDot, { backgroundColor: statusColors[item.status] || colors.gray400 }]} />

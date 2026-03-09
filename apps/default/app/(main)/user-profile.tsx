@@ -12,9 +12,9 @@ import { Image } from "expo-image";
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const user = useQuery(api.users.getPublicProfile, id ? { userId: id } : "skip");
+  const profile = useQuery(api.users.getById, id ? { userId: id as Id<"users"> } : "skip");
 
-  if (!user) {
+  if (!profile) {
     return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View></SafeAreaView>;
   }
 
@@ -22,8 +22,8 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.banner}>
-          {user.bannerUrl ? (
-            <Image source={{ uri: user.bannerUrl }} style={styles.bannerImage} contentFit="cover" />
+          {profile.bannerUrl ? (
+            <Image source={{ uri: profile.bannerUrl }} style={styles.bannerImage} contentFit="cover" />
           ) : (
             <View style={styles.bannerPlaceholder} />
           )}
@@ -33,20 +33,20 @@ export default function UserProfileScreen() {
         </View>
 
         <View style={styles.profileInfo}>
-          <Avatar uri={user.avatarUrl} name={user.name} size={80} />
-          <Text style={styles.name}>{user.name}</Text>
-          {user.city && <Text style={styles.location}>{user.city}{user.county ? `, ${user.county}` : ""}</Text>}
-          {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
+          <Avatar uri={profile.avatarUrl} name={profile.name} size={80} />
+          <Text style={styles.name}>{profile.name}</Text>
+          {profile.city && <Text style={styles.location}>{profile.city}{profile.county ? `, ${profile.county}` : ""}</Text>}
+          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
 
           <View style={styles.actions}>
             <Button title="Nachricht" onPress={() => router.push({ pathname: "/(main)/chat", params: { id: "new-" + id } })} fullWidth />
           </View>
 
-          {user.interests && user.interests.length > 0 && (
+          {profile.interests && profile.interests.length > 0 && (
             <View style={styles.interestsSection}>
               <Text style={styles.sectionTitle}>Interessen</Text>
               <View style={styles.chipContainer}>
-                {user.interests.slice(0, 10).map((interest: string) => (
+                {profile.interests.slice(0, 10).map((interest: string) => (
                   <View key={interest} style={styles.chip}>
                     <Text style={styles.chipText}>{interest}</Text>
                   </View>

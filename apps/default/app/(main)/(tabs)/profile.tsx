@@ -58,7 +58,7 @@ export default function ProfileScreen() {
             <View style={styles.interestsSection}>
               <Text style={styles.sectionTitle}>Interessen</Text>
               <View style={styles.chipContainer}>
-                {me.interests.slice(0, 10).map(interest => (
+                {me.interests.slice(0, 10).map((interest: string) => (
                   <View key={interest} style={styles.chip}>
                     <Text style={styles.chipText}>{interest}</Text>
                   </View>

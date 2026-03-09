@@ -89,7 +89,7 @@ export const create = authMutation({
   args: {
     type: v.union(v.literal("photo"), v.literal("video"), v.literal("reel")),
     caption: v.optional(v.string()),
-    mediaStorageId: v.id("_storage"),
+    mediaStorageId: v.optional(v.id("_storage")),
     isAnnouncement: v.optional(v.boolean()),
   },
   returns: v.id("posts"),

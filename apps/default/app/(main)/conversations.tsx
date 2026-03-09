@@ -34,9 +34,9 @@ export default function ConversationsScreen() {
             <View style={styles.convInfo}>
               <View style={styles.convTop}>
                 <Text style={styles.convName} numberOfLines={1}>{item.otherUserName}</Text>
-                <Text style={styles.convTime}>{formatTime(item.lastMessageAt)}</Text>
+                <Text style={styles.convTime}>{item.lastMessageAt ? formatTime(item.lastMessageAt) : ""}</Text>
               </View>
-              <Text style={styles.convPreview} numberOfLines={1}>{item.lastMessageText || "Neue Unterhaltung"}</Text>
+              <Text style={styles.convPreview} numberOfLines={1}>{item.lastMessage || "Neue Unterhaltung"}</Text>
             </View>
             {item.unreadCount > 0 && (
               <View style={styles.unreadBadge}>
