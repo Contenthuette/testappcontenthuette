@@ -131,11 +131,11 @@ export default function FeedScreen() {
         <ZLogo size={36} />
         <Text style={styles.headerTitle}>Feed</Text>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
-          <SymbolView name="heart" size={22} tintColor={colors.black} />
-        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
-          <SymbolView name="paperplane" size={22} tintColor={colors.black} />
+          <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
+          <SymbolView name="bell" size={22} tintColor={colors.black} />
         </TouchableOpacity>
       </View>
 

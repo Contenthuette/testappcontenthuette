@@ -24,8 +24,9 @@ export default function SearchScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
+          <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
+        <SymbolView name="slider.horizontal.3" size={20} tintColor={colors.black} />
         <Text style={styles.title}>Filter</Text>
         <TouchableOpacity onPress={() => { setCounty(""); setCity(""); setGender(""); setAgeFrom(""); setAgeTo(""); setSelectedInterests([]); }}>
           <Text style={styles.resetText}>Zur\u00fccksetzen</Text>

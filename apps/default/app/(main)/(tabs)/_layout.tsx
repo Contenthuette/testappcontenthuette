@@ -30,6 +30,7 @@ export default function TabsLayout() {
           fontSize: 10,
           fontWeight: "600",
           letterSpacing: 0.2,
+          marginTop: 2,
         },
         tabBarIconStyle: {
           marginBottom: -2,
@@ -41,7 +42,11 @@ export default function TabsLayout() {
         options={{
           title: "Gruppen",
           tabBarIcon: ({ color, focused }) => (
-            <SymbolView name={focused ? "person.3.fill" : "person.3"} size={24} tintColor={color} />
+            <SymbolView
+              name={focused ? "person.3.fill" : "person.3"}
+              size={22}
+              tintColor={color}
+            />
           ),
         }}
       />
@@ -50,7 +55,11 @@ export default function TabsLayout() {
         options={{
           title: "Feed",
           tabBarIcon: ({ color, focused }) => (
-            <SymbolView name={focused ? "square.stack.3d.up.fill" : "square.stack.3d.up"} size={24} tintColor={color} />
+            <SymbolView
+              name={focused ? "rectangle.stack.fill" : "rectangle.stack"}
+              size={22}
+              tintColor={color}
+            />
           ),
         }}
       />
@@ -58,9 +67,9 @@ export default function TabsLayout() {
         name="create"
         options={{
           title: "",
-          tabBarIcon: ({ focused }) => (
+          tabBarIcon: () => (
             <View style={tabStyles.createBtn}>
-              <SymbolView name="plus" size={20} tintColor={colors.white} />
+              <SymbolView name="plus" size={18} tintColor={colors.white} weight="bold" />
             </View>
           ),
         }}
@@ -70,7 +79,11 @@ export default function TabsLayout() {
         options={{
           title: "Events",
           tabBarIcon: ({ color, focused }) => (
-            <SymbolView name={focused ? "calendar.circle.fill" : "calendar.circle"} size={24} tintColor={color} />
+            <SymbolView
+              name={focused ? "calendar" : "calendar"}
+              size={22}
+              tintColor={color}
+            />
           ),
         }}
       />
@@ -79,7 +92,11 @@ export default function TabsLayout() {
         options={{
           title: "Profil",
           tabBarIcon: ({ color, focused }) => (
-            <SymbolView name={focused ? "person.circle.fill" : "person.circle"} size={24} tintColor={color} />
+            <SymbolView
+              name={focused ? "person.circle.fill" : "person.circle"}
+              size={22}
+              tintColor={color}
+            />
           ),
         }}
       />
@@ -89,13 +106,13 @@ export default function TabsLayout() {
 
 const tabStyles = StyleSheet.create({
   createBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -4,
-    boxShadow: "0px 4px 12px rgba(0,0,0,0.2)",
+    marginTop: -6,
+    boxShadow: "0px 4px 14px rgba(0,0,0,0.25)",
   },
 });

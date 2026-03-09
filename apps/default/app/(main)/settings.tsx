@@ -13,24 +13,32 @@ const sections = [
     title: "Konto",
     items: [
       { icon: "bookmark" as const, label: "Gespeicherte Beiträge", route: "/(main)/saved-posts" },
-      { icon: "pencil" as const, label: "Profil bearbeiten", route: "/(main)/edit-profile" },
-      { icon: "creditcard" as const, label: "Abonnement verwalten", route: "/(main)/subscription" },
+      { icon: "pencil.circle" as const, label: "Profil bearbeiten", route: "/(main)/edit-profile" },
+      { icon: "bell.badge" as const, label: "Benachrichtigungen", route: "/(main)/notifications" },
       { icon: "ticket" as const, label: "Meine Tickets", route: "/(main)/my-tickets" },
     ],
   },
   {
-    title: "Einstellungen",
+    title: "Privatsphäre & Sicherheit",
     items: [
-      { icon: "bell" as const, label: "Benachrichtigungen", route: "/(main)/notifications" },
+      { icon: "lock.shield" as const, label: "Privatsphäre", route: "/(main)/legal?type=privacy" },
+      { icon: "person.badge.shield.checkmark" as const, label: "Konto & Sicherheit", route: "/(main)/legal?type=terms" },
       { icon: "hand.raised" as const, label: "Blockierte Nutzer", route: "/(main)/blocked-users" },
+      { icon: "photo.stack" as const, label: "Medienverwaltung", route: "/(main)/saved-posts" },
+    ],
+  },
+  {
+    title: "Abonnement",
+    items: [
+      { icon: "creditcard" as const, label: "Abonnement verwalten", route: "/(main)/subscription" },
     ],
   },
   {
     title: "Rechtliches",
     items: [
       { icon: "doc.text" as const, label: "Impressum", route: "/(main)/legal?type=imprint" },
-      { icon: "lock.shield" as const, label: "Datenschutzerklärung", route: "/(main)/legal?type=privacy" },
-      { icon: "doc.plaintext" as const, label: "AGB", route: "/(main)/legal?type=terms" },
+      { icon: "doc.plaintext" as const, label: "Datenschutzerklärung", route: "/(main)/legal?type=privacy" },
+      { icon: "doc.text.magnifyingglass" as const, label: "AGB", route: "/(main)/legal?type=terms" },
     ],
   },
 ];
@@ -69,7 +77,7 @@ export default function SettingsScreen() {
                   activeOpacity={0.6}
                 >
                   <View style={styles.rowIcon}>
-                    <SymbolView name={item.icon} size={18} tintColor={colors.gray500} />
+                    <SymbolView name={item.icon} size={17} tintColor={colors.gray500} />
                   </View>
                   <Text style={styles.rowLabel}>{item.label}</Text>
                   <SymbolView name="chevron.right" size={13} tintColor={colors.gray300} />
@@ -79,10 +87,17 @@ export default function SettingsScreen() {
           </View>
         ))}
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleSignOut} activeOpacity={0.6}>
-          <SymbolView name="rectangle.portrait.and.arrow.right" size={18} tintColor={colors.danger} />
-          <Text style={styles.logoutText}>Abmelden</Text>
-        </TouchableOpacity>
+        {/* Logout */}
+        <View style={styles.section}>
+          <View style={styles.sectionCard}>
+            <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut} activeOpacity={0.6}>
+              <View style={[styles.rowIcon, styles.logoutIcon]}>
+                <SymbolView name="rectangle.portrait.and.arrow.right" size={17} tintColor={colors.danger} />
+              </View>
+              <Text style={styles.logoutText}>Abmelden</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <Text style={styles.version}>Z · Version 1.0.0</Text>
       </ScrollView>
@@ -141,19 +156,23 @@ const styles = StyleSheet.create({
   },
   rowLabel: { flex: 1, fontSize: 16, color: colors.black, letterSpacing: -0.1 },
 
-  logoutBtn: {
+  logoutRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    marginTop: spacing.xxl,
-    paddingVertical: spacing.lg,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
   },
-  logoutText: { fontSize: 16, fontWeight: "600", color: colors.danger },
+  logoutIcon: {
+    backgroundColor: "rgba(239,68,68,0.08)",
+  },
+  logoutText: { flex: 1, fontSize: 16, fontWeight: "500", color: colors.danger },
+
   version: {
     fontSize: 12,
     color: colors.gray400,
     textAlign: "center",
-    marginTop: spacing.lg,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
   },
 });

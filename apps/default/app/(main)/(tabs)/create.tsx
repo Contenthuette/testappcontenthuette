@@ -8,15 +8,21 @@ import * as Haptics from "expo-haptics";
 
 const createOptions = [
   {
-    icon: "camera.fill" as const,
+    icon: "photo" as const,
     label: "Foto posten",
     desc: "Teile einen Moment mit deiner Community",
     route: "/(main)/create-post" as const,
   },
   {
-    icon: "video.fill" as const,
+    icon: "video" as const,
     label: "Video posten",
-    desc: "Lade ein Video oder Reel hoch",
+    desc: "Lade ein Video hoch und teile es",
+    route: "/(main)/create-post" as const,
+  },
+  {
+    icon: "play.rectangle" as const,
+    label: "Reel posten",
+    desc: "Erstelle ein kurzes Reel für deinen Feed",
     route: "/(main)/create-post" as const,
   },
   {

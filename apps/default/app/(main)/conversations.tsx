@@ -21,7 +21,9 @@ export default function ConversationsScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>Nachrichten</Text>
-        <View style={{ width: 36 }} />
+        <TouchableOpacity style={styles.composeBtn} hitSlop={12}>
+          <SymbolView name="square.and.pencil" size={20} tintColor={colors.black} />
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -89,7 +91,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backBtn: { width: 36, height: 36, justifyContent: "center" },
-  title: { fontSize: 17, fontWeight: "600", color: colors.black },
+  title: { flex: 1, fontSize: 17, fontWeight: "600", color: colors.black, textAlign: "center" },
+  composeBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   list: { paddingBottom: 40 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
 
