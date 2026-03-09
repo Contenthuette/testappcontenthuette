@@ -9,8 +9,9 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
@@ -23,7 +24,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 export default function EditGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
   const updateGroup = useMutation(api.groups.update);
   const generateUploadUrl = useMutation(api.groups.generateUploadUrl);
@@ -95,8 +95,7 @@ export default function EditGroupScreen() {
     } catch (error) {
       console.error("Group update failed:", error);
       if (Platform.OS !== "web") {
-        const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Gruppe konnte nicht aktualisiert werden.");
+        Alert.alert("Fehler", "Gruppe konnte nicht aktualisiert werden.");
       }
     } finally {
       setSaving(false);

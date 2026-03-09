@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
@@ -49,7 +50,6 @@ export default function CreatePostScreen() {
       handlePick();
     }, 400);
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handlePick = async () => {
@@ -96,8 +96,7 @@ export default function CreatePostScreen() {
       console.error("Post creation failed:", error);
       setPublishing(false);
       if (Platform.OS !== "web") {
-        const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Beitrag konnte nicht veroeffentlicht werden.");
+        Alert.alert("Fehler", "Beitrag konnte nicht veroeffentlicht werden.");
       }
     }
   };

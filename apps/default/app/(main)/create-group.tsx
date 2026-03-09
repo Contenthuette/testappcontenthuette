@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation } from "convex/react";
@@ -77,8 +78,7 @@ export default function CreateGroupScreen() {
     } catch (error) {
       console.error("Group creation failed:", error);
       if (Platform.OS !== "web") {
-        const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Gruppe konnte nicht erstellt werden.");
+        Alert.alert("Fehler", "Gruppe konnte nicht erstellt werden.");
       }
     } finally {
       setCreating(false);

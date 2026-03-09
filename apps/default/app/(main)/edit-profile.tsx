@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
@@ -21,7 +21,6 @@ import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 
 export default function EditProfileScreen() {
-  const router = useRouter();
   const me = useQuery(api.users.me);
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateUploadUrl);
@@ -114,8 +113,7 @@ export default function EditProfileScreen() {
     } catch (error) {
       console.error("Profile update failed:", error);
       if (Platform.OS !== "web") {
-        const { Alert: RNAlert } = require("react-native");
-        RNAlert.alert("Fehler", "Profil konnte nicht aktualisiert werden.");
+        Alert.alert("Fehler", "Profil konnte nicht aktualisiert werden.");
       }
     } finally {
       setSaving(false);
