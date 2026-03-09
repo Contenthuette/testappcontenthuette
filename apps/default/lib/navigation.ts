@@ -1,45 +1,35 @@
 import { router } from "expo-router";
 
 /**
- * Fallback map: screen path segment → safe parent route.
- * When router.back() has nowhere to go, we navigate to this fallback.
+ * Fallback map: screen path segment → target route.
+ * Back buttons always navigate to the mapped route.
  */
 const FALLBACK_ROUTES: Record<string, string> = {
-  // Groups
+  // All main sub-pages → Groups home
   "group-detail": "/(main)/(tabs)/groups",
   "group-chat": "/(main)/(tabs)/groups",
   "create-group": "/(main)/(tabs)/groups",
   "edit-group": "/(main)/(tabs)/groups",
-
-  // Events
-  "event-detail": "/(main)/(tabs)/events",
-  "ticket": "/(main)/my-tickets",
-  "my-tickets": "/(main)/(tabs)/events",
-
-  // Messages
-  "chat": "/(main)/conversations",
+  "event-detail": "/(main)/(tabs)/groups",
+  "ticket": "/(main)/(tabs)/groups",
+  "my-tickets": "/(main)/(tabs)/groups",
+  "chat": "/(main)/(tabs)/groups",
   "conversations": "/(main)/(tabs)/groups",
-
-  // Profile & Settings
-  "settings": "/(main)/(tabs)/profile",
-  "edit-profile": "/(main)/(tabs)/profile",
-  "saved-posts": "/(main)/(tabs)/profile",
-  "blocked-users": "/(main)/settings",
-  "subscription": "/(main)/settings",
-  "legal": "/(main)/settings",
-
-  // Feed
-  "create-post": "/(main)/(tabs)/feed",
-  "post-comments": "/(main)/(tabs)/feed",
-
-  // Other
+  "settings": "/(main)/(tabs)/groups",
+  "edit-profile": "/(main)/(tabs)/groups",
+  "saved-posts": "/(main)/(tabs)/groups",
+  "blocked-users": "/(main)/(tabs)/groups",
+  "subscription": "/(main)/(tabs)/groups",
+  "legal": "/(main)/(tabs)/groups",
+  "create-post": "/(main)/(tabs)/groups",
+  "post-comments": "/(main)/(tabs)/groups",
   "notifications": "/(main)/(tabs)/groups",
   "search": "/(main)/(tabs)/groups",
   "user-profile": "/(main)/(tabs)/groups",
   "partner-detail": "/(main)/(tabs)/groups",
   "filters": "/(main)/(tabs)/groups",
 
-  // Admin
+  // Admin → Dashboard
   "dashboard": "/(main)/(tabs)/profile",
   "users": "/(admin)/dashboard",
   "group-mgmt": "/(admin)/dashboard",
@@ -56,28 +46,16 @@ const FALLBACK_ROUTES: Record<string, string> = {
 };
 
 /**
- * Navigate back safely. If the router has history, go back.
- * Otherwise use the fallback route for the given screen.
+ * Navigate to the mapped parent route for the given screen.
+ * Always goes directly to the target (never router.back).
  */
 export function safeBack(screenName?: string) {
-  try {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-  } catch {
-    // router.back() failed, fall through to fallback
-  }
-
-  // Use fallback route
-  const key = screenName;
-  const fallback = key ? FALLBACK_ROUTES[key] : undefined;
+  const fallback = screenName ? FALLBACK_ROUTES[screenName] : undefined;
   const target = fallback ?? "/(main)/(tabs)/groups";
 
   try {
     router.navigate(target as "/");
   } catch {
-    // Last resort: hard navigate to home
     router.replace("/(main)/(tabs)/groups" as "/");
   }
 }
