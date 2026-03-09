@@ -11,19 +11,19 @@ const createOptions = [
     icon: "photo" as const,
     label: "Foto posten",
     desc: "Teile einen Moment mit deiner Community",
-    route: "/(main)/create-post" as const,
+    route: "/(main)/create-post?type=photo" as const,
   },
   {
     icon: "video" as const,
     label: "Video posten",
     desc: "Lade ein Video hoch und teile es",
-    route: "/(main)/create-post" as const,
+    route: "/(main)/create-post?type=video" as const,
   },
   {
     icon: "play.rectangle" as const,
     label: "Reel posten",
-    desc: "Erstelle ein kurzes Reel für deinen Feed",
-    route: "/(main)/create-post" as const,
+    desc: "Erstelle ein kurzes Reel f\u00fcr deinen Feed",
+    route: "/(main)/create-post?type=reel" as const,
   },
   {
     icon: "person.3.fill" as const,

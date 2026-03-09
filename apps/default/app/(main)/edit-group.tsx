@@ -8,10 +8,11 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Image } from "expo-image";
-import { SymbolView } from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { COUNTIES } from "@/lib/constants";
+import { pickImage, type MediaResult } from "@/lib/media-picker";
 
 const TOPICS = [
   "Sport & Fitness", "Kunst & Kultur", "Musik", "Natur & Outdoor",
@@ -23,6 +24,7 @@ export default function EditGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
   const updateGroup = useMutation(api.groups.update);
+  const generateUploadUrl = useMutation(api.groups.generateUploadUrl);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -35,6 +37,10 @@ export default function EditGroupScreen() {
   const [showCounties, setShowCounties] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
 
+  // Thumbnail media
+  const [thumbnailLocal, setThumbnailLocal] = useState<MediaResult | null>(null);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+
   useEffect(() => {
     if (group) {
       setName(group.name || "");
@@ -46,6 +52,17 @@ export default function EditGroupScreen() {
     }
   }, [group?._id]);
 
+  const handlePickThumbnail = async () => {
+    try {
+      const result = await pickImage({ aspect: [1, 1] });
+      if (result) setThumbnailLocal(result);
+    } catch (e) {
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Bild konnte nicht ausgewählt werden.");
+      }
+    }
+  };
+
   const handleSave = useCallback(async () => {
     if (!id || !name.trim()) {
       if (Platform.OS !== "web") {
@@ -55,6 +72,25 @@ export default function EditGroupScreen() {
     }
     setSaving(true);
     try {
+      let thumbnailStorageId: Id<"_storage"> | undefined;
+
+      // Upload thumbnail if changed
+      if (thumbnailLocal) {
+        setUploadingThumb(true);
+        const uploadUrl = await generateUploadUrl();
+        const response = await fetch(thumbnailLocal.uri);
+        const blob = await response.blob();
+        const uploadResult = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": thumbnailLocal.mimeType || "image/jpeg" },
+          body: blob,
+        });
+        if (!uploadResult.ok) throw new Error("Thumbnail-Upload fehlgeschlagen");
+        const json = await uploadResult.json();
+        thumbnailStorageId = json.storageId;
+        setUploadingThumb(false);
+      }
+
       await updateGroup({
         groupId: id as Id<"groups">,
         name: name.trim(),
@@ -63,7 +99,9 @@ export default function EditGroupScreen() {
         city: city.trim() || undefined,
         topic: topic || undefined,
         visibility,
+        thumbnailStorageId,
       });
+      setThumbnailLocal(null);
       setSuccessMsg(true);
       setTimeout(() => setSuccessMsg(false), 2000);
     } catch (e: unknown) {
@@ -73,13 +111,16 @@ export default function EditGroupScreen() {
       }
     } finally {
       setSaving(false);
+      setUploadingThumb(false);
     }
-  }, [id, name, description, county, city, topic, visibility, updateGroup]);
+  }, [id, name, description, county, city, topic, visibility, thumbnailLocal, updateGroup, generateUploadUrl]);
+
+  const thumbUri = thumbnailLocal?.uri ?? group?.thumbnailUrl;
 
   if (!group) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color={colors.gray400} />
+        <ActivityIndicator color={colors.textSecondary} />
       </View>
     );
   }
@@ -89,7 +130,7 @@ export default function EditGroupScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => safeBack()} style={styles.backBtn}>
-          <SymbolView name="chevron.left" size={22} tintColor={colors.black} />
+          <Icon name="chevron.left" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Gruppe bearbeiten</Text>
         <TouchableOpacity
@@ -98,7 +139,7 @@ export default function EditGroupScreen() {
           style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={colors.white} />
+            <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.saveBtnText}>Speichern</Text>
           )}
@@ -108,7 +149,7 @@ export default function EditGroupScreen() {
       {/* Success Banner */}
       {successMsg && (
         <View style={styles.successBanner}>
-          <SymbolView name="checkmark.circle.fill" size={18} tintColor={colors.white} />
+          <Icon name="checkmark.circle.fill" size={18} color="#fff" />
           <Text style={styles.successText}>Gruppe erfolgreich aktualisiert</Text>
         </View>
       )}
@@ -117,19 +158,31 @@ export default function EditGroupScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Thumbnail Preview */}
+        {/* Thumbnail - tappable */}
         <View style={styles.thumbnailSection}>
-          <View style={styles.thumbnailContainer}>
-            {group.thumbnailUrl ? (
-              <Image source={{ uri: group.thumbnailUrl }} style={styles.thumbnail} />
+          <TouchableOpacity
+            style={styles.thumbnailContainer}
+            onPress={handlePickThumbnail}
+            activeOpacity={0.7}
+          >
+            {thumbUri ? (
+              <Image source={{ uri: thumbUri }} style={styles.thumbnail} contentFit="cover" />
             ) : (
               <View style={styles.thumbnailPlaceholder}>
-                <SymbolView name="camera" size={32} tintColor={colors.gray400} />
+                <Icon name="camera" size={32} color={colors.textTertiary} />
               </View>
             )}
-          </View>
-          <Text style={styles.thumbnailHint}>Thumbnail wird beim Erstellen festgelegt</Text>
+            <View style={styles.thumbnailBadge}>
+              {uploadingThumb ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Icon name="camera.fill" size={14} color="#fff" />
+              )}
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.thumbnailHint}>Tippe zum Ändern des Thumbnails</Text>
         </View>
 
         {/* Name */}
@@ -140,7 +193,7 @@ export default function EditGroupScreen() {
             value={name}
             onChangeText={setName}
             placeholder="Name der Gruppe"
-            placeholderTextColor={colors.gray400}
+            placeholderTextColor={colors.textTertiary}
             maxLength={60}
           />
         </View>
@@ -153,7 +206,7 @@ export default function EditGroupScreen() {
             value={description}
             onChangeText={setDescription}
             placeholder="Beschreibe deine Gruppe..."
-            placeholderTextColor={colors.gray400}
+            placeholderTextColor={colors.textTertiary}
             multiline
             numberOfLines={4}
             maxLength={500}
@@ -169,13 +222,13 @@ export default function EditGroupScreen() {
             style={styles.selectBtn}
             onPress={() => setShowCounties(!showCounties)}
           >
-            <Text style={[styles.selectBtnText, !county && { color: colors.gray400 }]}>
+            <Text style={[styles.selectBtnText, !county && { color: colors.textTertiary }]}>
               {county || "Landkreis w\u00e4hlen"}
             </Text>
-            <SymbolView
+            <Icon
               name={showCounties ? "chevron.up" : "chevron.down"}
               size={16}
-              tintColor={colors.gray400}
+              color={colors.textTertiary}
             />
           </TouchableOpacity>
           {showCounties && (
@@ -214,7 +267,7 @@ export default function EditGroupScreen() {
             value={city}
             onChangeText={setCity}
             placeholder="z.B. Rostock, Schwerin..."
-            placeholderTextColor={colors.gray400}
+            placeholderTextColor={colors.textTertiary}
             maxLength={100}
           />
         </View>
@@ -226,13 +279,13 @@ export default function EditGroupScreen() {
             style={styles.selectBtn}
             onPress={() => setShowTopics(!showTopics)}
           >
-            <Text style={[styles.selectBtnText, !topic && { color: colors.gray400 }]}>
+            <Text style={[styles.selectBtnText, !topic && { color: colors.textTertiary }]}>
               {topic || "Thema w\u00e4hlen"}
             </Text>
-            <SymbolView
+            <Icon
               name={showTopics ? "chevron.up" : "chevron.down"}
               size={16}
-              tintColor={colors.gray400}
+              color={colors.textTertiary}
             />
           </TouchableOpacity>
           {showTopics && (
@@ -274,10 +327,10 @@ export default function EditGroupScreen() {
               ]}
               onPress={() => setVisibility("public")}
             >
-              <SymbolView
+              <Icon
                 name="globe"
                 size={20}
-                tintColor={visibility === "public" ? colors.white : colors.black}
+                color={visibility === "public" ? "#fff" : colors.textPrimary}
               />
               <Text
                 style={[
@@ -285,7 +338,7 @@ export default function EditGroupScreen() {
                   visibility === "public" && styles.visibilityTextActive,
                 ]}
               >
-                \u00d6ffentlich
+                Öffentlich
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -295,10 +348,10 @@ export default function EditGroupScreen() {
               ]}
               onPress={() => setVisibility("invite_only")}
             >
-              <SymbolView
+              <Icon
                 name="lock"
                 size={20}
-                tintColor={visibility === "invite_only" ? colors.white : colors.black}
+                color={visibility === "invite_only" ? "#fff" : colors.textPrimary}
               />
               <Text
                 style={[
@@ -319,80 +372,97 @@ export default function EditGroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
+  container: { flex: 1, backgroundColor: colors.background },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: spacing.lg, paddingTop: 56, paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray200,
-    backgroundColor: colors.white,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: radius.full,
-    backgroundColor: colors.gray100, alignItems: "center", justifyContent: "center",
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
+  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.textPrimary },
   saveBtn: {
-    backgroundColor: colors.black, paddingHorizontal: 18, paddingVertical: 10,
-    borderRadius: radius.full, minWidth: 90, alignItems: "center",
+    backgroundColor: colors.textPrimary, paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 20, minWidth: 90, alignItems: "center",
   },
   saveBtnDisabled: { opacity: 0.5 },
-  saveBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
+  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   successBanner: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.success, paddingVertical: 10, gap: spacing.sm,
+    backgroundColor: "#22c55e", paddingVertical: 10, gap: spacing.sm,
   },
-  successText: { color: colors.white, fontSize: 14, fontWeight: "600" },
+  successText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   scrollView: { flex: 1 },
   scrollContent: { padding: spacing.xl },
+
+  // Thumbnail
   thumbnailSection: { alignItems: "center", marginBottom: spacing.xxl },
   thumbnailContainer: {
     width: 100, height: 100, borderRadius: 50, overflow: "hidden",
-    backgroundColor: colors.gray100, borderWidth: 2, borderColor: colors.gray200,
+    backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.border,
+    ...shadows.sm,
   },
   thumbnail: { width: "100%", height: "100%" },
   thumbnailPlaceholder: {
     width: "100%", height: "100%", alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.gray100,
+    backgroundColor: colors.surface,
   },
-  thumbnailHint: { marginTop: spacing.sm, fontSize: 12, color: colors.gray400 },
+  thumbnailBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.textPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  thumbnailHint: { marginTop: spacing.sm, fontSize: 13, color: colors.textTertiary },
+
   fieldGroup: { marginBottom: spacing.xl },
   fieldLabel: {
-    fontSize: 13, fontWeight: "600", color: colors.gray500,
+    fontSize: 13, fontWeight: "600", color: colors.textSecondary,
     marginBottom: spacing.sm, textTransform: "uppercase", letterSpacing: 0.5,
   },
   textInput: {
-    backgroundColor: colors.gray50, borderRadius: radius.md, paddingHorizontal: spacing.lg,
-    paddingVertical: 14, fontSize: 16, color: colors.black,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray200,
+    backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.lg,
+    paddingVertical: 14, fontSize: 16, color: colors.textPrimary,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
   },
   textArea: { minHeight: 100, paddingTop: 14 },
-  charCount: { fontSize: 12, color: colors.gray400, textAlign: "right", marginTop: spacing.xs },
+  charCount: { fontSize: 12, color: colors.textTertiary, textAlign: "right", marginTop: spacing.xs },
   selectBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: colors.gray50, borderRadius: radius.md, paddingHorizontal: spacing.lg,
-    paddingVertical: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray200,
+    backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.lg,
+    paddingVertical: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
   },
-  selectBtnText: { fontSize: 16, color: colors.black },
+  selectBtnText: { fontSize: 16, color: colors.textPrimary },
   chipGrid: {
     flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: 10,
   },
   chip: {
-    paddingHorizontal: 14, paddingVertical: spacing.sm, borderRadius: radius.full,
-    backgroundColor: colors.gray50, borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray200,
+    paddingHorizontal: 14, paddingVertical: spacing.sm, borderRadius: 20,
+    backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
-  chipActive: { backgroundColor: colors.black, borderColor: colors.black },
-  chipText: { fontSize: 14, color: colors.black },
-  chipTextActive: { color: colors.white },
+  chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+  chipText: { fontSize: 14, color: colors.textPrimary },
+  chipTextActive: { color: "#fff" },
   visibilityRow: { flexDirection: "row", gap: spacing.md },
   visibilityOption: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: spacing.sm, paddingVertical: 14, borderRadius: radius.md,
-    backgroundColor: colors.gray50, borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray200,
+    gap: spacing.sm, paddingVertical: 14, borderRadius: 12,
+    backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
-  visibilityOptionActive: { backgroundColor: colors.black, borderColor: colors.black },
-  visibilityText: { fontSize: 15, fontWeight: "500", color: colors.black },
-  visibilityTextActive: { color: colors.white },
+  visibilityOptionActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+  visibilityText: { fontSize: 15, fontWeight: "500", color: colors.textPrimary },
+  visibilityTextActive: { color: "#fff" },
 });
