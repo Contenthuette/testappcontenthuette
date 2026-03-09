@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";

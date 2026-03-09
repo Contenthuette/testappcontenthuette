@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.xl },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.black, marginBottom: spacing.md },
   metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
-  metricCard: { width: "47%", padding: spacing.lg, backgroundColor: colors.white, borderRadius: radius.lg, ...shadows.sm },
+  metricCard: { width: "47%", padding: spacing.lg, backgroundColor: colors.white, borderRadius: radius.lg },
   metricValue: { fontSize: 24, fontWeight: "800", color: colors.black },
   metricLabel: { fontSize: 13, color: colors.gray500, marginTop: spacing.xs },
 });

@@ -50,7 +50,7 @@ export default function EditProfileScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => safeBack("edit-profile")} style={styles.backBtn} hitSlop={12}>
+          <TouchableOpacity onPress={() => safeBack("edit-profile")} hitSlop={12}>
             <Text style={styles.cancelText}>Abbrechen</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Profil bearbeiten</Text>
