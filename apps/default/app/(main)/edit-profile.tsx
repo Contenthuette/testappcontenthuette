@@ -1,92 +1,104 @@
 import React, { useState, useEffect } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows, theme } from "@/lib/theme";
-import { SymbolView } from "@/components/Icon";
-import { Avatar } from "@/components/Avatar";
+import { Image } from "expo-image";
+import { colors, spacing, shadows } from "@/lib/theme";
+import { Icon } from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
-import type { MediaResult } from "@/lib/media-picker";
+import * as Haptics from "expo-haptics";
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const user = useQuery(api.users.me);
-  const generateUploadUrl = useMutation(api.users.generateUploadUrl);
+  const me = useQuery(api.users.me);
   const updateProfile = useMutation(api.users.updateProfile);
+  const generateUploadUrl = useMutation(api.users.generateUploadUrl);
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
 
+  // Avatar
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [avatarMedia, setAvatarMedia] = useState<MediaResult | null>(null);
-  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
-  const [bannerMedia, setBannerMedia] = useState<MediaResult | null>(null);
+  const [avatarFile, setAvatarFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  const [isSaving, setIsSaving] = useState(false);
+  // Banner
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [bannerFile, setBannerFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      setName(user.name ?? "");
-      setBio(user.bio ?? "");
-      setCounty(user.county ?? "");
-      setCity(user.city ?? "");
-      if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
-      if (user.bannerUrl) setBannerPreview(user.bannerUrl);
+    if (me) {
+      setName(me.name ?? "");
+      setBio(me.bio ?? "");
+      setCounty(me.county ?? "");
+      setCity(me.city ?? "");
+      if (me.avatarUrl) setAvatarPreview(me.avatarUrl);
+      if (me.bannerUrl) setBannerPreview(me.bannerUrl);
     }
-  }, [user]);
+  }, [me]);
 
-  async function handlePickAvatar() {
+  const handlePickAvatar = async () => {
+    setUploadingAvatar(true);
     try {
-      const result = await pickImage();
+      const result = await pickImage({ quality: 0.8, allowsEditing: true });
       if (result) {
-        setAvatarMedia(result);
         setAvatarPreview(result.uri);
+        setAvatarFile({ uri: result.uri, mimeType: result.mimeType });
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       }
-    } catch {
-      // user cancelled
+    } finally {
+      setUploadingAvatar(false);
     }
-  }
+  };
 
-  async function handlePickBanner() {
+  const handlePickBanner = async () => {
+    setUploadingBanner(true);
     try {
-      const result = await pickImage();
+      const result = await pickImage({ quality: 0.8, allowsEditing: false });
       if (result) {
-        setBannerMedia(result);
         setBannerPreview(result.uri);
+        setBannerFile({ uri: result.uri, mimeType: result.mimeType });
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       }
-    } catch {
-      // user cancelled
+    } finally {
+      setUploadingBanner(false);
     }
-  }
+  };
 
-  async function handleSave() {
-    setIsSaving(true);
+  const handleSave = async () => {
+    setSaving(true);
     try {
       let avatarStorageId: string | undefined;
       let bannerStorageId: string | undefined;
 
-      if (avatarMedia) {
-        avatarStorageId = await uploadToConvex(
-          () => generateUploadUrl(),
-          avatarMedia.uri,
-          avatarMedia.mimeType
-        );
+      if (avatarFile) {
+        const url = await generateUploadUrl();
+        avatarStorageId = await uploadToConvex(url, avatarFile.uri, avatarFile.mimeType);
       }
-      if (bannerMedia) {
-        bannerStorageId = await uploadToConvex(
-          () => generateUploadUrl(),
-          bannerMedia.uri,
-          bannerMedia.mimeType
-        );
+      if (bannerFile) {
+        const url = await generateUploadUrl();
+        bannerStorageId = await uploadToConvex(url, bannerFile.uri, bannerFile.mimeType);
       }
 
       await updateProfile({
@@ -94,23 +106,28 @@ export default function EditProfileScreen() {
         bio: bio.trim() || undefined,
         county: county.trim() || undefined,
         city: city.trim() || undefined,
-        ...(avatarStorageId ? { avatarStorageId: avatarStorageId as unknown as ReturnType<typeof updateProfile> extends Promise<unknown> ? string : string } : {}),
-        ...(bannerStorageId ? { bannerStorageId: bannerStorageId as unknown as ReturnType<typeof updateProfile> extends Promise<unknown> ? string : string } : {}),
+        ...(avatarStorageId ? { avatarStorageId: avatarStorageId as never } : {}),
+        ...(bannerStorageId ? { bannerStorageId: bannerStorageId as never } : {}),
       });
 
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       safeBack(router, "/(main)/(tabs)/profile");
-    } catch {
+    } catch (error) {
+      console.error("Profile update failed:", error);
       if (Platform.OS !== "web") {
         const { Alert } = require("react-native");
         Alert.alert("Fehler", "Profil konnte nicht gespeichert werden.");
       }
-      setIsSaving(false);
+    } finally {
+      setSaving(false);
     }
-  }
+  };
 
-  if (user === undefined) {
+  if (me === undefined) {
     return (
-      <View style={s.loadingContainer}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.black} />
       </View>
     );
@@ -118,198 +135,320 @@ export default function EditProfileScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
-      <View style={s.header}>
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => safeBack(router, "/(main)/(tabs)/profile")}
-          style={s.headerBtn}
+          style={styles.headerBtn}
         >
-          <SymbolView name="xmark" size={20} tintColor={theme.text} />
+          <Icon name="chevron.left" size={20} color={colors.black} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Profil bearbeiten</Text>
+        <Text style={styles.headerTitle}>Profil bearbeiten</Text>
         <TouchableOpacity
           onPress={handleSave}
-          disabled={isSaving}
-          style={[s.saveBtn, isSaving && s.saveBtnDisabled]}
+          disabled={saving}
+          style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
         >
-          {isSaving ? (
+          {saving ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={s.saveText}>Speichern</Text>
+            <Text style={styles.saveBtnText}>Speichern</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={s.bodyContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Banner */}
-        <TouchableOpacity style={s.bannerArea} onPress={handlePickBanner} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.bannerArea}
+          onPress={handlePickBanner}
+          disabled={uploadingBanner || saving}
+          activeOpacity={0.7}
+        >
           {bannerPreview ? (
-            <Image source={{ uri: bannerPreview }} style={s.bannerImage} contentFit="cover" />
+            <Image
+              source={{ uri: bannerPreview }}
+              style={styles.bannerImage}
+              contentFit="cover"
+            />
           ) : (
-            <View style={s.bannerPlaceholder}>
-              <SymbolView name="photo.fill" size={28} tintColor={colors.gray400} />
-              <Text style={s.bannerHint}>Banner antippen zum Ändern</Text>
+            <View style={styles.bannerPlaceholder}>
+              <Icon name="photo" size={28} color={colors.grey400} />
             </View>
           )}
-          <View style={s.bannerOverlay}>
-            <SymbolView name="camera.fill" size={16} tintColor={colors.white} />
+          <View style={styles.bannerOverlay}>
+            {uploadingBanner ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <View style={styles.editBadge}>
+                <Icon name="camera" size={14} color={colors.white} />
+                <Text style={styles.editBadgeText}>Banner \u00e4ndern</Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
 
         {/* Avatar */}
-        <View style={s.avatarSection}>
-          <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.7}>
-            <View style={s.avatarWrapper}>
-              {avatarPreview ? (
-                <Image
-                  source={{ uri: avatarPreview }}
-                  style={s.avatar}
-                  contentFit="cover"
-                />
-              ) : (
-                <Avatar name={name || "?"} size={90} />
-              )}
-              <View style={s.avatarBadge}>
-                <SymbolView name="camera.fill" size={14} tintColor={colors.white} />
+        <View style={styles.avatarRow}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={handlePickAvatar}
+            disabled={uploadingAvatar || saving}
+            activeOpacity={0.7}
+          >
+            {avatarPreview ? (
+              <Image
+                source={{ uri: avatarPreview }}
+                style={styles.avatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Icon name="person" size={32} color={colors.grey400} />
               </View>
+            )}
+            <View style={styles.avatarBadge}>
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Icon name="camera" size={14} color={colors.white} />
+              )}
             </View>
           </TouchableOpacity>
-          <Text style={s.avatarHint}>Tippe zum Ändern</Text>
+          <Text style={styles.avatarHint}>Profilbild \u00e4ndern</Text>
         </View>
 
-        {/* Form fields */}
-        <View style={s.formSection}>
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Name</Text>
+        {/* Form Fields */}
+        <View style={styles.formSection}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Name</Text>
             <TextInput
-              style={s.fieldInput}
+              style={styles.fieldInput}
               value={name}
               onChangeText={setName}
               placeholder="Dein Name"
-              placeholderTextColor={colors.gray400}
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
             />
           </View>
 
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Bio</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Bio</Text>
             <TextInput
-              style={[s.fieldInput, s.fieldInputMulti]}
+              style={[styles.fieldInput, styles.fieldInputMultiline]}
               value={bio}
               onChangeText={setBio}
-              placeholder="Erzähle etwas über dich..."
-              placeholderTextColor={colors.gray400}
+              placeholder="Erz\u00e4hl etwas \u00fcber dich..."
+              placeholderTextColor={colors.grey400}
               multiline
               maxLength={200}
-              textAlignVertical="top"
+              editable={!saving}
             />
+            <Text style={styles.charCount}>{bio.length}/200</Text>
           </View>
 
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Landkreis</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Landkreis</Text>
             <TextInput
-              style={s.fieldInput}
+              style={styles.fieldInput}
               value={county}
               onChangeText={setCounty}
               placeholder="z.B. Rostock"
-              placeholderTextColor={colors.gray400}
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
             />
           </View>
 
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Stadt</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Stadt</Text>
             <TextInput
-              style={s.fieldInput}
+              style={styles.fieldInput}
               value={city}
               onChangeText={setCity}
-              placeholder="z.B. Warnemünde"
-              placeholderTextColor={colors.gray400}
+              placeholder="z.B. Warnem\u00fcnde"
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
             />
           </View>
         </View>
       </ScrollView>
-
-      {isSaving && (
-        <View style={s.overlay}>
-          <View style={s.overlayCard}>
-            <ActivityIndicator size="large" color={colors.black} />
-            <Text style={s.overlayText}>Profil wird gespeichert...</Text>
-          </View>
-        </View>
-      )}
     </KeyboardAvoidingView>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+  },
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: spacing.lg, paddingTop: 60, paddingBottom: spacing.md,
-    backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.gray200,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: 60,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.grey200,
   },
   headerBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: colors.gray100,
-    alignItems: "center", justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.grey100,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: colors.black,
+  },
   saveBtn: {
     backgroundColor: colors.black,
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
-    borderRadius: radius.full, minWidth: 90, alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: "center",
   },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveText: { color: colors.white, fontWeight: "600", fontSize: 15 },
-  bodyContent: { paddingBottom: 40 },
+  saveBtnDisabled: {
+    backgroundColor: colors.grey300,
+  },
+  saveBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  /* Banner */
   bannerArea: {
-    width: "100%", height: 160, backgroundColor: colors.gray100,
+    height: 160,
+    backgroundColor: colors.grey100,
+    position: "relative",
     overflow: "hidden",
   },
-  bannerImage: { width: "100%", height: "100%" },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
   bannerPlaceholder: {
-    flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.xs,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  bannerHint: { fontSize: 13, color: colors.gray400 },
   bannerOverlay: {
-    position: "absolute", bottom: spacing.sm, right: spacing.sm,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center",
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
   },
-  avatarSection: { alignItems: "center", marginTop: -45, gap: spacing.xs },
-  avatarWrapper: { position: "relative" },
-  avatar: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: colors.white },
+  editBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  editBadgeText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  /* Avatar */
+  avatarRow: {
+    alignItems: "center",
+    marginTop: -40,
+    gap: 8,
+    marginBottom: spacing.lg,
+  },
+  avatarContainer: {
+    position: "relative",
+  },
+  avatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
+  avatarPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: colors.grey200,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
   avatarBadge: {
-    position: "absolute", bottom: 0, right: 0,
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: colors.black, alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: colors.white,
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.white,
   },
-  avatarHint: { fontSize: 12, color: colors.gray400 },
-  formSection: { padding: spacing.lg, gap: spacing.lg },
-  fieldGroup: { gap: spacing.xs },
+  avatarHint: {
+    fontSize: 13,
+    color: colors.grey500,
+  },
+  /* Form */
+  formSection: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
   fieldLabel: {
-    fontSize: 13, fontWeight: "600", color: colors.gray500,
-    textTransform: "uppercase", letterSpacing: 0.5,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.grey500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   fieldInput: {
-    backgroundColor: colors.gray50, borderRadius: radius.md,
-    padding: spacing.md, fontSize: 16, color: colors.black,
-    borderWidth: 1, borderColor: colors.gray200,
+    backgroundColor: colors.grey100,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.black,
   },
-  fieldInputMulti: { minHeight: 80 },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
-    alignItems: "center", justifyContent: "center",
+  fieldInputMultiline: {
+    minHeight: 80,
+    textAlignVertical: "top",
   },
-  overlayCard: {
-    backgroundColor: colors.white, borderRadius: radius.xl,
-    padding: spacing.xxl, alignItems: "center", gap: spacing.lg,
-    ...shadows.lg,
+  charCount: {
+    fontSize: 12,
+    color: colors.grey400,
+    textAlign: "right",
+    marginTop: 2,
   },
-  overlayText: { fontSize: 16, fontWeight: "600", color: colors.black },
 });

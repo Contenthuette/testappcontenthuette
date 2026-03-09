@@ -1,28 +1,32 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
-import { Image } from "expo-image";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius, shadows, theme } from "@/lib/theme";
-import { SymbolView } from "@/components/Icon";
+import { Image } from "expo-image";
+import { colors, spacing, shadows } from "@/lib/theme";
+import { Icon } from "@/components/Icon";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
-import type { MediaResult } from "@/lib/media-picker";
+import * as Haptics from "expo-haptics";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export default function EditGroupScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const groupId = id as Id<"groups">;
-
-  const group = useQuery(api.groups.getById, id ? { groupId } : "skip");
-  const generateUploadUrl = useMutation(api.groups.generateUploadUrl);
+  const group = useQuery(api.groups.getById, id ? { id: id as Id<"groups"> } : "skip");
   const updateGroup = useMutation(api.groups.update);
+  const generateUploadUrl = useMutation(api.groups.generateUploadUrl);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -30,9 +34,10 @@ export default function EditGroupScreen() {
   const [city, setCity] = useState("");
   const [topic, setTopic] = useState("");
 
-  const [thumbPreview, setThumbPreview] = useState<string | null>(null);
-  const [thumbMedia, setThumbMedia] = useState<MediaResult | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [pickingThumbnail, setPickingThumbnail] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (group) {
@@ -41,58 +46,65 @@ export default function EditGroupScreen() {
       setCounty(group.county ?? "");
       setCity(group.city ?? "");
       setTopic(group.topic ?? "");
-      if (group.thumbnailUrl) setThumbPreview(group.thumbnailUrl);
+      if (group.thumbnailUrl) setThumbnailPreview(group.thumbnailUrl);
     }
   }, [group]);
 
-  async function handlePickThumbnail() {
+  const handlePickThumbnail = useCallback(async () => {
+    setPickingThumbnail(true);
     try {
-      const result = await pickImage();
+      const result = await pickImage({ quality: 0.8, allowsEditing: true });
       if (result) {
-        setThumbMedia(result);
-        setThumbPreview(result.uri);
+        setThumbnailPreview(result.uri);
+        setThumbnailFile({ uri: result.uri, mimeType: result.mimeType });
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       }
-    } catch {
-      // cancelled
+    } finally {
+      setPickingThumbnail(false);
     }
-  }
+  }, []);
 
-  async function handleSave() {
-    if (!name.trim()) return;
-    setIsSaving(true);
+  const handleSave = async () => {
+    if (!id) return;
+    setSaving(true);
     try {
       let thumbnailStorageId: string | undefined;
-      if (thumbMedia) {
-        thumbnailStorageId = await uploadToConvex(
-          () => generateUploadUrl(),
-          thumbMedia.uri,
-          thumbMedia.mimeType
-        );
+
+      if (thumbnailFile) {
+        const url = await generateUploadUrl();
+        thumbnailStorageId = await uploadToConvex(url, thumbnailFile.uri, thumbnailFile.mimeType);
       }
 
       await updateGroup({
-        groupId,
-        name: name.trim(),
+        id: id as Id<"groups">,
+        name: name.trim() || undefined,
         description: description.trim() || undefined,
         county: county.trim() || undefined,
         city: city.trim() || undefined,
         topic: topic.trim() || undefined,
-        ...(thumbnailStorageId ? { thumbnailStorageId: thumbnailStorageId as unknown as Id<"_storage"> } : {}),
+        ...(thumbnailStorageId ? { thumbnailStorageId: thumbnailStorageId as never } : {}),
       });
 
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       safeBack(router, `/(main)/groups/${id}`);
-    } catch {
+    } catch (error) {
+      console.error("Group update failed:", error);
       if (Platform.OS !== "web") {
         const { Alert } = require("react-native");
-        Alert.alert("Fehler", "Gruppe konnte nicht gespeichert werden.");
+        Alert.alert("Fehler", "Gruppe konnte nicht aktualisiert werden.");
       }
-      setIsSaving(false);
+    } finally {
+      setSaving(false);
     }
-  }
+  };
 
-  if (!group) {
+  if (!id || group === undefined) {
     return (
-      <View style={s.loadingContainer}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.black} />
       </View>
     );
@@ -100,187 +112,285 @@ export default function EditGroupScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
-      <View style={s.header}>
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => safeBack(router, `/(main)/groups/${id}`)}
-          style={s.headerBtn}
+          style={styles.headerBtn}
         >
-          <SymbolView name="xmark" size={20} tintColor={theme.text} />
+          <Icon name="chevron.left" size={20} color={colors.black} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Gruppe bearbeiten</Text>
+        <Text style={styles.headerTitle}>Gruppe bearbeiten</Text>
         <TouchableOpacity
           onPress={handleSave}
-          disabled={isSaving || !name.trim()}
-          style={[s.saveBtn, (isSaving || !name.trim()) && s.saveBtnDisabled]}
+          disabled={saving || !name.trim()}
+          style={[
+            styles.saveBtn,
+            (saving || !name.trim()) && styles.saveBtnDisabled,
+          ]}
         >
-          {isSaving ? (
+          {saving ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={s.saveText}>Speichern</Text>
+            <Text style={styles.saveBtnText}>Speichern</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={s.bodyContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Thumbnail */}
+        <Text style={styles.sectionLabel}>Gruppenbild</Text>
         <TouchableOpacity
-          style={s.thumbArea}
+          style={styles.thumbnailArea}
           onPress={handlePickThumbnail}
+          disabled={pickingThumbnail || saving}
           activeOpacity={0.7}
         >
-          {thumbPreview ? (
-            <Image source={{ uri: thumbPreview }} style={s.thumbImage} contentFit="cover" />
+          {thumbnailPreview ? (
+            <View style={styles.thumbnailPreviewWrap}>
+              <Image
+                source={{ uri: thumbnailPreview }}
+                style={styles.thumbnailImage}
+                contentFit="cover"
+              />
+              <View style={styles.thumbnailOverlay}>
+                {pickingThumbnail ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <View style={styles.editBadge}>
+                    <Icon name="camera" size={14} color={colors.white} />
+                    <Text style={styles.editBadgeText}>Bild \u00e4ndern</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : pickingThumbnail ? (
+            <View style={styles.thumbnailEmpty}>
+              <ActivityIndicator size="large" color={colors.grey400} />
+            </View>
           ) : (
-            <View style={s.thumbPlaceholder}>
-              <SymbolView name="photo.fill" size={36} tintColor={colors.gray400} />
-              <Text style={s.thumbHint}>Gruppenbild antippen zum Ändern</Text>
+            <View style={styles.thumbnailEmpty}>
+              <Icon name="photo" size={36} color={colors.grey400} />
+              <Text style={styles.thumbnailEmptyText}>Tippe hier, um ein Gruppenbild auszuw\u00e4hlen</Text>
             </View>
           )}
-          <View style={s.thumbOverlay}>
-            <SymbolView name="camera.fill" size={16} tintColor={colors.white} />
-            <Text style={s.thumbOverlayText}>Ändern</Text>
-          </View>
         </TouchableOpacity>
 
-        {/* Form */}
-        <View style={s.formSection}>
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Gruppenname *</Text>
+        {/* Fields */}
+        <View style={styles.formSection}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Name *</Text>
             <TextInput
-              style={s.fieldInput}
+              style={styles.fieldInput}
               value={name}
               onChangeText={setName}
-              placeholder="Name der Gruppe"
-              placeholderTextColor={colors.gray400}
+              placeholder="Gruppenname"
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
             />
           </View>
 
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Beschreibung</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Beschreibung</Text>
             <TextInput
-              style={[s.fieldInput, s.fieldInputMulti]}
+              style={[styles.fieldInput, styles.fieldInputMultiline]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Worum geht es in dieser Gruppe?"
-              placeholderTextColor={colors.gray400}
+              placeholder="Worum geht es in der Gruppe?"
+              placeholderTextColor={colors.grey400}
               multiline
               maxLength={300}
-              textAlignVertical="top"
+              editable={!saving}
             />
           </View>
 
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>Thema</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Thema</Text>
             <TextInput
-              style={s.fieldInput}
+              style={styles.fieldInput}
               value={topic}
               onChangeText={setTopic}
-              placeholder="z.B. Sport, Kultur, Natur"
-              placeholderTextColor={colors.gray400}
+              placeholder="z.B. Sport, Kultur, Technik"
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
             />
           </View>
 
-          <View style={s.row}>
-            <View style={[s.fieldGroup, { flex: 1 }]}>
-              <Text style={s.fieldLabel}>Landkreis</Text>
-              <TextInput
-                style={s.fieldInput}
-                value={county}
-                onChangeText={setCounty}
-                placeholder="Landkreis"
-                placeholderTextColor={colors.gray400}
-              />
-            </View>
-            <View style={[s.fieldGroup, { flex: 1 }]}>
-              <Text style={s.fieldLabel}>Stadt</Text>
-              <TextInput
-                style={s.fieldInput}
-                value={city}
-                onChangeText={setCity}
-                placeholder="Stadt"
-                placeholderTextColor={colors.gray400}
-              />
-            </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Landkreis</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={county}
+              onChangeText={setCounty}
+              placeholder="z.B. Rostock"
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Stadt</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={city}
+              onChangeText={setCity}
+              placeholder="z.B. Stralsund"
+              placeholderTextColor={colors.grey400}
+              editable={!saving}
+            />
           </View>
         </View>
       </ScrollView>
-
-      {isSaving && (
-        <View style={s.overlay}>
-          <View style={s.overlayCard}>
-            <ActivityIndicator size="large" color={colors.black} />
-            <Text style={s.overlayText}>Wird gespeichert...</Text>
-          </View>
-        </View>
-      )}
     </KeyboardAvoidingView>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+  },
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: spacing.lg, paddingTop: 60, paddingBottom: spacing.md,
-    backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.gray200,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: 60,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.grey200,
   },
   headerBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: colors.gray100,
-    alignItems: "center", justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.grey100,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: colors.black,
+  },
   saveBtn: {
     backgroundColor: colors.black,
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
-    borderRadius: radius.full, minWidth: 90, alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: "center",
   },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveText: { color: colors.white, fontWeight: "600", fontSize: 15 },
-  bodyContent: { paddingBottom: 40 },
-  thumbArea: {
-    width: "100%", height: 200, backgroundColor: colors.gray100,
+  saveBtnDisabled: {
+    backgroundColor: colors.grey300,
+  },
+  saveBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.grey500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  /* Thumbnail */
+  thumbnailArea: {
+    borderRadius: 16,
     overflow: "hidden",
+    backgroundColor: colors.grey100,
+    borderWidth: 1,
+    borderColor: colors.grey200,
+    borderStyle: "dashed",
+    minHeight: 180,
   },
-  thumbImage: { width: "100%", height: "100%" },
-  thumbPlaceholder: {
-    flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.xs,
+  thumbnailPreviewWrap: {
+    position: "relative",
+    minHeight: 180,
   },
-  thumbHint: { fontSize: 13, color: colors.gray400 },
-  thumbOverlay: {
-    position: "absolute", bottom: spacing.md, right: spacing.md,
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: colors.overlay, paddingHorizontal: 12,
-    paddingVertical: 6, borderRadius: radius.full,
+  thumbnailImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 16,
   },
-  thumbOverlayText: { color: colors.white, fontWeight: "600", fontSize: 13 },
-  formSection: { padding: spacing.lg, gap: spacing.lg },
-  fieldGroup: { gap: spacing.xs },
+  thumbnailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 16,
+  },
+  editBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  editBadgeText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  thumbnailEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 50,
+    gap: 10,
+  },
+  thumbnailEmptyText: {
+    fontSize: 14,
+    color: colors.grey500,
+    textAlign: "center",
+    paddingHorizontal: spacing.lg,
+  },
+  /* Form */
+  formSection: {
+    gap: spacing.lg,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
   fieldLabel: {
-    fontSize: 13, fontWeight: "600", color: colors.gray500,
-    textTransform: "uppercase", letterSpacing: 0.5,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.grey500,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   fieldInput: {
-    backgroundColor: colors.gray50, borderRadius: radius.md,
-    padding: spacing.md, fontSize: 16, color: colors.black,
-    borderWidth: 1, borderColor: colors.gray200,
+    backgroundColor: colors.grey100,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.black,
   },
-  fieldInputMulti: { minHeight: 100 },
-  row: { flexDirection: "row", gap: spacing.md },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
-    alignItems: "center", justifyContent: "center",
+  fieldInputMultiline: {
+    minHeight: 80,
+    textAlignVertical: "top",
   },
-  overlayCard: {
-    backgroundColor: colors.white, borderRadius: radius.xl,
-    padding: spacing.xxl, alignItems: "center", gap: spacing.lg,
-    ...shadows.lg,
-  },
-  overlayText: { fontSize: 16, fontWeight: "600", color: colors.black },
 });
