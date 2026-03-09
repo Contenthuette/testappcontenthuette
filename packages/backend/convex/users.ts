@@ -42,9 +42,26 @@ export const me = authQuery({
     const user = await getUserByAuthId(ctx, authId);
     if (!user) return null;
     return {
-      ...user,
-      avatarUrl: user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) : user.avatarUrl,
-      bannerUrl: user.bannerStorageId ? await ctx.storage.getUrl(user.bannerStorageId) : user.bannerUrl,
+      _id: user._id,
+      _creationTime: user._creationTime,
+      authId: user.authId,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) ?? undefined : user.avatarUrl,
+      bannerUrl: user.bannerStorageId ? await ctx.storage.getUrl(user.bannerStorageId) ?? undefined : user.bannerUrl,
+      bio: user.bio,
+      county: user.county,
+      city: user.city,
+      gender: user.gender,
+      birthDate: user.birthDate,
+      interests: user.interests,
+      role: user.role,
+      onboardingComplete: user.onboardingComplete,
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionPlan: user.subscriptionPlan,
+      subscriptionExpiresAt: user.subscriptionExpiresAt,
+      lastActiveAt: user.lastActiveAt,
+      createdAt: user.createdAt,
     };
   },
 });
