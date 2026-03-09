@@ -10,13 +10,14 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
-import { useVideoPlayer, VideoView } from "expo-video";
 import Icon from "@/components/Icon";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
@@ -34,6 +35,7 @@ export default function CreatePostScreen() {
   const postType: PostType = type === "video" ? "video" : "photo";
   const config = typeConfig[postType];
   const router = useRouter();
+  const { width } = useWindowDimensions();
 
   const createPost = useMutation(api.posts.create);
   const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
@@ -45,9 +47,7 @@ export default function CreatePostScreen() {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
 
-  const videoPlayer = useVideoPlayer(mediaPreview ?? "", (player: { loop: boolean }) => {
-    player.loop = false;
-  });
+  const videoPreviewHeight = (width - spacing.lg * 2) * (16 / 9);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -162,13 +162,12 @@ export default function CreatePostScreen() {
         >
           {mediaPreview ? (
             postType === "video" ? (
-              <View style={styles.videoPreviewWrap}>
-                <VideoView
-                  player={videoPlayer}
-                  style={styles.videoPlayer}
-                  allowsFullscreen
-                  allowsPictureInPicture={false}
-                  contentFit="cover"
+              <View style={[styles.videoPreviewWrap, { height: videoPreviewHeight }]}>
+                <VideoPlayer
+                  uri={mediaPreview}
+                  height={videoPreviewHeight}
+                  autoPlay={false}
+                  showControls
                 />
                 <View style={styles.videoChangeBtnWrap}>
                   <TouchableOpacity
@@ -296,14 +295,9 @@ const styles = StyleSheet.create({
   videoPreviewWrap: {
     position: "relative",
     width: "100%",
-    aspectRatio: 9 / 16,
     borderRadius: radius.md,
     overflow: "hidden",
     backgroundColor: colors.black,
-  },
-  videoPlayer: {
-    width: "100%",
-    height: "100%",
   },
   videoChangeBtnWrap: {
     position: "absolute",
@@ -311,6 +305,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
+    zIndex: 10,
   },
   changeBadge: {
     flexDirection: "row",

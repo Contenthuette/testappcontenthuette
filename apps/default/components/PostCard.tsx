@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { useVideoPlayer, VideoView } from "expo-video";
 import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface PostCardProps {
@@ -31,78 +31,11 @@ interface PostCardProps {
   onProfile?: () => void;
 }
 
-function VideoPost({ mediaUrl }: { mediaUrl: string }) {
-  const { width } = useWindowDimensions();
-  const videoHeight = width * (16 / 9);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const player = useVideoPlayer(mediaUrl, (p: { loop: boolean }) => {
-    p.loop = true;
-  });
-
-  const handleTogglePlay = useCallback(() => {
-    if (isPlaying) {
-      player.pause();
-    } else {
-      player.play();
-    }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying, player]);
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.95}
-      onPress={handleTogglePlay}
-      style={[vs.container, { height: videoHeight }]}
-    >
-      <VideoView
-        player={player}
-        style={vs.video}
-        allowsFullscreen
-        allowsPictureInPicture={false}
-        contentFit="cover"
-        nativeControls={false}
-      />
-      {!isPlaying && (
-        <View style={vs.playOverlay}>
-          <View style={vs.playBtn}>
-            <SymbolView name="play.fill" size={28} tintColor="#fff" />
-          </View>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-const vs = StyleSheet.create({
-  container: {
-    width: "100%",
-    backgroundColor: "#000",
-    position: "relative",
-  },
-  video: {
-    width: "100%",
-    height: "100%",
-  },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.15)",
-  },
-  playBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
-
 export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }: PostCardProps) {
+  const { width } = useWindowDimensions();
   const timeAgo = formatTimeAgo(post.createdAt);
   const isVideo = post.type === "video";
+  const videoHeight = (width - 32) * (16 / 9);
 
   return (
     <View style={[s.container, post.isAnnouncement && s.announcement]}>
@@ -124,7 +57,15 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
 
       {post.mediaUrl ? (
         isVideo ? (
-          <VideoPost mediaUrl={post.mediaUrl} />
+          <View style={s.videoWrap}>
+            <VideoPlayer
+              uri={post.mediaUrl}
+              height={videoHeight}
+              autoPlay={false}
+              loop
+              showControls
+            />
+          </View>
         ) : (
           <Image source={{ uri: post.mediaUrl }} style={s.media} contentFit="cover" />
         )
@@ -160,7 +101,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
 function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
+  if (mins < 1) return "gerade eben";
   if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h`;
@@ -179,6 +120,11 @@ const s = StyleSheet.create({
   authorName: { fontSize: 14, fontWeight: "600", color: theme.text },
   time: { fontSize: 12, color: theme.textSecondary },
   media: { width: "100%", aspectRatio: 1 },
+  videoWrap: {
+    width: "100%",
+    borderRadius: 0,
+    overflow: "hidden",
+  },
   actions: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, gap: 16 },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   actionCount: { fontSize: 14, color: theme.text },
