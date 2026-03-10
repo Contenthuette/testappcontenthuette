@@ -19,7 +19,10 @@ export default function GroupDetailScreen() {
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
   const membership = useQuery(api.groups.getMyMembership, id ? { groupId: id as Id<"groups"> } : "skip");
   const members = useQuery(api.groups.getMembers, id ? { groupId: id as Id<"groups"> } : "skip");
+  const pendingRequests = useQuery(api.groups.getPendingRequests, id ? { groupId: id as Id<"groups"> } : "skip");
   const joinGroup = useMutation(api.groups.join);
+  const acceptRequest = useMutation(api.groups.acceptRequest);
+  const rejectRequest = useMutation(api.groups.rejectRequest);
 
   if (!group) {
     return (
@@ -30,11 +33,28 @@ export default function GroupDetailScreen() {
   }
 
   const isMember = membership?.status === "active";
+  const isPending = membership?.status === "pending";
   const isAdmin = membership?.role === "admin";
+  const isRequestGroup = group.visibility === "request" || group.visibility === "invite_only";
 
   const handleJoin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try { await joinGroup({ groupId: id as Id<"groups"> }); } catch { /* already member */ }
+  };
+
+  const handleAccept = async (userId: Id<"users">) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try { await acceptRequest({ groupId: id as Id<"groups">, userId }); } catch { /* error */ }
+  };
+
+  const handleReject = async (userId: Id<"users">) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try { await rejectRequest({ groupId: id as Id<"groups">, userId }); } catch { /* error */ }
+  };
+
+  const getVisibilityLabel = () => {
+    if (group.visibility === "public") return "Öffentlich";
+    return "Auf Anfrage";
   };
 
   return (
@@ -53,7 +73,6 @@ export default function GroupDetailScreen() {
           <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("group-detail")}>
             <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
-          {/* Admin edit button */}
           {isAdmin && (
             <TouchableOpacity
               style={styles.editBtn}
@@ -65,19 +84,18 @@ export default function GroupDetailScreen() {
         </View>
 
         <View style={styles.content}>
-          {/* Title */}
           <Text style={styles.groupName}>{group.name}</Text>
           <View style={styles.metaRow}>
             <SymbolView name="mappin" size={13} tintColor={colors.gray400} />
             <Text style={styles.metaText}>
-              {[group.city || group.county || "MV", group.topic].filter(Boolean).join(" · ")}
+              {[group.city || group.county || "MV", group.topic].filter(Boolean).join(" \u00b7 ")}
             </Text>
           </View>
           <View style={styles.metaRow}>
             <SymbolView name="person.2" size={13} tintColor={colors.gray400} />
             <Text style={styles.metaText}>
-              {group.memberCount} {group.memberCount === 1 ? "Mitglied" : "Mitglieder"} ·{" "}
-              {group.visibility === "public" ? "Öffentlich" : "Nur auf Einladung"}
+              {group.memberCount} {group.memberCount === 1 ? "Mitglied" : "Mitglieder"} \u00b7{" "}
+              {getVisibilityLabel()}
             </Text>
           </View>
 
@@ -85,7 +103,17 @@ export default function GroupDetailScreen() {
             <Text style={styles.desc}>{group.description}</Text>
           )}
 
-          {/* Admin quick action */}
+          {/* Interests tags */}
+          {group.interests && group.interests.length > 0 && (
+            <View style={styles.interestTags}>
+              {group.interests.map(i => (
+                <View key={i} style={styles.interestTag}>
+                  <Text style={styles.interestTagText}>{i}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {isAdmin && (
             <TouchableOpacity
               style={styles.adminEditRow}
@@ -109,10 +137,17 @@ export default function GroupDetailScreen() {
                 <SymbolView name="bubble.left.and.bubble.right" size={16} tintColor={colors.white} />
                 <Text style={styles.primaryBtnText}>Chat öffnen</Text>
               </TouchableOpacity>
+            ) : isPending ? (
+              <View style={styles.pendingBtn}>
+                <SymbolView name="clock" size={16} tintColor={colors.gray600} />
+                <Text style={styles.pendingBtnText}>Anfrage gesendet</Text>
+              </View>
             ) : (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleJoin} activeOpacity={0.7}>
-                <SymbolView name="plus" size={16} tintColor={colors.white} />
-                <Text style={styles.primaryBtnText}>Beitreten</Text>
+                <SymbolView name={isRequestGroup ? "envelope" : "plus"} size={16} tintColor={colors.white} />
+                <Text style={styles.primaryBtnText}>
+                  {isRequestGroup ? "Anfrage senden" : "Beitreten"}
+                </Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.7}>
@@ -120,11 +155,45 @@ export default function GroupDetailScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Pending Requests (Admin only) */}
+          {isAdmin && pendingRequests && pendingRequests.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Beitrittsanfragen ({pendingRequests.length})
+              </Text>
+              {pendingRequests.map(req => (
+                <View key={req._id} style={styles.requestRow}>
+                  <Avatar uri={req.avatarUrl} name={req.name} size={44} />
+                  <View style={styles.requestInfo}>
+                    <Text style={styles.requestName}>{req.name}</Text>
+                    <Text style={styles.requestTime}>
+                      {formatTimeAgo(req.requestedAt)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.acceptBtn}
+                    onPress={() => handleAccept(req.userId)}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView name="checkmark" size={14} tintColor={colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rejectBtn}
+                    onPress={() => handleReject(req.userId)}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView name="xmark" size={14} tintColor={colors.gray600} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Members */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Mitglieder</Text>
             {members && members.length > 0 ? (
-              members.map(m => (
+              members.filter(m => m.status === "active").map(m => (
                 <TouchableOpacity
                   key={m._id}
                   style={styles.memberRow}
@@ -149,6 +218,17 @@ export default function GroupDetailScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function formatTimeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "Gerade eben";
+  if (min < 60) return `vor ${min} Min.`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `vor ${hrs} Std.`;
+  const days = Math.floor(hrs / 24);
+  return `vor ${days} T.`;
 }
 
 const styles = StyleSheet.create({
@@ -204,6 +284,26 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
+  interestTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: spacing.md,
+  },
+  interestTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  interestTagText: {
+    fontSize: 12,
+    color: colors.gray600,
+    fontWeight: "500",
+  },
+
   adminEditRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -234,6 +334,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
   },
   primaryBtnText: { fontSize: 15, fontWeight: "600", color: colors.white },
+  pendingBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+  },
+  pendingBtnText: { fontSize: 15, fontWeight: "600", color: colors.gray600 },
   secondaryBtn: {
     width: 48,
     height: 48,
@@ -241,6 +354,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // Pending requests
+  requestRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray100,
+  },
+  requestInfo: { flex: 1 },
+  requestName: { fontSize: 15, fontWeight: "600", color: colors.black },
+  requestTime: { fontSize: 12, color: colors.gray400, marginTop: 1 },
+  acceptBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rejectBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.gray200,
   },
 
   section: { marginTop: spacing.xxl },

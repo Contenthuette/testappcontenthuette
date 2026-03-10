@@ -20,6 +20,9 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
+import { INTERESTS } from "@/lib/constants";
+
+type GroupVisibility = "public" | "request";
 
 export default function CreateGroupScreen() {
   const router = useRouter();
@@ -31,11 +34,19 @@ export default function CreateGroupScreen() {
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
   const [topic, setTopic] = useState("");
+  const [visibility, setVisibility] = useState<GroupVisibility>("public");
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
   const [thumbPreview, setThumbPreview] = useState<string | null>(null);
   const [thumbFile, setThumbFile] = useState<{ uri: string; mimeType: string } | null>(null);
   const [pickingThumb, setPickingThumb] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests(prev =>
+      prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
+    );
+  };
 
   const handlePickThumbnail = async () => {
     setPickingThumb(true);
@@ -67,7 +78,8 @@ export default function CreateGroupScreen() {
         county: county.trim() || undefined,
         city: city.trim() || undefined,
         topic: topic.trim() || undefined,
-        visibility: "public" as const,
+        interests: selectedInterests.length > 0 ? selectedInterests : undefined,
+        visibility,
         ...(thumbnailStorageId ? { thumbnailStorageId: thumbnailStorageId as never } : {}),
       });
 
@@ -141,7 +153,7 @@ export default function CreateGroupScreen() {
                   ) : (
                     <View style={styles.editBadge}>
                       <Icon name="camera" size={14} tintColor={colors.white} />
-                      <Text style={styles.editBadgeText}>Bild aendern</Text>
+                      <Text style={styles.editBadgeText}>Bild ändern</Text>
                     </View>
                   )}
                 </View>
@@ -153,7 +165,7 @@ export default function CreateGroupScreen() {
             ) : (
               <View style={styles.thumbEmpty}>
                 <Icon name="photo" size={36} tintColor={colors.gray400} />
-                <Text style={styles.thumbEmptyText}>Tippe, um ein Gruppenbild auszuwaehlen</Text>
+                <Text style={styles.thumbEmptyText}>Tippe, um ein Gruppenbild auszuwählen</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -219,6 +231,75 @@ export default function CreateGroupScreen() {
             />
           </View>
         </View>
+
+        {/* Visibility */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Sichtbarkeit</Text>
+          <View style={styles.visibilityRow}>
+            <TouchableOpacity
+              style={[styles.visibilityOption, visibility === "public" && styles.visibilityActive]}
+              onPress={() => setVisibility("public")}
+              activeOpacity={0.7}
+            >
+              <Icon name="globe" size={20} tintColor={visibility === "public" ? colors.white : colors.gray600} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.visibilityTitle, visibility === "public" && styles.visibilityTitleActive]}>
+                  Öffentlich
+                </Text>
+                <Text style={[styles.visibilityDesc, visibility === "public" && styles.visibilityDescActive]}>
+                  Jeder kann beitreten
+                </Text>
+              </View>
+              <View style={[styles.radio, visibility === "public" && styles.radioActive]}>
+                {visibility === "public" && <View style={styles.radioDot} />}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.visibilityOption, visibility === "request" && styles.visibilityActive]}
+              onPress={() => setVisibility("request")}
+              activeOpacity={0.7}
+            >
+              <Icon name="lock" size={20} tintColor={visibility === "request" ? colors.white : colors.gray600} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.visibilityTitle, visibility === "request" && styles.visibilityTitleActive]}>
+                  Auf Anfrage
+                </Text>
+                <Text style={[styles.visibilityDesc, visibility === "request" && styles.visibilityDescActive]}>
+                  Beitritt muss bestätigt werden
+                </Text>
+              </View>
+              <View style={[styles.radio, visibility === "request" && styles.radioActive]}>
+                {visibility === "request" && <View style={styles.radioDot} />}
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Interests */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Interessen</Text>
+          <Text style={styles.interestHint}>
+            Wähle Interessen aus, die zur Gruppe passen
+          </Text>
+          <View style={styles.interestChips}>
+            {INTERESTS.map((interest) => {
+              const isSelected = selectedInterests.includes(interest);
+              return (
+                <TouchableOpacity
+                  key={interest}
+                  style={[styles.interestChip, isSelected && styles.interestChipActive]}
+                  onPress={() => toggleInterest(interest)}
+                  disabled={creating}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.interestChipText, isSelected && styles.interestChipTextActive]}>
+                    {interest}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -256,7 +337,7 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { backgroundColor: colors.gray300 },
   saveBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
-  scrollContent: { padding: spacing.lg, gap: spacing.xl },
+  scrollContent: { padding: spacing.lg, gap: spacing.xl, paddingBottom: 60 },
   section: { gap: spacing.sm },
   sectionLabel: {
     fontSize: 13,
@@ -322,4 +403,71 @@ const styles = StyleSheet.create({
     color: colors.black,
   },
   fieldInputMultiline: { minHeight: 80, textAlignVertical: "top" },
+  // Visibility
+  visibilityRow: { gap: spacing.sm },
+  visibilityOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.gray100,
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
+    borderCurve: "continuous",
+  },
+  visibilityActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  visibilityTitle: { fontSize: 15, fontWeight: "600", color: colors.black },
+  visibilityTitleActive: { color: colors.white },
+  visibilityDesc: { fontSize: 12, color: colors.gray500, marginTop: 2 },
+  visibilityDescActive: { color: "rgba(255,255,255,0.65)" },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.gray300,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioActive: { borderColor: colors.white },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.white,
+  },
+  // Interests
+  interestHint: {
+    fontSize: 13,
+    color: colors.gray400,
+  },
+  interestChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  interestChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    backgroundColor: colors.white,
+  },
+  interestChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  interestChipText: {
+    fontSize: 13,
+    color: colors.gray700,
+  },
+  interestChipTextActive: {
+    color: colors.white,
+    fontWeight: "600",
+  },
 });

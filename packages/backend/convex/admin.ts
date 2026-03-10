@@ -308,7 +308,7 @@ export const listGroups = authQuery({
     name: v.string(),
     memberCount: v.number(),
     city: v.optional(v.string()),
-    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
   })),
   handler: async (ctx) => {
     await requireAdmin(ctx);
