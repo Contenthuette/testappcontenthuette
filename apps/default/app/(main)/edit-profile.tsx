@@ -41,6 +41,7 @@ export default function EditProfileScreen() {
   const [pickingBanner, setPickingBanner] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [customInterest, setCustomInterest] = useState("");
 
   useEffect(() => {
     if (me) {
@@ -128,6 +129,15 @@ export default function EditProfileScreen() {
     setSelectedInterests(prev =>
       prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
     );
+  };
+
+  const handleAddCustomInterest = () => {
+    const trimmed = customInterest.trim();
+    if (trimmed && !selectedInterests.includes(trimmed) && !(INTERESTS as readonly string[]).includes(trimmed)) {
+      setSelectedInterests(prev => [...prev, trimmed]);
+      setCustomInterest("");
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   };
 
   if (me === undefined) {
@@ -323,6 +333,42 @@ export default function EditProfileScreen() {
                 </TouchableOpacity>
               );
             })}
+            {selectedInterests
+              .filter(i => !(INTERESTS as readonly string[]).includes(i))
+              .map((interest) => (
+                <TouchableOpacity
+                  key={interest}
+                  style={[styles.interestChip, styles.interestChipActive, styles.customChip]}
+                  onPress={() => toggleInterest(interest)}
+                  disabled={saving}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.interestChipText, styles.interestChipTextActive]}>
+                    {interest}
+                  </Text>
+                  <Icon name="xmark" size={10} tintColor={colors.white} />
+                </TouchableOpacity>
+              ))}
+          </View>
+          <View style={styles.customInterestRow}>
+            <TextInput
+              style={styles.customInterestInput}
+              value={customInterest}
+              onChangeText={setCustomInterest}
+              placeholder="Eigenes Interesse eingeben..."
+              placeholderTextColor={colors.gray400}
+              editable={!saving}
+              returnKeyType="done"
+              onSubmitEditing={handleAddCustomInterest}
+            />
+            <TouchableOpacity
+              style={[styles.customInterestBtn, !customInterest.trim() && styles.customInterestBtnDisabled]}
+              onPress={handleAddCustomInterest}
+              disabled={!customInterest.trim() || saving}
+              activeOpacity={0.7}
+            >
+              <Icon name="plus" size={16} tintColor={!customInterest.trim() ? colors.gray400 : colors.white} />
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -488,5 +534,36 @@ const styles = StyleSheet.create({
   interestChipTextActive: {
     color: colors.white,
     fontWeight: "600",
+  },
+  customChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  customInterestRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  customInterestInput: {
+    flex: 1,
+    height: 42,
+    backgroundColor: colors.gray100,
+    borderRadius: 21,
+    paddingHorizontal: spacing.md,
+    fontSize: 14,
+    color: colors.black,
+  },
+  customInterestBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customInterestBtnDisabled: {
+    backgroundColor: colors.gray200,
   },
 });
