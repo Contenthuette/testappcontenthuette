@@ -25,7 +25,8 @@ export const list = authQuery({
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
-    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    interests: v.optional(v.array(v.string())),
+    visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
     memberCount: v.number(),
     isMember: v.boolean(),
     createdAt: v.number(),
@@ -71,6 +72,7 @@ export const list = authQuery({
         county: g.county,
         city: g.city,
         topic: g.topic,
+        interests: g.interests,
         visibility: g.visibility,
         memberCount: g.memberCount,
         isMember,
@@ -91,7 +93,8 @@ export const getById = query({
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
-    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    interests: v.optional(v.array(v.string())),
+    visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
     memberCount: v.number(),
     creatorId: v.id("users"),
     createdAt: v.number(),
@@ -107,6 +110,7 @@ export const getById = query({
       county: g.county,
       city: g.city,
       topic: g.topic,
+      interests: g.interests,
       visibility: g.visibility,
       memberCount: g.memberCount,
       creatorId: g.creatorId,
@@ -122,7 +126,8 @@ export const create = authMutation({
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
-    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    interests: v.optional(v.array(v.string())),
+    visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
     thumbnailStorageId: v.optional(v.id("_storage")),
   },
   returns: v.id("groups"),
@@ -136,7 +141,7 @@ export const create = authMutation({
       createdAt: Date.now(),
     });
     // Create conversation for group
-    const convId = await ctx.db.insert("conversations", {
+    await ctx.db.insert("conversations", {
       type: "group",
       groupId,
       createdAt: Date.now(),
@@ -165,7 +170,8 @@ export const join = authMutation({
     if (existing) return null;
     const group = await ctx.db.get(args.groupId);
     if (!group) throw new Error("Group not found");
-    const status = group.visibility === "invite_only" ? "pending" as const : "active" as const;
+    const needsApproval = group.visibility === "invite_only" || group.visibility === "request";
+    const status = needsApproval ? "pending" as const : "active" as const;
     await ctx.db.insert("groupMembers", {
       groupId: args.groupId,
       userId: myUserId,
@@ -175,8 +181,146 @@ export const join = authMutation({
     });
     if (status === "active") {
       await ctx.db.patch(args.groupId, { memberCount: group.memberCount + 1 });
+    } else {
+      // Notify group admins about join request
+      const me = await ctx.db.get(myUserId);
+      const adminMembers = await ctx.db.query("groupMembers")
+        .withIndex("by_groupId", q => q.eq("groupId", args.groupId))
+        .collect();
+      for (const admin of adminMembers) {
+        if (admin.role === "admin" && admin.status === "active") {
+          await ctx.db.insert("notifications", {
+            userId: admin.userId,
+            type: "join_request",
+            title: "Beitrittsanfrage",
+            body: `${me?.name ?? "Jemand"} möchte der Gruppe "${group.name}" beitreten.`,
+            referenceId: args.groupId,
+            isRead: false,
+            createdAt: Date.now(),
+          });
+        }
+      }
     }
     return null;
+  },
+});
+
+export const acceptRequest = authMutation({
+  args: {
+    groupId: v.id("groups"),
+    userId: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    // Verify caller is admin
+    const myMembership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (!myMembership || myMembership.role !== "admin") {
+      throw new Error("Nur Admins können Anfragen bearbeiten");
+    }
+    // Find pending membership
+    const membership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", args.userId))
+      .unique();
+    if (!membership || membership.status !== "pending") {
+      throw new Error("Keine offene Anfrage gefunden");
+    }
+    await ctx.db.patch(membership._id, { status: "active", joinedAt: Date.now() });
+    const group = await ctx.db.get(args.groupId);
+    if (group) {
+      await ctx.db.patch(args.groupId, { memberCount: group.memberCount + 1 });
+    }
+    // Notify the user
+    await ctx.db.insert("notifications", {
+      userId: args.userId,
+      type: "join_accepted",
+      title: "Anfrage angenommen",
+      body: `Deine Anfrage für die Gruppe "${group?.name ?? ""}" wurde angenommen!`,
+      referenceId: args.groupId,
+      isRead: false,
+      createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const rejectRequest = authMutation({
+  args: {
+    groupId: v.id("groups"),
+    userId: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    // Verify caller is admin
+    const myMembership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (!myMembership || myMembership.role !== "admin") {
+      throw new Error("Nur Admins können Anfragen bearbeiten");
+    }
+    // Find pending membership
+    const membership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", args.userId))
+      .unique();
+    if (!membership || membership.status !== "pending") {
+      throw new Error("Keine offene Anfrage gefunden");
+    }
+    await ctx.db.delete(membership._id);
+    // Notify the user
+    const group = await ctx.db.get(args.groupId);
+    await ctx.db.insert("notifications", {
+      userId: args.userId,
+      type: "join_rejected",
+      title: "Anfrage abgelehnt",
+      body: `Deine Anfrage für die Gruppe "${group?.name ?? ""}" wurde leider abgelehnt.`,
+      referenceId: args.groupId,
+      isRead: false,
+      createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const getPendingRequests = authQuery({
+  args: { groupId: v.id("groups") },
+  returns: v.array(v.object({
+    _id: v.id("groupMembers"),
+    userId: v.id("users"),
+    name: v.string(),
+    avatarUrl: v.optional(v.string()),
+    requestedAt: v.number(),
+  })),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) return [];
+    // Verify caller is admin
+    const myMembership = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .unique();
+    if (!myMembership || myMembership.role !== "admin") return [];
+    const members = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId", q => q.eq("groupId", args.groupId))
+      .collect();
+    const pending = members.filter(m => m.status === "pending");
+    const results = [];
+    for (const m of pending) {
+      const user = await ctx.db.get(m.userId);
+      if (user) {
+        results.push({
+          _id: m._id,
+          userId: m.userId,
+          name: user.name,
+          avatarUrl: user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) ?? undefined : user.avatarUrl,
+          requestedAt: m.joinedAt,
+        });
+      }
+    }
+    return results;
   },
 });
 
@@ -257,7 +401,8 @@ export const update = authMutation({
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
-    visibility: v.optional(v.union(v.literal("public"), v.literal("invite_only"))),
+    interests: v.optional(v.array(v.string())),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("invite_only"), v.literal("request"))),
     thumbnailStorageId: v.optional(v.id("_storage")),
   },
   returns: v.null(),
@@ -282,6 +427,7 @@ export const update = authMutation({
     if (args.county !== undefined) patch.county = args.county;
     if (args.city !== undefined) patch.city = args.city;
     if (args.topic !== undefined) patch.topic = args.topic;
+    if (args.interests !== undefined) patch.interests = args.interests;
     if (args.visibility !== undefined) patch.visibility = args.visibility;
     if (args.thumbnailStorageId !== undefined) patch.thumbnailStorageId = args.thumbnailStorageId;
 

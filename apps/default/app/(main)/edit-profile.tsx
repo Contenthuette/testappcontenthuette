@@ -19,6 +19,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
+import { INTERESTS } from "@/lib/constants";
 
 export default function EditProfileScreen() {
   const me = useQuery(api.users.me);
@@ -29,6 +30,7 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState("");
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<{ uri: string; mimeType: string } | null>(null);
@@ -46,6 +48,7 @@ export default function EditProfileScreen() {
       setBio(me.bio ?? "");
       setCounty(me.county ?? "");
       setCity(me.city ?? "");
+      setSelectedInterests(me.interests ?? []);
       if (me.avatarUrl) setAvatarPreview(me.avatarUrl);
       if (me.bannerUrl) setBannerPreview(me.bannerUrl);
     }
@@ -99,6 +102,7 @@ export default function EditProfileScreen() {
         bio: bio.trim() || undefined,
         county: county.trim() || undefined,
         city: city.trim() || undefined,
+        interests: selectedInterests.length > 0 ? selectedInterests : undefined,
         ...(avatarStorageId ? { avatarStorageId: avatarStorageId as never } : {}),
         ...(bannerStorageId ? { bannerStorageId: bannerStorageId as never } : {}),
       });
@@ -118,6 +122,12 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests(prev =>
+      prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
+    );
   };
 
   if (me === undefined) {
@@ -289,6 +299,32 @@ export default function EditProfileScreen() {
             />
           </View>
         </View>
+
+        {/* Interests */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Interessen</Text>
+          <Text style={styles.interestHint}>
+            Wähle Interessen aus, die dich beschreiben
+          </Text>
+          <View style={styles.interestChips}>
+            {INTERESTS.map((interest) => {
+              const isSelected = selectedInterests.includes(interest);
+              return (
+                <TouchableOpacity
+                  key={interest}
+                  style={[styles.interestChip, isSelected && styles.interestChipActive]}
+                  onPress={() => toggleInterest(interest)}
+                  disabled={saving}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.interestChipText, isSelected && styles.interestChipTextActive]}>
+                    {interest}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -423,4 +459,34 @@ const styles = StyleSheet.create({
     color: colors.black,
   },
   fieldInputMultiline: { minHeight: 80, textAlignVertical: "top" },
+  interestHint: {
+    fontSize: 13,
+    color: colors.gray400,
+    marginBottom: spacing.sm,
+  },
+  interestChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  interestChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    backgroundColor: colors.white,
+  },
+  interestChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  interestChipText: {
+    fontSize: 13,
+    color: colors.gray700,
+  },
+  interestChipTextActive: {
+    color: colors.white,
+    fontWeight: "600",
+  },
 });

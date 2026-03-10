@@ -41,7 +41,8 @@ export default defineSchema({
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
-    visibility: v.union(v.literal("public"), v.literal("invite_only")),
+    interests: v.optional(v.array(v.string())),
+    visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
     creatorId: v.id("users"),
     memberCount: v.number(),
     createdAt: v.number(),
@@ -198,7 +199,10 @@ export default defineSchema({
       v.literal("event_reminder"),
       v.literal("ticket_confirmed"),
       v.literal("announcement"),
-      v.literal("call")
+      v.literal("call"),
+      v.literal("join_request"),
+      v.literal("join_accepted"),
+      v.literal("join_rejected")
     ),
     title: v.string(),
     body: v.string(),

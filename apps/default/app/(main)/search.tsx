@@ -30,7 +30,7 @@ export default function SearchScreen() {
         <SymbolView name="slider.horizontal.3" size={20} tintColor={colors.black} />
         <Text style={styles.title}>Filter</Text>
         <TouchableOpacity onPress={() => { setCounty(""); setCity(""); setGender(""); setAgeFrom(""); setAgeTo(""); setSelectedInterests([]); }}>
-          <Text style={styles.resetText}>Zur\u00fccksetzen</Text>
+          <Text style={styles.resetText}>Zurücksetzen</Text>
         </TouchableOpacity>
       </View>
 
@@ -65,13 +65,12 @@ export default function SearchScreen() {
         <Text style={styles.sectionTitle}>Alter</Text>
         <View style={styles.ageRow}>
           <TextInput style={styles.ageInput} placeholder="Von" placeholderTextColor={colors.gray400} value={ageFrom} onChangeText={setAgeFrom} keyboardType="numeric" />
-          <Text style={styles.ageDash}>\u2013</Text>
           <TextInput style={styles.ageInput} placeholder="Bis" placeholderTextColor={colors.gray400} value={ageTo} onChangeText={setAgeTo} keyboardType="numeric" />
         </View>
 
         <Text style={styles.sectionTitle}>Interessen</Text>
         <View style={styles.chips}>
-          {INTERESTS.slice(0, 50).map(i => (
+          {INTERESTS.map(i => (
             <TouchableOpacity key={i} style={[styles.chip, selectedInterests.includes(i) && styles.chipActive]} onPress={() => toggleInterest(i)}>
               <Text style={[styles.chipText, selectedInterests.includes(i) && styles.chipTextActive]}>{i}</Text>
             </TouchableOpacity>
@@ -99,9 +98,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.black, borderColor: colors.black },
   chipText: { fontSize: 13, color: colors.gray700 },
   chipTextActive: { color: colors.white, fontWeight: "600" },
-  ageRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  ageRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   ageInput: { flex: 1, height: 44, borderRadius: radius.md, backgroundColor: colors.gray100, paddingHorizontal: spacing.md, fontSize: 16, color: colors.black },
-  ageDash: { fontSize: 18, color: colors.gray400 },
   applyBtn: { marginTop: spacing.xxl, padding: spacing.lg, backgroundColor: colors.black, borderRadius: radius.lg, alignItems: "center" },
   applyText: { fontSize: 16, fontWeight: "600", color: colors.white },
 });

@@ -1,5 +1,5 @@
 {
-  "name": "mv-social-network",
+  "name": "z-social",
   "private": true,
   "workspaces": [
     "apps/*",
