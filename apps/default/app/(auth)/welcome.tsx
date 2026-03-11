@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
+import { ZLogo } from "@/components/ZLogo";
 
 const FEATURES = [
   {
@@ -39,7 +40,7 @@ export default function WelcomeScreen() {
       >
         {/* Logo */}
         <View style={styles.logoRow}>
-          <Text style={styles.logo}>Z</Text>
+          <ZLogo size={48} />
         </View>
 
         {/* Hero text */}
