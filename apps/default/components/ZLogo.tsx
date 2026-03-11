@@ -1,6 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { colors } from "@/lib/theme";
+import { View, StyleSheet } from "react-native";
+import { Image } from "expo-image";
+
+const logoSource = require("../../../assets/images/z-lgo-1xaccc.png");
 
 interface ZLogoProps {
   size?: number;
@@ -8,27 +10,33 @@ interface ZLogoProps {
   withBackground?: boolean;
 }
 
-export function ZLogo({ size = 32, color = colors.black, withBackground = false }: ZLogoProps) {
+export function ZLogo({ size = 32, withBackground = false }: ZLogoProps) {
   if (withBackground) {
     return (
-      <View style={[
-        styles.bgContainer,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.28,
-          backgroundColor: color,
-        },
-      ]}>
-        <Text style={[
-          styles.text,
-          { fontSize: size * 0.52, color: color === colors.black ? colors.white : colors.black },
-        ]}>Z</Text>
+      <View
+        style={[
+          styles.bgContainer,
+          {
+            width: size,
+            height: size,
+            borderRadius: size * 0.28,
+          },
+        ]}
+      >
+        <Image
+          source={logoSource}
+          style={{ width: size * 0.7, height: size * 0.7 }}
+          contentFit="contain"
+        />
       </View>
     );
   }
   return (
-    <Text style={[styles.text, { fontSize: size * 0.65, color }]}>Z</Text>
+    <Image
+      source={logoSource}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+    />
   );
 }
 
@@ -36,9 +44,6 @@ const styles = StyleSheet.create({
   bgContainer: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  text: {
-    fontWeight: "900",
-    letterSpacing: -1,
+    backgroundColor: "#000",
   },
 });
