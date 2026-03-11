@@ -17,7 +17,7 @@ const FEATURES = [
   },
   {
     icon: "sparkles" as const,
-    label: "Exklusive Partys\n& Reisen",
+    label: "Exklusive Events\nin MV",
   },
   {
     icon: "person.2" as const,
@@ -28,6 +28,7 @@ const FEATURES = [
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   const cardSize = (width - spacing.xl * 2 - spacing.md) / 2;
+  const cardHeight = cardSize * 0.8;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -50,7 +51,7 @@ export default function WelcomeScreen() {
           {FEATURES.map((feature, index) => (
             <View
               key={index}
-              style={[styles.card, { width: cardSize, height: cardSize }]}
+              style={[styles.card, { width: cardSize, height: cardHeight }]}
             >
               <View style={styles.cardIconWrap}>
                 <SymbolView name={feature.icon} size={26} tintColor={colors.gray600} />
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   logoRow: {
-    alignItems: "flex-start",
+    alignItems: "center",
     marginBottom: spacing.xxl,
   },
   logo: {
