@@ -44,7 +44,7 @@ export default function WelcomeScreen() {
         </View>
 
         {/* Hero text */}
-        <Text style={styles.title}>WE ARE Z</Text>
+        <Text style={styles.title}>We are Z</Text>
         <Text style={styles.subtitle}>Social Media. Nur für MV.</Text>
 
         {/* Feature grid */}
@@ -88,12 +88,12 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: 100,
   },
   logoRow: {
     alignItems: "center",
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.md,
   },
   logo: {
     fontSize: 42,
