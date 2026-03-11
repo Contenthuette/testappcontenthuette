@@ -44,7 +44,7 @@ export default function WelcomeScreen() {
         </View>
 
         {/* Hero text */}
-        <Text style={styles.title}>Members Only</Text>
+        <Text style={styles.title}>WE ARE Z</Text>
         <Text style={styles.subtitle}>Social Media. Nur für MV.</Text>
 
         {/* Feature grid */}
