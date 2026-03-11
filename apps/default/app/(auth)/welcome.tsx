@@ -154,6 +154,7 @@ const styles = StyleSheet.create({
     color: colors.black,
     letterSpacing: -0.8,
     lineHeight: 32,
+    textAlign: "center",
   },
   punchline: {
     fontSize: 17,
