@@ -40,7 +40,7 @@ export default function WelcomeScreen() {
       >
         {/* Logo */}
         <View style={styles.logoRow}>
-          <ZLogo size={48} />
+          <ZLogo size={96} />
         </View>
 
         {/* Hero text */}
