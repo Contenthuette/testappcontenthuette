@@ -138,7 +138,7 @@ export default function ProfileScreen() {
         {me.role === "admin" && (
           <TouchableOpacity
             style={styles.adminBtn}
-            onPress={() => router.push("/(admin)/dashboard")}
+            onPress={() => router.push("/(main)/admin-login" as "/")}
             activeOpacity={0.7}
           >
             <SymbolView name="shield.checkered" size={18} tintColor={colors.white} />

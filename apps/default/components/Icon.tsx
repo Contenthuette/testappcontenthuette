@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Plus,
   PlusCircle,
   X,
@@ -38,6 +39,7 @@ import {
   UserCircle,
   User,
   Settings,
+  Settings2,
   Shield,
   ShieldCheck,
   Grid3X3,
@@ -79,6 +81,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "chevron.left": ChevronLeft,
   "chevron.right": ChevronRight,
   "chevron.down": ChevronDown,
+  "chevron.up": ChevronUp,
   "arrow.up": ArrowUp,
   "arrow.up.circle.fill": ArrowUpCircle,
 
@@ -158,6 +161,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
 
   // Settings & Security
   gearshape: Settings,
+  "gearshape.2": Settings2,
   "shield.checkered": Shield,
   "lock.shield": Lock,
   lock: Lock,
@@ -183,6 +187,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "questionmark.circle": HelpCircle,
   "info.circle": Info,
   "exclamationmark.triangle.fill": AlertTriangle,
+  "exclamationmark.triangle": AlertTriangle,
   envelope: Mail,
   pencil: Pencil,
   "pencil.circle": PencilLine,

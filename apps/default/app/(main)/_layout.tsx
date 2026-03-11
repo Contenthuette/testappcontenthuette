@@ -25,6 +25,9 @@ export default function MainLayout() {
       <Stack.Screen name="search" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="my-tickets" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="legal" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="admin-login" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="admin" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="admin-event-form" options={{ presentation: "modal" }} />
     </Stack>
   );
 }

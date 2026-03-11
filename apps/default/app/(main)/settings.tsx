@@ -5,6 +5,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
@@ -45,6 +47,9 @@ const sections = [
 ];
 
 export default function SettingsScreen() {
+  const me = useQuery(api.users.me);
+  const isAdmin = me?.role === "admin" || me?.email === "leif@z-social.com";
+
   const handleSignOut = async () => {
     try {
       await authClient.signOut();
@@ -87,6 +92,26 @@ export default function SettingsScreen() {
             </View>
           </View>
         ))}
+
+        {/* Admin Panel */}
+        {isAdmin && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Admin</Text>
+            <View style={styles.sectionCard}>
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => router.push("/(main)/admin-login" as "/")}
+                activeOpacity={0.6}
+              >
+                <View style={[styles.rowIcon, { backgroundColor: "rgba(0,0,0,0.06)" }]}>
+                  <SymbolView name="gearshape.2" size={17} tintColor={colors.black} />
+                </View>
+                <Text style={styles.rowLabel}>Admin-Panel</Text>
+                <SymbolView name="chevron.right" size={13} tintColor={colors.gray300} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Logout */}
         <View style={styles.section}>
