@@ -233,7 +233,7 @@ export default function FeedScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <ZLogo size={36} />
+        <ZLogo size={47} />
         <Text style={styles.headerTitle}>Feed</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>

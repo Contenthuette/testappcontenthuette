@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
+import { ZLogo } from "@/components/ZLogo";
 import { Image } from "expo-image";
 
 export default function EventsScreen() {
@@ -64,6 +65,7 @@ export default function EventsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
+        <ZLogo size={47} />
         <Text style={styles.headerTitle}>Events</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={() => router.push("/(main)/my-tickets")} style={styles.ticketBtn} activeOpacity={0.7}>
