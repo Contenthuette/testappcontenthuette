@@ -106,6 +106,7 @@ const styles = StyleSheet.create({
     color: colors.black,
     letterSpacing: -1,
     lineHeight: 42,
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 17,
@@ -113,6 +114,7 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     marginTop: spacing.sm,
     letterSpacing: -0.2,
+    textAlign: "center",
   },
   grid: {
     flexDirection: "row",
