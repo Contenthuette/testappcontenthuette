@@ -74,7 +74,7 @@ export const ensureUser = authMutation({
     const authId = ctx.user._id;
     const existing = await getUserByAuthId(ctx, authId);
     if (existing) return existing._id;
-    const isAdmin = args.email.toLowerCase() === "live@z-social.com";
+    const isAdmin = args.email.toLowerCase() === "live@z-social.com" || args.email.toLowerCase() === "leif@z-social.com";
     return await ctx.db.insert("users", {
       authId,
       email: args.email,
