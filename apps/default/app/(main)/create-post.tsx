@@ -54,6 +54,9 @@ export default function CreatePostScreen() {
   const [aspectMode, setAspectMode] = useState<AspectMode>("cropped");
   const [cropOffsetY, setCropOffsetY] = useState(0.5);
 
+  // Videos are always cropped to 3:4
+  const effectiveAspectMode: AspectMode = postType === "video" ? "cropped" : aspectMode;
+
   const cropOffsetRef = useRef(0.5);
 
   const previewWidth = width - spacing.lg * 2;
@@ -144,8 +147,8 @@ export default function CreatePostScreen() {
         type: postType,
         caption: caption.trim() || undefined,
         mediaStorageId: storageId as never,
-        aspectMode,
-        cropOffsetY: aspectMode === "cropped" ? cropOffsetY : undefined,
+        aspectMode: effectiveAspectMode,
+        cropOffsetY: effectiveAspectMode === "cropped" ? cropOffsetY : undefined,
         mediaAspectRatio,
       });
 
@@ -177,43 +180,45 @@ export default function CreatePostScreen() {
     );
   }
 
-  const isCropped = aspectMode === "cropped";
+  const isCropped = effectiveAspectMode === "cropped";
 
   const renderCropPreview = () => {
     if (!mediaPreview || !mediaDims) return null;
 
     return (
       <View>
-        {/* Aspect mode toggle */}
-        <View style={styles.aspectToggleRow}>
-          <Text style={styles.aspectLabel}>Format</Text>
-          <View style={styles.aspectToggle}>
-            <TouchableOpacity
-              style={[styles.aspectBtn, isCropped && styles.aspectBtnActive]}
-              onPress={() => handleAspectToggle("cropped")}
-              activeOpacity={0.7}
-            >
-              <Icon name="crop" size={14} tintColor={isCropped ? colors.white : colors.gray600} />
-              <Text style={[styles.aspectBtnText, isCropped && styles.aspectBtnTextActive]}>
-                3:4 anpassen
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.aspectBtn, !isCropped && styles.aspectBtnActive]}
-              onPress={() => handleAspectToggle("original")}
-              activeOpacity={0.7}
-            >
-              <Icon
-                name="arrow.up.left.and.arrow.down.right"
-                size={14}
-                tintColor={!isCropped ? colors.white : colors.gray600}
-              />
-              <Text style={[styles.aspectBtnText, !isCropped && styles.aspectBtnTextActive]}>
-                Original
-              </Text>
-            </TouchableOpacity>
+        {/* Aspect mode toggle – only for photos */}
+        {postType === "photo" && (
+          <View style={styles.aspectToggleRow}>
+            <Text style={styles.aspectLabel}>Format</Text>
+            <View style={styles.aspectToggle}>
+              <TouchableOpacity
+                style={[styles.aspectBtn, isCropped && styles.aspectBtnActive]}
+                onPress={() => handleAspectToggle("cropped")}
+                activeOpacity={0.7}
+              >
+                <Icon name="crop" size={14} tintColor={isCropped ? colors.white : colors.gray600} />
+                <Text style={[styles.aspectBtnText, isCropped && styles.aspectBtnTextActive]}>
+                  3:4 anpassen
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.aspectBtn, !isCropped && styles.aspectBtnActive]}
+                onPress={() => handleAspectToggle("original")}
+                activeOpacity={0.7}
+              >
+                <Icon
+                  name="arrow.up.left.and.arrow.down.right"
+                  size={14}
+                  tintColor={!isCropped ? colors.white : colors.gray600}
+                />
+                <Text style={[styles.aspectBtnText, !isCropped && styles.aspectBtnTextActive]}>
+                  Original
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
 
         {isCropped ? (
           /* ── Cropped preview with drag ── */
@@ -300,7 +305,9 @@ export default function CreatePostScreen() {
 
         <Text style={styles.aspectHint}>
           {isCropped
-            ? "Das Medium wird auf 3:4 zugeschnitten und fuellt den Feed."
+            ? postType === "video"
+              ? "Ziehe das Video um den sichtbaren 3:4 Ausschnitt zu waehlen."
+              : "Das Medium wird auf 3:4 zugeschnitten und fuellt den Feed."
             : "Das Medium wird im Originalformat mit Raendern angezeigt."}
         </Text>
 
