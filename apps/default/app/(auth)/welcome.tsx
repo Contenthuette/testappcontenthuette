@@ -162,6 +162,7 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     letterSpacing: -0.2,
     marginTop: spacing.xs,
+    textAlign: "center",
   },
   ctaWrap: {
     paddingHorizontal: spacing.xl,
