@@ -12,6 +12,7 @@ async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): 
 
 const sharedPostPreviewValidator = v.optional(v.object({
   thumbnailUrl: v.optional(v.string()),
+  mediaUrl: v.optional(v.string()),
   postType: v.union(v.literal("photo"), v.literal("video")),
   authorName: v.string(),
   caption: v.optional(v.string()),
@@ -32,7 +33,8 @@ async function enrichPostPreview(
     ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
     : post.mediaUrl;
   return {
-    thumbnailUrl: thumbUrl ?? mediaUrl ?? undefined,
+    thumbnailUrl: thumbUrl ?? (post.type === "photo" ? mediaUrl : undefined),
+    mediaUrl: mediaUrl ?? undefined,
     postType: post.type,
     authorName: author?.name ?? "Unbekannt",
     caption: post.caption?.slice(0, 80) ?? undefined,

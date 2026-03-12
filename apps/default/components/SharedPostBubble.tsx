@@ -1,228 +1,242 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Image } from "expo-image";
-import { router } from "expo-router";
-import { colors, spacing, radius } from "@/lib/theme";
-import { SymbolView } from "@/components/Icon";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface SharedPostBubbleProps {
   postId: Id<"posts">;
   preview?: {
     thumbnailUrl?: string;
+    mediaUrl?: string;
     postType: "photo" | "video";
     authorName: string;
     caption?: string;
   };
   isMine: boolean;
-  timestamp: string;
+  timestamp?: string;
 }
 
-export function SharedPostBubble({
-  postId,
-  preview,
-  isMine,
-  timestamp,
-}: SharedPostBubbleProps) {
-  const handlePress = () => {
-    router.push({ pathname: "/(main)/post-detail", params: { id: postId } });
-  };
+function VideoThumbnail({ mediaUrl }: { mediaUrl: string }) {
+  const player = useVideoPlayer(mediaUrl, (p) => {
+    p.loop = false;
+    p.muted = true;
+    p.pause();
+  });
+
+  useEffect(() => {
+    // Seek to 0.1s to get a frame (avoid black first frame)
+    const timer = setTimeout(() => {
+      try {
+        player.currentTime = 0.1;
+      } catch {
+        // ignore if not ready
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [player]);
+
+  return (
+    <View style={thumbStyles.videoContainer}>
+      <VideoView
+        player={player}
+        style={thumbStyles.video}
+        nativeControls={false}
+        allowsPictureInPicture={false}
+      />
+      <View style={thumbStyles.playOverlay}>
+        <View style={thumbStyles.playCircle}>
+          <SymbolView name="play.fill" size={18} tintColor="#fff" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const thumbStyles = StyleSheet.create({
+  videoContainer: {
+    width: "100%",
+    aspectRatio: 3 / 4,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#1a1a1a",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  playCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
+
+export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedPostBubbleProps) {
+  const router = useRouter();
 
   if (!preview) {
     return (
       <TouchableOpacity
-        style={[styles.fallback, isMine ? styles.fallbackMine : styles.fallbackOther]}
-        onPress={handlePress}
-        activeOpacity={0.7}
+        style={[styles.container, isMine ? styles.meContainer : styles.otherContainer]}
+        onPress={() => router.push({ pathname: "/post-detail", params: { postId } })}
+        activeOpacity={0.8}
       >
-        <SymbolView name="photo" size={18} tintColor={isMine ? "rgba(255,255,255,0.6)" : colors.gray400} />
-        <Text style={[styles.fallbackText, isMine && styles.fallbackTextMine]}>
-          Geteilter Beitrag
-        </Text>
+        <View style={styles.fallback}>
+          <SymbolView name="photo" size={28} tintColor="#999" />
+          <Text style={styles.fallbackText}>Geteilter Beitrag</Text>
+        </View>
+        {timestamp ? <Text style={styles.time}>{timestamp}</Text> : null}
       </TouchableOpacity>
     );
   }
 
+  const isVideo = preview.postType === "video";
+  const hasThumb = !!preview.thumbnailUrl;
+  const hasMedia = !!preview.mediaUrl;
+
   return (
     <TouchableOpacity
-      style={[styles.card, isMine ? styles.cardMine : styles.cardOther]}
-      onPress={handlePress}
-      activeOpacity={0.7}
+      style={[styles.container, isMine ? styles.meContainer : styles.otherContainer]}
+      onPress={() => router.push({ pathname: "/post-detail", params: { postId } })}
+      activeOpacity={0.8}
     >
-      {/* Thumbnail */}
-      {preview.thumbnailUrl ? (
-        <View style={styles.thumbWrap}>
+      <View style={styles.mediaWrap}>
+        {isVideo && hasMedia && !hasThumb ? (
+          <VideoThumbnail mediaUrl={preview.mediaUrl!} />
+        ) : hasThumb ? (
+          <View style={styles.imageWrap}>
+            <Image
+              source={{ uri: preview.thumbnailUrl }}
+              style={styles.media}
+              contentFit="cover"
+              transition={200}
+            />
+            {isVideo && (
+              <View style={thumbStyles.playOverlay}>
+                <View style={thumbStyles.playCircle}>
+                  <SymbolView name="play.fill" size={18} tintColor="#fff" />
+                </View>
+              </View>
+            )}
+          </View>
+        ) : hasMedia && !isVideo ? (
           <Image
-            source={{ uri: preview.thumbnailUrl }}
-            style={styles.thumb}
+            source={{ uri: preview.mediaUrl }}
+            style={styles.media}
             contentFit="cover"
             transition={200}
           />
-          {/* Video play overlay */}
-          {preview.postType === "video" && (
-            <View style={styles.playOverlay}>
-              <View style={styles.playCircle}>
-                <SymbolView name="play.fill" size={14} tintColor={colors.white} />
-              </View>
-            </View>
-          )}
-        </View>
-      ) : (
-        <View style={[styles.thumbWrap, styles.thumbPlaceholder]}>
-          <SymbolView
-            name={preview.postType === "video" ? "video.fill" : "photo.fill"}
-            size={28}
-            tintColor={colors.gray300}
-          />
-        </View>
-      )}
-
-      {/* Info bar */}
-      <View style={[styles.infoBar, isMine ? styles.infoBarMine : styles.infoBarOther]}>
-        <View style={styles.infoContent}>
-          <Text
-            style={[styles.authorLabel, isMine && styles.authorLabelMine]}
-            numberOfLines={1}
-          >
-            {preview.authorName}
-          </Text>
-          {preview.caption ? (
-            <Text
-              style={[styles.captionLabel, isMine && styles.captionLabelMine]}
-              numberOfLines={2}
-            >
-              {preview.caption}
-            </Text>
-          ) : (
-            <Text style={[styles.captionLabel, isMine && styles.captionLabelMine]}>
-              {preview.postType === "video" ? "🎬 Video" : "📷 Foto"}
-            </Text>
-          )}
-        </View>
-        <SymbolView
-          name="chevron.right"
-          size={12}
-          tintColor={isMine ? "rgba(255,255,255,0.4)" : colors.gray300}
-        />
+        ) : (
+          <View style={[styles.media, styles.placeholder]}>
+            <SymbolView name={isVideo ? "video" : "photo"} size={32} tintColor="#bbb" />
+          </View>
+        )}
       </View>
 
-      {/* Timestamp */}
-      <Text style={[styles.time, isMine && styles.timeMine]}>{timestamp}</Text>
+      <View style={styles.meta}>
+        <Text style={styles.author} numberOfLines={1}>
+          {preview.authorName}
+        </Text>
+        {preview.caption ? (
+          <Text style={styles.caption} numberOfLines={2}>
+            {preview.caption}
+          </Text>
+        ) : null}
+        <View style={styles.bottomRow}>
+          <View style={styles.openRow}>
+            <Text style={styles.openLabel}>Im Feed ansehen</Text>
+            <SymbolView name="chevron.right" size={10} tintColor="#999" />
+          </View>
+          {timestamp ? <Text style={styles.time}>{timestamp}</Text> : null}
+        </View>
+      </View>
     </TouchableOpacity>
   );
 }
 
-const CARD_WIDTH = 220;
-const THUMB_HEIGHT = 160;
-
 const styles = StyleSheet.create({
-  card: {
-    width: CARD_WIDTH,
+  container: {
+    width: 220,
     borderRadius: 16,
     overflow: "hidden",
     borderCurve: "continuous",
   },
-  cardOther: {
-    backgroundColor: colors.gray100,
+  meContainer: {
+    backgroundColor: "#f0f0f0",
   },
-  cardMine: {
-    backgroundColor: colors.black,
+  otherContainer: {
+    backgroundColor: "#f5f5f5",
   },
-
-  /* Thumbnail */
-  thumbWrap: {
-    width: CARD_WIDTH,
-    height: THUMB_HEIGHT,
-    backgroundColor: colors.gray200,
+  mediaWrap: {
+    width: "100%",
+    aspectRatio: 3 / 4,
+    backgroundColor: "#e8e8e8",
   },
-  thumb: {
+  imageWrap: {
     width: "100%",
     height: "100%",
   },
-  thumbPlaceholder: {
-    alignItems: "center",
+  media: {
+    width: "100%",
+    height: "100%",
+  },
+  placeholder: {
     justifyContent: "center",
-  },
-
-  /* Video play overlay */
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#e0e0e0",
   },
-  playCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingLeft: 2,
+  meta: {
+    padding: 10,
+    gap: 3,
   },
-
-  /* Info bar */
-  infoBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  infoBarOther: {},
-  infoBarMine: {},
-  infoContent: {
-    flex: 1,
-    gap: 2,
-  },
-  authorLabel: {
+  author: {
     fontSize: 13,
-    fontWeight: "700",
-    color: colors.black,
+    fontWeight: "600",
+    color: "#000",
   },
-  authorLabelMine: {
-    color: colors.white,
-  },
-  captionLabel: {
+  caption: {
     fontSize: 12,
-    color: colors.gray500,
+    color: "#666",
     lineHeight: 16,
   },
-  captionLabelMine: {
-    color: "rgba(255,255,255,0.6)",
-  },
-
-  /* Timestamp */
-  time: {
-    fontSize: 10,
-    color: colors.gray400,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    alignSelf: "flex-end",
-  },
-  timeMine: {
-    color: "rgba(255,255,255,0.5)",
-  },
-
-  /* Fallback (no preview) */
-  fallback: {
+  openRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 3,
+    marginTop: 4,
+  },
+  openLabel: {
+    fontSize: 11,
+    color: "#999",
+  },
+  fallback: {
+    padding: 20,
+    alignItems: "center",
     gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  fallbackOther: {
-    backgroundColor: colors.gray100,
-  },
-  fallbackMine: {
-    backgroundColor: colors.black,
   },
   fallbackText: {
-    fontSize: 14,
-    color: colors.gray500,
+    fontSize: 13,
+    color: "#999",
   },
-  fallbackTextMine: {
-    color: "rgba(255,255,255,0.6)",
+  bottomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  time: {
+    fontSize: 10,
+    color: "#aaa",
   },
 });

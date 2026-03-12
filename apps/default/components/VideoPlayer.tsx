@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { View, StyleSheet, Pressable, LayoutChangeEvent } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { SymbolView } from "expo-symbols";
 
 interface VideoPlayerProps {
   uri: string;
@@ -34,16 +35,45 @@ export function VideoPlayer({
 
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
   const barWidthRef = useRef(0);
   const isSeeking = useRef(false);
+  const didSeekInit = useRef(false);
+
+  // Seek to 0.1s on mount when not auto-playing to show a preview frame
+  useEffect(() => {
+    if (!autoPlay && !didSeekInit.current) {
+      didSeekInit.current = true;
+      const timer = setTimeout(() => {
+        try {
+          player.currentTime = 0.1;
+        } catch {
+          // player may not be ready
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [player, autoPlay]);
 
   useEffect(() => {
     if (isVisible && autoPlay) {
       player.play();
-    } else {
+      setIsPlaying(true);
+    } else if (!isVisible) {
       player.pause();
+      setIsPlaying(false);
     }
   }, [isVisible, autoPlay, player]);
+
+  const handleTapToPlay = useCallback(() => {
+    if (isPlaying) {
+      player.pause();
+      setIsPlaying(false);
+    } else {
+      player.play();
+      setIsPlaying(true);
+    }
+  }, [player, isPlaying]);
 
   // Track playback progress
   useEffect(() => {
@@ -112,11 +142,21 @@ export function VideoPlayer({
           />
         </Pressable>
       ) : (
-        <VideoView
-          player={player}
-          style={styles.video}
-          contentFit={contentFit}
-        />
+        <Pressable onPress={handleTapToPlay} style={StyleSheet.absoluteFill}>
+          <VideoView
+            player={player}
+            style={styles.video}
+            contentFit={contentFit}
+            nativeControls={isPlaying}
+          />
+          {!isPlaying && (
+            <View style={styles.playOverlay}>
+              <View style={styles.playCircle}>
+                <SymbolView name="play.fill" size={28} tintColor="#fff" />
+              </View>
+            </View>
+          )}
+        </Pressable>
       )}
       {/* Scrubber bar */}
       {hideControls && duration > 0 && (
@@ -142,6 +182,20 @@ const styles = StyleSheet.create({
   },
   video: {
     flex: 1,
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.15)",
+  },
+  playCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   scrubberWrap: {
     position: "absolute",
