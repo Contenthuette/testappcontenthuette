@@ -40,7 +40,7 @@ export default function AdminEventForm() {
   const [city, setCity] = useState("");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
-  const [duration, setDuration] = useState("120");
+  const [endTime, setEndTime] = useState("");
   const [totalTickets, setTotalTickets] = useState("");
   const [ticketPrice, setTicketPrice] = useState("");
   const [thumbUri, setThumbUri] = useState<string | null>(null);
@@ -57,7 +57,12 @@ export default function AdminEventForm() {
       setCity(eventDetail.city);
       setDate(eventDetail.date);
       setStartTime(eventDetail.startTime);
-      setDuration(String(eventDetail.durationMinutes));
+      // Calculate end time from startTime + durationMinutes
+      const [h, m] = eventDetail.startTime.split(":").map(Number);
+      const totalMin = h * 60 + m + eventDetail.durationMinutes;
+      const endH = Math.floor(totalMin / 60) % 24;
+      const endM = totalMin % 60;
+      setEndTime(`${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`);
       setTotalTickets(String(eventDetail.totalTickets));
       setTicketPrice(String(eventDetail.ticketPrice));
       if (eventDetail.thumbnailUrl) setThumbUri(eventDetail.thumbnailUrl);
@@ -82,6 +87,12 @@ export default function AdminEventForm() {
   /* Submit */
   const handleSave = async () => {
     if (!name.trim() || !venue.trim() || !city.trim() || !date.trim() || !startTime.trim()) return;
+    // Calculate durationMinutes from startTime and endTime
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff <= 0) diff += 24 * 60; // crosses midnight
+    const durationMinutes = diff || 120;
     setSaving(true);
     try {
       if (isEdit && eventId) {
@@ -93,7 +104,7 @@ export default function AdminEventForm() {
           city: city.trim(),
           date: date.trim(),
           startTime: startTime.trim(),
-          durationMinutes: parseInt(duration, 10) || 120,
+          durationMinutes,
           totalTickets: parseInt(totalTickets, 10) || 0,
           ticketPrice: parseFloat(ticketPrice) || 0,
           ...(thumbStorageId ? { thumbnailStorageId: thumbStorageId } : {}),
@@ -106,7 +117,7 @@ export default function AdminEventForm() {
           city: city.trim(),
           date: date.trim(),
           startTime: startTime.trim(),
-          durationMinutes: parseInt(duration, 10) || 120,
+          durationMinutes,
           totalTickets: parseInt(totalTickets, 10) || 0,
           ticketPrice: parseFloat(ticketPrice) || 0,
           currency: "EUR",
@@ -180,7 +191,7 @@ export default function AdminEventForm() {
           <Field label="Stadt *" value={city} onChangeText={setCity} placeholder="z.B. Rostock" />
           <Field label="Datum *" value={date} onChangeText={setDate} placeholder="TT.MM.JJJJ" />
           <Field label="Startzeit *" value={startTime} onChangeText={setStartTime} placeholder="HH:MM" />
-          <Field label="Dauer (Min.)" value={duration} onChangeText={setDuration} placeholder="120" keyboardType="number-pad" />
+          <Field label="Endzeit" value={endTime} onChangeText={setEndTime} placeholder="HH:MM" />
           <Field label="Ticketanzahl" value={totalTickets} onChangeText={setTotalTickets} placeholder="100" keyboardType="number-pad" />
           <Field label="Ticketpreis (EUR)" value={ticketPrice} onChangeText={setTicketPrice} placeholder="15.00" keyboardType="decimal-pad" />
 
