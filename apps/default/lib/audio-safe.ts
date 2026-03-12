@@ -33,7 +33,7 @@ try {
   });
   _useAudioPlayerStatus = () => ({
     currentTime: 0,
-    isPlaying: false,
+    playing: false,
     duration: 0,
   });
   _requestRecordingPermissionsAsync = async () => ({ granted: false });

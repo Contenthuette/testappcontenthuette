@@ -70,7 +70,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
     <Animated.View
       entering={SlideInUp.duration(300)}
       exiting={SlideOutUp.duration(200)}
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { top: insets.top + 4 }]}
     >
       <TouchableOpacity
         style={styles.banner}
@@ -80,14 +80,13 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
         <View style={styles.iconContainer}>
           <SymbolView
             name={isVideo ? "video.fill" : "phone.fill"}
-            size={14}
+            size={11}
             tintColor="#FFFFFF"
           />
         </View>
         <Text style={styles.text} numberOfLines={1}>
           {displayName} · {statusText}
         </Text>
-        <Text style={styles.tapHint}>Tippen zum Zurückkehren</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -96,36 +95,35 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 0,
     left: 0,
     right: 0,
     zIndex: 9999,
-    backgroundColor: "#34C759",
+    alignItems: "center",
+    pointerEvents: "box-none",
   },
   banner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    gap: 6,
+    backgroundColor: "#34C759",
+    borderRadius: 20,
+    boxShadow: "0px 2px 8px rgba(0,0,0,0.15)",
   },
   iconContainer: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
   },
   text: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#FFFFFF",
-    flexShrink: 1,
-  },
-  tapHint: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.7)",
+    maxWidth: 160,
   },
 });
