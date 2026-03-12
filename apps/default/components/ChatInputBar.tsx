@@ -120,6 +120,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.black,
     lineHeight: 22,
+    paddingVertical: 11,
   },
   sendBtn: {
     width: 44,
