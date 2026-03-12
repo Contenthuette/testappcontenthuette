@@ -202,7 +202,8 @@ export default defineSchema({
       v.literal("call"),
       v.literal("join_request"),
       v.literal("join_accepted"),
-      v.literal("join_rejected")
+      v.literal("join_rejected"),
+      v.literal("post_share")
     ),
     title: v.string(),
     body: v.string(),

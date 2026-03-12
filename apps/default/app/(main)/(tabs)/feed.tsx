@@ -15,6 +15,8 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { useIsFocused } from "@react-navigation/native";
+import { ShareSheet } from "@/components/ShareSheet";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const HEADER_HEIGHT = 56;
 const FEED_ASPECT = 3 / 4; // 3:4 portrait
@@ -26,6 +28,7 @@ export default function FeedScreen() {
   const toggleSave = useMutation(api.posts.toggleSave);
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const isFocused = useIsFocused();
+  const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
 
   // 3:4 feed media height
   const feedMediaHeight = screenWidth / FEED_ASPECT;
@@ -188,7 +191,7 @@ export default function FeedScreen() {
           >
             <SymbolView name="bubble.right" size={24} tintColor={colors.black} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} hitSlop={8}>
+          <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => setSharePostId(item._id)}>
             <SymbolView name="paperplane" size={24} tintColor={colors.black} />
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
@@ -265,6 +268,12 @@ export default function FeedScreen() {
             />
           )
         }
+      />
+
+      <ShareSheet
+        visible={sharePostId !== null}
+        postId={sharePostId}
+        onClose={() => setSharePostId(null)}
       />
     </SafeAreaView>
   );
