@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useAudioRecorder, requestRecordingPermissionsAsync, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as Haptics from "expo-haptics";
-import { Icon } from "@/components/Icon";
+import { SymbolView } from "@/components/Icon";
 
 interface VoiceRecorderProps {
   onSend: (uri: string, duration: number) => void;
@@ -15,7 +15,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-type RecorderPhase = "idle" | "recording" | "preview";
+type RecorderPhase = "idle" | "recording" | "paused" | "preview";
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
@@ -32,7 +32,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   // Timer
   useEffect(() => {
     if (phase === "recording") {
-      setElapsed(0);
       timerRef.current = setInterval(() => {
         setElapsed((prev) => prev + 1);
       }, 1000);
@@ -50,18 +49,23 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const startRecording = useCallback(async () => {
     try {
       const status = await requestRecordingPermissionsAsync();
-      if (!status.granted) return;
+      if (!status.granted) {
+        onCancel();
+        return;
+      }
       audioRecorder.record();
+      setElapsed(0);
       setPhase("recording");
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (err) {
       console.error("Start recording error:", err);
+      onCancel();
     }
-  }, [audioRecorder]);
+  }, [audioRecorder, onCancel]);
 
-  const stopRecording = useCallback(async () => {
+  const pauseRecording = useCallback(async () => {
     try {
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
@@ -73,7 +77,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         onCancel();
       }
     } catch (err) {
-      console.error("Stop recording error:", err);
+      console.error("Pause recording error:", err);
       onCancel();
     }
   }, [audioRecorder, elapsed, onCancel]);
@@ -101,6 +105,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       previewPlayer.pause();
     }
     setRecordedUri(null);
+    setElapsed(0);
     setPhase("idle");
     onCancel();
   }, [onCancel, previewPlayer, isPreviewPlaying]);
@@ -113,144 +118,255 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fake waveform bars
-  const waveformBars = Array.from({ length: 20 }, (_, i) => {
-    const height = 6 + Math.sin(i * 0.7 + elapsed) * 8 + Math.random() * 4;
-    return Math.max(4, Math.min(22, height));
-  });
+  // Waveform dots (animated-ish based on elapsed)
+  const waveformDots = useMemo(() => {
+    return Array.from({ length: 30 }, (_, i) => {
+      const base = 4 + Math.sin(i * 0.6 + elapsed * 0.8) * 3;
+      const h = Math.max(3, Math.min(14, base + Math.random() * 2));
+      return h;
+    });
+  }, [elapsed]);
 
+  // Circular progress (max 120s recording)
+  const maxDuration = 120;
+  const progress = Math.min(elapsed / maxDuration, 1);
+  const circumference = 2 * Math.PI * 15;
+  const strokeDashoffset = circumference * (1 - progress);
+
+  // === RECORDING STATE ===
   if (phase === "recording") {
     return (
-      <View style={styles.container}>
-        <View style={styles.recordingRow}>
-          <View style={styles.redDot} />
-          <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
+      <View style={styles.card}>
+        {/* Top row: timer + waveform + circular progress */}
+        <View style={styles.topRow}>
+          <Text style={styles.timer}>{formatTime(elapsed)}</Text>
+
+          <View style={styles.waveform}>
+            {waveformDots.map((h, i) => (
+              <View
+                key={`dot-${i}`}
+                style={[
+                  styles.dot,
+                  {
+                    height: h,
+                    backgroundColor:
+                      i < waveformDots.length * 0.7 ? "#000" : "#D1D5DB",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Circular timer */}
+          <View style={styles.circularTimer}>
+            <View style={styles.circleTrack}>
+              <Text style={styles.circleTime}>{formatTime(elapsed)}</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.waveform}>
-          {waveformBars.map((h, i) => (
-            <View
-              key={`wave-${i}`}
-              style={[
-                styles.waveBar,
-                {
-                  height: h,
-                  backgroundColor: i < waveformBars.length * 0.7 ? "#000000" : "#D4D4D8",
-                },
-              ]}
-            />
-          ))}
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={handleDelete} style={styles.actionBtn} activeOpacity={0.7}>
-            <Icon name="trash" size={20} tintColor="#EF4444" />
+        {/* Bottom row: delete, pause/stop, send */}
+        <View style={styles.bottomRow}>
+          <TouchableOpacity
+            onPress={handleDelete}
+            style={styles.deleteBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="trash" size={18} tintColor="#9CA3AF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={stopRecording} style={styles.stopBtn} activeOpacity={0.7}>
-            <View style={styles.stopSquare} />
+
+          <TouchableOpacity
+            onPress={pauseRecording}
+            style={styles.pauseBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="pause.fill" size={18} tintColor="#FFF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={async () => {
+              await pauseRecording();
+              // Send will be handled via preview state
+            }}
+            style={styles.sendBtnBlack}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
+  // === PREVIEW STATE (after stop) ===
   if (phase === "preview") {
+    const previewProgress =
+      previewStatus.duration > 0
+        ? Math.min(previewStatus.currentTime / previewStatus.duration, 1)
+        : 0;
+
     return (
-      <View style={styles.container}>
-        <View style={styles.previewRow}>
-          <TouchableOpacity onPress={togglePreview} style={styles.playBtn} activeOpacity={0.7}>
-            <Icon name={isPreviewPlaying ? "pause" : "play"} size={18} tintColor="#000" />
+      <View style={styles.card}>
+        {/* Top row: play/pause + waveform + time */}
+        <View style={styles.topRow}>
+          <TouchableOpacity
+            onPress={togglePreview}
+            style={styles.previewPlayBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView
+              name={isPreviewPlaying ? "pause.fill" : "play.fill"}
+              size={16}
+              tintColor="#000"
+            />
           </TouchableOpacity>
-          <Text style={styles.previewTime}>{formatTime(recordedDuration)}</Text>
+
+          <View style={styles.waveform}>
+            {waveformDots.map((h, i) => (
+              <View
+                key={`pdot-${i}`}
+                style={[
+                  styles.dot,
+                  {
+                    height: h,
+                    backgroundColor:
+                      i / waveformDots.length <= previewProgress
+                        ? "#000"
+                        : "#D1D5DB",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          <Text style={styles.previewTime}>
+            {formatTime(
+              isPreviewPlaying
+                ? previewStatus.currentTime
+                : recordedDuration
+            )}
+          </Text>
         </View>
 
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={handleDelete} style={styles.actionBtn} activeOpacity={0.7}>
-            <Icon name="trash" size={20} tintColor="#EF4444" />
+        {/* Bottom row: delete + send */}
+        <View style={styles.bottomRow}>
+          <TouchableOpacity
+            onPress={handleDelete}
+            style={styles.deleteBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="trash" size={18} tintColor="#9CA3AF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7}>
-            <Icon name="send" size={18} tintColor="#FFFFFF" />
+
+          <View style={{ flex: 1 }} />
+
+          <TouchableOpacity
+            onPress={handleSend}
+            style={styles.sendBtnBlack}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
+  // idle – nothing visible (auto-starts recording)
   return null;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F4F4F5",
-    borderRadius: 24,
+  card: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 22,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 12,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 14,
   },
-  recordingRow: {
+
+  /* ---- Top row ---- */
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
-  redDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#EF4444",
-  },
-  timerText: {
+  timer: {
     fontSize: 15,
     fontWeight: "600",
     color: "#000",
     fontVariant: ["tabular-nums"],
+    minWidth: 34,
   },
   waveform: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
-    height: 24,
+    height: 18,
+    overflow: "hidden",
   },
-  waveBar: {
+  dot: {
     width: 3,
-    borderRadius: 2,
+    borderRadius: 1.5,
   },
-  actions: {
+  circularTimer: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleTrack: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2.5,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleTime: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#6B7280",
+    fontVariant: ["tabular-nums"],
+  },
+
+  /* ---- Bottom row ---- */
+  bottomRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "space-between",
+    gap: 12,
   },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  deleteBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "rgba(0,0,0,0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
-  stopBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  pauseBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendBtnBlack: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
   },
-  stopSquare: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-    backgroundColor: "#FFFFFF",
-  },
-  previewRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  playBtn: {
+
+  /* ---- Preview row ---- */
+  previewPlayBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
@@ -259,17 +375,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   previewTime: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "600",
-    color: "#000",
+    color: "#6B7280",
     fontVariant: ["tabular-nums"],
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#000",
-    alignItems: "center",
-    justifyContent: "center",
+    minWidth: 30,
+    textAlign: "right",
   },
 });

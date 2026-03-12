@@ -14,12 +14,14 @@ import { VoiceRecorder } from "@/components/VoiceRecorder";
 interface ChatInputBarProps {
   onSend: (text: string) => void;
   onSendVoice?: (uri: string, durationMs: number) => void;
+  onPlusPress?: () => void;
   placeholder?: string;
 }
 
 export function ChatInputBar({
   onSend,
   onSendVoice,
+  onPlusPress,
   placeholder = "Nachricht...",
 }: ChatInputBarProps) {
   const [text, setText] = useState("");
@@ -53,18 +55,30 @@ export function ChatInputBar({
 
   if (showVoiceRecorder) {
     return (
-      <VoiceRecorder
-        onSend={handleVoiceSend}
-        onCancel={handleVoiceCancel}
-      />
+      <View style={styles.wrapper}>
+        <VoiceRecorder
+          onSend={handleVoiceSend}
+          onCancel={handleVoiceCancel}
+        />
+      </View>
     );
   }
 
   const hasText = text.trim().length > 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.inputRow}>
+    <View style={styles.wrapper}>
+      <View style={styles.bar}>
+        {/* Plus button */}
+        <TouchableOpacity
+          onPress={onPlusPress}
+          style={styles.plusBtn}
+          activeOpacity={0.7}
+        >
+          <SymbolView name="plus" size={18} tintColor={colors.gray500} />
+        </TouchableOpacity>
+
+        {/* Text input */}
         <TextInput
           style={styles.input}
           placeholder={placeholder}
@@ -76,13 +90,14 @@ export function ChatInputBar({
           returnKeyType="default"
         />
 
+        {/* Mic or Send button */}
         {hasText ? (
-          <TouchableOpacity onPress={handleSend} style={styles.sendBtn}>
-            <SymbolView name="arrow.up" size={18} tintColor={colors.white} />
+          <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7}>
+            <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={handleMicPress} style={styles.micBtn}>
-            <SymbolView name="mic" size={20} tintColor={colors.gray500} />
+          <TouchableOpacity onPress={handleMicPress} style={styles.micBtn} activeOpacity={0.7}>
+            <SymbolView name="mic.fill" size={16} tintColor={colors.white} />
           </TouchableOpacity>
         )}
       </View>
@@ -91,22 +106,30 @@ export function ChatInputBar({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.gray200,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
     backgroundColor: colors.white,
   },
-  inputRow: {
+  bar: {
     flexDirection: "row",
     alignItems: "flex-end",
     backgroundColor: colors.gray100,
-    borderRadius: radius.xl,
-    paddingLeft: spacing.md,
-    paddingRight: 4,
-    paddingVertical: 4,
-    minHeight: 44,
+    borderRadius: 26,
+    paddingLeft: 5,
+    paddingRight: 5,
+    paddingVertical: 5,
+    minHeight: 48,
+    gap: 6,
+  },
+  plusBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(0,0,0,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   input: {
     flex: 1,
@@ -114,19 +137,21 @@ const styles = StyleSheet.create({
     color: colors.black,
     maxHeight: 100,
     paddingVertical: Platform.OS === "ios" ? 8 : 6,
+    paddingHorizontal: 4,
   },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  micBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
   },
-  micBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  sendBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
   },
