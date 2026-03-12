@@ -2,12 +2,56 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
-async function getMyUserId(ctx: any): Promise<Id<"users"> | null> {
+async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
   const authId = ctx.user._id;
-  const user = await ctx.db.query("users").withIndex("by_authId", (q: any) => q.eq("authId", authId)).unique();
+  const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
   return user?._id ?? null;
 }
+
+const sharedPostPreviewValidator = v.optional(v.object({
+  thumbnailUrl: v.optional(v.string()),
+  postType: v.union(v.literal("photo"), v.literal("video")),
+  authorName: v.string(),
+  caption: v.optional(v.string()),
+}));
+
+async function enrichPostPreview(
+  ctx: { db: QueryCtx["db"]; storage: QueryCtx["storage"] },
+  m: { type: string; sharedPostId?: Id<"posts"> },
+) {
+  if (m.type !== "post_share" || !m.sharedPostId) return undefined;
+  const post = await ctx.db.get(m.sharedPostId);
+  if (!post) return undefined;
+  const author = await ctx.db.get(post.authorId);
+  const thumbUrl = post.thumbnailStorageId
+    ? ((await ctx.storage.getUrl(post.thumbnailStorageId)) ?? undefined)
+    : post.thumbnailUrl;
+  const mediaUrl = post.mediaStorageId
+    ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
+    : post.mediaUrl;
+  return {
+    thumbnailUrl: thumbUrl ?? mediaUrl ?? undefined,
+    postType: post.type,
+    authorName: author?.name ?? "Unbekannt",
+    caption: post.caption?.slice(0, 80) ?? undefined,
+  };
+}
+
+const messageReturnValidator = v.object({
+  _id: v.id("messages"),
+  senderId: v.id("users"),
+  senderName: v.string(),
+  senderAvatarUrl: v.optional(v.string()),
+  type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
+  text: v.optional(v.string()),
+  mediaUrl: v.optional(v.string()),
+  sharedPostId: v.optional(v.id("posts")),
+  sharedPostPreview: sharedPostPreviewValidator,
+  isMe: v.boolean(),
+  createdAt: v.number(),
+});
 
 // Get conversations list (DMs)
 export const listConversations = authQuery({
@@ -100,18 +144,7 @@ export const getGroupConversation = query({
 // Get messages for conversation
 export const getMessages = authQuery({
   args: { conversationId: v.id("conversations") },
-  returns: v.array(v.object({
-    _id: v.id("messages"),
-    senderId: v.id("users"),
-    senderName: v.string(),
-    senderAvatarUrl: v.optional(v.string()),
-    type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
-    text: v.optional(v.string()),
-    mediaUrl: v.optional(v.string()),
-    sharedPostId: v.optional(v.id("posts")),
-    isMe: v.boolean(),
-    createdAt: v.number(),
-  })),
+  returns: v.array(messageReturnValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     const messages = await ctx.db.query("messages")
@@ -121,6 +154,7 @@ export const getMessages = authQuery({
     const results = [];
     for (const m of messages) {
       const sender = await ctx.db.get(m.senderId);
+      const preview = await enrichPostPreview(ctx, m);
       results.push({
         _id: m._id,
         senderId: m.senderId,
@@ -130,6 +164,7 @@ export const getMessages = authQuery({
         text: m.text,
         mediaUrl: m.mediaStorageId ? await ctx.storage.getUrl(m.mediaStorageId) ?? undefined : m.mediaUrl,
         sharedPostId: m.sharedPostId,
+        sharedPostPreview: preview,
         isMe: m.senderId === myUserId,
         createdAt: m.createdAt,
       });
@@ -168,31 +203,22 @@ export const sendMessage = authMutation({
 // Group messages - get messages for a group's conversation
 export const getGroupMessages = authQuery({
   args: { groupId: v.id("groups") },
-  returns: v.array(v.object({
-    _id: v.id("messages"),
-    senderId: v.id("users"),
-    senderName: v.string(),
-    senderAvatarUrl: v.optional(v.string()),
-    type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
-    text: v.optional(v.string()),
-    mediaUrl: v.optional(v.string()),
-    isMe: v.boolean(),
-    createdAt: v.number(),
-  })),
+  returns: v.array(messageReturnValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     // Find or create group conversation
-    let conv = await ctx.db.query("conversations")
-      .withIndex("by_groupId", (q: any) => q.eq("groupId", args.groupId))
+    const conv = await ctx.db.query("conversations")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .unique();
     if (!conv) return [];
     const messages = await ctx.db.query("messages")
-      .withIndex("by_conversationId", (q: any) => q.eq("conversationId", conv!._id))
+      .withIndex("by_conversationId", (q) => q.eq("conversationId", conv._id))
       .order("desc")
       .take(100);
     const results = [];
     for (const m of messages) {
       const sender = await ctx.db.get(m.senderId);
+      const preview = await enrichPostPreview(ctx, m);
       results.push({
         _id: m._id,
         senderId: m.senderId,
@@ -201,6 +227,8 @@ export const getGroupMessages = authQuery({
         type: m.type,
         text: m.text,
         mediaUrl: m.mediaStorageId ? await ctx.storage.getUrl(m.mediaStorageId) ?? undefined : m.mediaUrl,
+        sharedPostId: m.sharedPostId,
+        sharedPostPreview: preview,
         isMe: m.senderId === myUserId,
         createdAt: m.createdAt,
       });
@@ -251,26 +279,17 @@ export const sendGroupMessage = authMutation({
 // Get direct messages (alias for getMessages)
 export const getDirectMessages = authQuery({
   args: { conversationId: v.id("conversations") },
-  returns: v.array(v.object({
-    _id: v.id("messages"),
-    senderId: v.id("users"),
-    senderName: v.string(),
-    senderAvatarUrl: v.optional(v.string()),
-    type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
-    text: v.optional(v.string()),
-    mediaUrl: v.optional(v.string()),
-    isMe: v.boolean(),
-    createdAt: v.number(),
-  })),
+  returns: v.array(messageReturnValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     const messages = await ctx.db.query("messages")
-      .withIndex("by_conversationId", (q: any) => q.eq("conversationId", args.conversationId))
+      .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
       .order("desc")
       .take(100);
     const results = [];
     for (const m of messages) {
       const sender = await ctx.db.get(m.senderId);
+      const preview = await enrichPostPreview(ctx, m);
       results.push({
         _id: m._id,
         senderId: m.senderId,
@@ -279,6 +298,8 @@ export const getDirectMessages = authQuery({
         type: m.type,
         text: m.text,
         mediaUrl: m.mediaStorageId ? await ctx.storage.getUrl(m.mediaStorageId) ?? undefined : m.mediaUrl,
+        sharedPostId: m.sharedPostId,
+        sharedPostPreview: preview,
         isMe: m.senderId === myUserId,
         createdAt: m.createdAt,
       });

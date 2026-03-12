@@ -13,6 +13,7 @@ import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
+import { SharedPostBubble } from "@/components/SharedPostBubble";
 
 export default function GroupChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +29,26 @@ export default function GroupChatScreen() {
 
   const renderMessage = ({ item }: { item: NonNullable<typeof messages>[number] }) => {
     const isMine = item.senderId === me?._id;
+    const timeStr = new Date(item.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+    // Shared post bubble
+    if (item.type === "post_share" && item.sharedPostId) {
+      return (
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+          {!isMine && <Avatar uri={item.senderAvatarUrl} name={item.senderName} size={30} />}
+          <View>
+            {!isMine && <Text style={styles.senderName}>{item.senderName}</Text>}
+            <SharedPostBubble
+              postId={item.sharedPostId}
+              preview={item.sharedPostPreview ?? undefined}
+              isMine={isMine}
+              timestamp={timeStr}
+            />
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
         {!isMine && <Avatar uri={item.senderAvatarUrl} name={item.senderName} size={30} />}
@@ -35,7 +56,7 @@ export default function GroupChatScreen() {
           {!isMine && <Text style={styles.senderName}>{item.senderName}</Text>}
           <Text style={[styles.msgText, isMine && styles.msgTextMine]}>{item.text}</Text>
           <Text style={[styles.timestamp, isMine && styles.timestampMine]}>
-            {new Date(item.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+            {timeStr}
           </Text>
         </View>
       </View>

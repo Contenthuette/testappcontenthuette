@@ -10,6 +10,7 @@ import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
+import { SharedPostBubble } from "@/components/SharedPostBubble";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,12 +25,28 @@ export default function ChatScreen() {
 
   const renderMessage = ({ item }: { item: NonNullable<typeof messages>[number] }) => {
     const isMine = item.senderId === me?._id;
+    const timeStr = new Date(item.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+    // Shared post bubble
+    if (item.type === "post_share" && item.sharedPostId) {
+      return (
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+          <SharedPostBubble
+            postId={item.sharedPostId}
+            preview={item.sharedPostPreview ?? undefined}
+            isMine={isMine}
+            timestamp={timeStr}
+          />
+        </View>
+      );
+    }
+
     return (
       <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
         <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
           <Text style={[styles.msgText, isMine && styles.msgTextMine]}>{item.text}</Text>
           <Text style={[styles.timestamp, isMine && styles.timestampMine]}>
-            {new Date(item.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+            {timeStr}
           </Text>
         </View>
       </View>

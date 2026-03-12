@@ -98,6 +98,83 @@ export const feed = authQuery({
   },
 });
 
+// Get single post by ID
+export const getById = authQuery({
+  args: { postId: v.id("posts") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("posts"),
+      authorId: v.id("users"),
+      authorName: v.string(),
+      authorAvatarUrl: v.optional(v.string()),
+      type: v.union(v.literal("photo"), v.literal("video")),
+      caption: v.optional(v.string()),
+      mediaUrl: v.optional(v.string()),
+      aspectMode: v.optional(v.union(v.literal("original"), v.literal("cropped"))),
+      cropOffsetY: v.optional(v.number()),
+      mediaAspectRatio: v.optional(v.number()),
+      likeCount: v.number(),
+      commentCount: v.number(),
+      isLiked: v.boolean(),
+      isSaved: v.boolean(),
+      isPinned: v.boolean(),
+      isAnnouncement: v.boolean(),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!post) return null;
+
+    const myUserId = await getMyUserId(ctx);
+    const author = await ctx.db.get(post.authorId);
+
+    let isLiked = false;
+    let isSaved = false;
+    if (myUserId) {
+      const like = await ctx.db
+        .query("likes")
+        .withIndex("by_postId_and_userId", (q) =>
+          q.eq("postId", post._id).eq("userId", myUserId),
+        )
+        .unique();
+      isLiked = !!like;
+      const saved = await ctx.db
+        .query("savedPosts")
+        .withIndex("by_postId_and_userId", (q) =>
+          q.eq("postId", post._id).eq("userId", myUserId),
+        )
+        .unique();
+      isSaved = !!saved;
+    }
+
+    return {
+      _id: post._id,
+      authorId: post.authorId,
+      authorName: author?.name ?? "Unknown",
+      authorAvatarUrl: author?.avatarStorageId
+        ? ((await ctx.storage.getUrl(author.avatarStorageId)) ?? undefined)
+        : author?.avatarUrl,
+      type: post.type,
+      caption: post.caption,
+      mediaUrl: post.mediaStorageId
+        ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
+        : post.mediaUrl,
+      aspectMode: post.aspectMode,
+      cropOffsetY: post.cropOffsetY,
+      mediaAspectRatio: post.mediaAspectRatio,
+      likeCount: post.likeCount,
+      commentCount: post.commentCount,
+      isLiked,
+      isSaved,
+      isPinned: post.isPinned,
+      isAnnouncement: post.isAnnouncement,
+      createdAt: post.createdAt,
+    };
+  },
+});
+
 // Create post
 export const create = authMutation({
   args: {
