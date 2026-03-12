@@ -87,9 +87,27 @@ export const getById = query({
   handler: async (ctx, args) => {
     const e = await ctx.db.get(args.eventId);
     if (!e) return null;
+    const thumbnailUrl = e.thumbnailStorageId
+      ? (await ctx.storage.getUrl(e.thumbnailStorageId)) ?? undefined
+      : e.thumbnailUrl;
     return {
-      ...e,
-      thumbnailUrl: e.thumbnailStorageId ? await ctx.storage.getUrl(e.thumbnailStorageId) ?? undefined : e.thumbnailUrl,
+      _id: e._id,
+      name: e.name,
+      description: e.description,
+      thumbnailUrl,
+      venue: e.venue,
+      city: e.city,
+      county: e.county,
+      date: e.date,
+      startTime: e.startTime,
+      durationMinutes: e.durationMinutes,
+      totalTickets: e.totalTickets,
+      soldTickets: e.soldTickets,
+      ticketPrice: e.ticketPrice,
+      currency: e.currency,
+      status: e.status,
+      creatorId: e.creatorId,
+      createdAt: e.createdAt,
     };
   },
 });
