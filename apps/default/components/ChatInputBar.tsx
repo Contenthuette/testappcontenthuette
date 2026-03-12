@@ -110,9 +110,9 @@ const styles = StyleSheet.create({
   inputWrap: {
     flex: 1,
     backgroundColor: colors.gray100,
-    borderRadius: 20,
+    borderRadius: 19,
     paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === "ios" ? 8 : 6,
+    minHeight: 38,
     maxHeight: 120,
     justifyContent: "center",
   },
