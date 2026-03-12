@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
-    gap: spacing.sm,
+    gap: 10,
   },
   headerTitle: {
     fontSize: 26,
