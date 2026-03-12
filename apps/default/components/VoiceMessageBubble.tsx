@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useAudioPlayer } from "expo-audio";
-import { Icon } from "@/components/Icon";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import SymbolView from "@/components/Icon";
 
 interface VoiceMessageBubbleProps {
   audioUrl: string;
   duration?: number;
-  isMe: boolean;
+  durationMs?: number;
+  isMine?: boolean;
+  isMe?: boolean;
+  timestamp?: string;
 }
 
 function formatTime(seconds: number): string {
@@ -15,42 +18,30 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function VoiceMessageBubble({ audioUrl, duration = 0, isMe }: VoiceMessageBubbleProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+export function VoiceMessageBubble({ audioUrl, duration: durationSec, durationMs, isMine, isMe, timestamp }: VoiceMessageBubbleProps) {
+  const mine = isMine ?? isMe ?? false;
+  const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
   const player = useAudioPlayer(audioUrl);
+  const status = useAudioPlayerStatus(player);
 
-  useEffect(() => {
-    if (!player) return;
-    const sub = player.addListener("playbackStatusUpdate", (status) => {
-      if (status.playing) {
-        setCurrentTime(status.currentTime);
-        setIsPlaying(true);
-      } else {
-        setIsPlaying(false);
-      }
-      if (status.didJustFinish) {
-        setIsPlaying(false);
-        setCurrentTime(0);
-      }
-    });
-    return () => sub.remove();
-  }, [player]);
+  const isPlaying = status.playing;
+  const currentTime = status.currentTime;
+  const effectiveDuration = status.duration > 0 ? status.duration : totalDuration;
 
   const togglePlay = useCallback(() => {
     if (!player) return;
     if (isPlaying) {
       player.pause();
     } else {
-      if (currentTime >= (duration || 0)) {
+      if (currentTime >= effectiveDuration && effectiveDuration > 0) {
         player.seekTo(0);
       }
       player.play();
     }
-  }, [player, isPlaying, currentTime, duration]);
+  }, [player, isPlaying, currentTime, effectiveDuration]);
 
-  const progress = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
-  const displayTime = isPlaying ? formatTime(currentTime) : formatTime(duration);
+  const progress = effectiveDuration > 0 ? Math.min(currentTime / effectiveDuration, 1) : 0;
+  const displayTime = isPlaying ? formatTime(currentTime) : formatTime(effectiveDuration);
 
   // Waveform bars
   const bars = Array.from({ length: 24 }, (_, i) => {
@@ -59,9 +50,9 @@ export function VoiceMessageBubble({ audioUrl, duration = 0, isMe }: VoiceMessag
   });
 
   return (
-    <View style={[styles.container, isMe ? styles.meContainer : styles.otherContainer]}>
+    <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        <Icon name={isPlaying ? "pause" : "play"} size={18} color={isMe ? "#FFFFFF" : "#000000"} />
+        <SymbolView name={isPlaying ? "pause" : "play"} size={18} color={mine ? "#FFFFFF" : "#000000"} />
       </TouchableOpacity>
 
       <View style={styles.waveContainer}>
@@ -74,8 +65,8 @@ export function VoiceMessageBubble({ audioUrl, duration = 0, isMe }: VoiceMessag
                 {
                   height: h,
                   backgroundColor: i / bars.length <= progress
-                    ? (isMe ? "#FFFFFF" : "#000000")
-                    : (isMe ? "rgba(255,255,255,0.35)" : "#D4D4D8"),
+                    ? (mine ? "#FFFFFF" : "#000000")
+                    : (mine ? "rgba(255,255,255,0.35)" : "#D4D4D8"),
                 },
               ]}
             />
@@ -83,7 +74,7 @@ export function VoiceMessageBubble({ audioUrl, duration = 0, isMe }: VoiceMessag
         </View>
       </View>
 
-      <Text style={[styles.time, { color: isMe ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
+      <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
         {displayTime}
       </Text>
     </View>

@@ -257,3 +257,4 @@ export function SymbolView({
 }
 
 export default SymbolView;
+export { SymbolView as Icon };

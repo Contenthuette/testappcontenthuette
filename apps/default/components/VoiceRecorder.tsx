@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
-import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer } from "expo-audio";
+import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Icon } from "@/components/Icon";
 
@@ -26,7 +26,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const previewPlayer = useAudioPlayer(recordedUri ?? undefined);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const previewStatus = useAudioPlayerStatus(previewPlayer);
+  const isPreviewPlaying = previewStatus.playing;
 
   // Timer
   useEffect(() => {
@@ -45,19 +46,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [phase]);
-
-  // Preview player listener
-  useEffect(() => {
-    if (!previewPlayer) return;
-    const sub = previewPlayer.addListener("playbackStatusUpdate", (status) => {
-      if (status.didJustFinish) {
-        setIsPreviewPlaying(false);
-      } else {
-        setIsPreviewPlaying(status.playing);
-      }
-    });
-    return () => sub.remove();
-  }, [previewPlayer]);
 
   const startRecording = useCallback(async () => {
     try {
