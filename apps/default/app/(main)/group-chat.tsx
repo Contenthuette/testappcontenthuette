@@ -12,19 +12,17 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
+import { ChatInputBar } from "@/components/ChatInputBar";
 
 export default function GroupChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [text, setText] = useState("");
   const messages = useQuery(api.messaging.getGroupMessages, id ? { groupId: id as Id<"groups"> } : "skip");
   const sendMessage = useMutation(api.messaging.sendGroupMessage);
   const me = useQuery(api.users.me);
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
 
-  const handleSend = async () => {
-    if (!text.trim() || !id) return;
-    const msg = text.trim();
-    setText("");
+  const handleSend = async (msg: string) => {
+    if (!id) return;
     await sendMessage({ groupId: id as Id<"groups">, text: msg, type: "text" });
   };
 
@@ -81,33 +79,7 @@ export default function GroupChatScreen() {
           showsVerticalScrollIndicator={false}
         />
 
-        {/* Input bar */}
-        <View style={styles.inputBar}>
-          <TouchableOpacity style={styles.attachBtn} hitSlop={8}>
-            <SymbolView name="plus" size={22} tintColor={colors.gray400} />
-          </TouchableOpacity>
-          <View style={styles.inputWrap}>
-            <TextInput
-              style={styles.input}
-              placeholder="Nachricht..."
-              placeholderTextColor={colors.gray400}
-              value={text}
-              onChangeText={setText}
-              multiline
-              maxLength={2000}
-            />
-          </View>
-          <TouchableOpacity style={styles.micBtn} hitSlop={8}>
-            <SymbolView name="mic" size={22} tintColor={colors.gray400} />
-          </TouchableOpacity>
-          {text.trim().length > 0 && (
-            <TouchableOpacity onPress={handleSend} hitSlop={8}>
-              <View style={styles.sendBtn}>
-                <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
+        <ChatInputBar onSend={handleSend} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -153,35 +125,4 @@ const styles = StyleSheet.create({
   msgTextMine: { color: colors.white },
   timestamp: { fontSize: 10, color: colors.gray400, marginTop: 4, alignSelf: "flex-end" },
   timestampMine: { color: "rgba(255,255,255,0.5)" },
-
-  inputBar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingBottom: Platform.OS === "ios" ? spacing.sm : spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.gray200,
-    gap: spacing.sm,
-  },
-  attachBtn: { paddingBottom: 6 },
-  inputWrap: {
-    flex: 1,
-    backgroundColor: colors.gray100,
-    borderRadius: 22,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === "ios" ? 8 : 6,
-    maxHeight: 120,
-  },
-  input: { fontSize: 16, color: colors.black, lineHeight: 22 },
-  micBtn: { paddingBottom: 6 },
-  sendBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
-  },
 });

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from "react-native";
+import React from "react";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -9,18 +9,16 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
+import { ChatInputBar } from "@/components/ChatInputBar";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [text, setText] = useState("");
   const messages = useQuery(api.messaging.getDirectMessages, id ? { conversationId: id as Id<"conversations"> } : "skip");
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const me = useQuery(api.users.me);
 
-  const handleSend = async () => {
-    if (!text.trim() || !id) return;
-    const msg = text.trim();
-    setText("");
+  const handleSend = async (msg: string) => {
+    if (!id) return;
     await sendMessage({ conversationId: id as Id<"conversations">, text: msg, type: "text" });
   };
 
@@ -64,22 +62,7 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messageList}
         />
 
-        <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.attachBtn}>
-            <SymbolView name="plus.circle.fill" size={28} tintColor={colors.gray400} />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            placeholder="Nachricht..."
-            placeholderTextColor={colors.gray400}
-            value={text}
-            onChangeText={setText}
-            multiline
-          />
-          <TouchableOpacity onPress={handleSend}>
-            <SymbolView name="arrow.up.circle.fill" size={32} tintColor={text.trim() ? colors.black : colors.gray300} />
-          </TouchableOpacity>
-        </View>
+        <ChatInputBar onSend={handleSend} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -102,7 +85,4 @@ const styles = StyleSheet.create({
   msgTextMine: { color: colors.white },
   timestamp: { fontSize: 11, color: colors.gray400, marginTop: spacing.xs, alignSelf: "flex-end" },
   timestampMine: { color: "rgba(255,255,255,0.6)" },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.gray100, gap: spacing.sm },
-  attachBtn: { paddingBottom: 4 },
-  input: { flex: 1, fontSize: 16, color: colors.black, maxHeight: 100, backgroundColor: colors.gray100, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
 });
