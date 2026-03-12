@@ -6,73 +6,82 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import { colors, spacing } from "@/lib/theme";
+import * as Haptics from "expo-haptics";
+import { colors, spacing, radius } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
+import { VoiceRecorder } from "@/components/VoiceRecorder";
 
 interface ChatInputBarProps {
   onSend: (text: string) => void;
-  onPlusPress?: () => void;
+  onSendVoice?: (uri: string, durationMs: number) => void;
   placeholder?: string;
 }
 
 export function ChatInputBar({
   onSend,
-  onPlusPress,
+  onSendVoice,
   placeholder = "Nachricht...",
 }: ChatInputBarProps) {
   const [text, setText] = useState("");
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+
+  const handleSend = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
+    setText("");
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleMicPress = () => {
+    setShowVoiceRecorder(true);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const handleVoiceSend = (uri: string, durationMs: number) => {
+    setShowVoiceRecorder(false);
+    onSendVoice?.(uri, durationMs);
+  };
+
+  const handleVoiceCancel = () => {
+    setShowVoiceRecorder(false);
+  };
+
+  if (showVoiceRecorder) {
+    return (
+      <VoiceRecorder
+        onSend={handleVoiceSend}
+        onCancel={handleVoiceCancel}
+      />
+    );
+  }
 
   const hasText = text.trim().length > 0;
 
-  const handleSend = () => {
-    if (!hasText) return;
-    onSend(text.trim());
-    setText("");
-  };
-
   return (
-    <View style={styles.outerWrap}>
-      <View style={styles.bar}>
-        {/* Plus button */}
-        <TouchableOpacity
-          style={styles.circleBtn}
-          onPress={onPlusPress}
-          activeOpacity={0.6}
-          hitSlop={6}
-        >
-          <SymbolView name="plus" size={20} tintColor={colors.gray500} />
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          placeholder={placeholder}
+          placeholderTextColor={colors.gray400}
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={2000}
+          returnKeyType="default"
+        />
 
-        {/* Input field */}
-        <View style={styles.inputWrap}>
-          <TextInput
-            style={styles.input}
-            placeholder={placeholder}
-            placeholderTextColor={colors.gray400}
-            value={text}
-            onChangeText={setText}
-            maxLength={2000}
-            returnKeyType="send"
-            onSubmitEditing={handleSend}
-          />
-        </View>
-
-        {/* Mic or Send */}
         {hasText ? (
-          <TouchableOpacity
-            style={styles.sendBtn}
-            onPress={handleSend}
-            activeOpacity={0.7}
-            hitSlop={6}
-          >
-            <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
+          <TouchableOpacity onPress={handleSend} style={styles.sendBtn}>
+            <SymbolView name="arrow.up" size={18} tintColor={colors.white} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={styles.circleBtn}
-            activeOpacity={0.6}
-            hitSlop={6}
-          >
+          <TouchableOpacity onPress={handleMicPress} style={styles.micBtn}>
             <SymbolView name="mic" size={20} tintColor={colors.gray500} />
           </TouchableOpacity>
         )}
@@ -82,51 +91,42 @@ export function ChatInputBar({
 }
 
 const styles = StyleSheet.create({
-  outerWrap: {
+  container: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: Platform.OS === "ios" ? spacing.sm : spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
+    backgroundColor: colors.white,
   },
-  bar: {
+  inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    backgroundColor: colors.white,
-    borderRadius: 28,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
-  },
-  circleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
     backgroundColor: colors.gray100,
+    borderRadius: radius.xl,
+    paddingLeft: spacing.md,
+    paddingRight: 4,
+    paddingVertical: 4,
+    minHeight: 44,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.black,
+    maxHeight: 100,
+    paddingVertical: Platform.OS === "ios" ? 8 : 6,
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
   },
-  inputWrap: {
-    flex: 1,
-    backgroundColor: colors.gray100,
-    borderRadius: 22,
-    paddingHorizontal: spacing.md,
-    height: 44,
-    justifyContent: "center",
-  },
-  input: {
-    fontSize: 16,
-    color: colors.black,
-    lineHeight: 20,
-    paddingVertical: 0,
-    textAlignVertical: "center",
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.black,
+  micBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },

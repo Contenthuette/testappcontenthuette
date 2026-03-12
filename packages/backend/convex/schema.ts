@@ -81,6 +81,7 @@ export default defineSchema({
     text: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaUrl: v.optional(v.string()),
+    mediaDuration: v.optional(v.number()),
     sharedPostId: v.optional(v.id("posts")),
     createdAt: v.number(),
   })

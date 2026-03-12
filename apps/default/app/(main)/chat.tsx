@@ -1,27 +1,61 @@
-import React from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useCallback } from "react";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
-import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
 import { SharedPostBubble } from "@/components/SharedPostBubble";
+import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const messages = useQuery(api.messaging.getDirectMessages, id ? { conversationId: id as Id<"conversations"> } : "skip");
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
+  const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
   const me = useQuery(api.users.me);
 
   const handleSend = async (msg: string) => {
     if (!id) return;
     await sendMessage({ conversationId: id as Id<"conversations">, text: msg, type: "text" });
   };
+
+  const handleSendVoice = useCallback(async (uri: string, durationMs: number) => {
+    if (!id) return;
+    try {
+      // Get upload URL
+      const uploadUrl = await generateUploadUrl();
+
+      // Fetch the recorded file and upload
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "audio/mp4" },
+        body: blob,
+      });
+
+      const { storageId } = await uploadResponse.json() as { storageId: Id<"_storage"> };
+
+      // Send voice message
+      await sendMessage({
+        conversationId: id as Id<"conversations">,
+        type: "voice",
+        mediaStorageId: storageId,
+        text: `🎤 ${Math.round(durationMs / 1000)}s`,
+      });
+    } catch (err) {
+      console.error("Failed to send voice message", err);
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Sprachnachricht konnte nicht gesendet werden.");
+      }
+    }
+  }, [id, generateUploadUrl, sendMessage]);
 
   const renderMessage = ({ item }: { item: NonNullable<typeof messages>[number] }) => {
     const isMine = item.senderId === me?._id;
@@ -34,6 +68,20 @@ export default function ChatScreen() {
           <SharedPostBubble
             postId={item.sharedPostId}
             preview={item.sharedPostPreview ?? undefined}
+            isMine={isMine}
+            timestamp={timeStr}
+          />
+        </View>
+      );
+    }
+
+    // Voice message bubble
+    if (item.type === "voice" && item.mediaUrl) {
+      return (
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+          <VoiceMessageBubble
+            audioUrl={item.mediaUrl}
+            durationMs={item.mediaDuration}
             isMine={isMine}
             timestamp={timeStr}
           />
@@ -79,7 +127,7 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messageList}
         />
 
-        <ChatInputBar onSend={handleSend} />
+        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

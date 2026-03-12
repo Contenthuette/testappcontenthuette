@@ -69,6 +69,7 @@ import {
   UserPlus,
   UserMinus,
   Play,
+  Pause,
   Hand,
   Images,
   FileSearch,
@@ -134,6 +135,8 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "photo.stack": Images,
   video: Video,
   "play.rectangle": Play,
+  "play.fill": Play,
+  "pause.fill": Pause,
   qrcode: QrCode,
   "square.grid.3x3": Grid3X3,
 

@@ -49,6 +49,7 @@ const messageReturnValidator = v.object({
   type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
   text: v.optional(v.string()),
   mediaUrl: v.optional(v.string()),
+  mediaDuration: v.optional(v.number()),
   sharedPostId: v.optional(v.id("posts")),
   sharedPostPreview: sharedPostPreviewValidator,
   isMe: v.boolean(),
@@ -165,6 +166,7 @@ export const getMessages = authQuery({
         type: m.type,
         text: m.text,
         mediaUrl: m.mediaStorageId ? await ctx.storage.getUrl(m.mediaStorageId) ?? undefined : m.mediaUrl,
+        mediaDuration: m.mediaDuration,
         sharedPostId: m.sharedPostId,
         sharedPostPreview: preview,
         isMe: m.senderId === myUserId,
@@ -182,6 +184,7 @@ export const sendMessage = authMutation({
     type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
     text: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
+    mediaDuration: v.optional(v.number()),
     sharedPostId: v.optional(v.id("posts")),
   },
   returns: v.id("messages"),
@@ -194,6 +197,7 @@ export const sendMessage = authMutation({
       type: args.type,
       text: args.text,
       mediaStorageId: args.mediaStorageId,
+      mediaDuration: args.mediaDuration,
       sharedPostId: args.sharedPostId,
       createdAt: Date.now(),
     });
@@ -243,9 +247,10 @@ export const getGroupMessages = authQuery({
 export const sendGroupMessage = authMutation({
   args: {
     groupId: v.id("groups"),
-    text: v.string(),
+    text: v.optional(v.string()),
     type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice")),
     mediaStorageId: v.optional(v.id("_storage")),
+    mediaDuration: v.optional(v.number()),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
@@ -271,10 +276,20 @@ export const sendGroupMessage = authMutation({
       type: args.type,
       text: args.text,
       mediaStorageId: args.mediaStorageId,
+      mediaDuration: args.mediaDuration,
       createdAt: Date.now(),
     });
     await ctx.db.patch(conv._id, { lastMessageAt: Date.now() });
     return msgId;
+  },
+});
+
+// Generate upload URL for voice messages and media
+export const generateUploadUrl = authMutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
@@ -314,9 +329,10 @@ export const getDirectMessages = authQuery({
 export const sendDirectMessage = authMutation({
   args: {
     conversationId: v.id("conversations"),
-    text: v.string(),
+    text: v.optional(v.string()),
     type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice")),
     mediaStorageId: v.optional(v.id("_storage")),
+    mediaDuration: v.optional(v.number()),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
@@ -328,6 +344,7 @@ export const sendDirectMessage = authMutation({
       type: args.type,
       text: args.text,
       mediaStorageId: args.mediaStorageId,
+      mediaDuration: args.mediaDuration,
       createdAt: Date.now(),
     });
     await ctx.db.patch(args.conversationId, { lastMessageAt: Date.now() });
