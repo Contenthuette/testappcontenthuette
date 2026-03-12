@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
-import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useAudioRecorder, requestRecordingPermissionsAsync, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Icon } from "@/components/Icon";
 
@@ -49,7 +49,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      const status = await AudioModule.requestRecordingPermissionsAsync();
+      const status = await requestRecordingPermissionsAsync();
       if (!status.granted) return;
       audioRecorder.record();
       setPhase("recording");
