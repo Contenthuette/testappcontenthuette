@@ -49,7 +49,7 @@ function VideoThumbnail({ mediaUrl }: { mediaUrl: string }) {
       />
       <View style={thumbStyles.playOverlay}>
         <View style={thumbStyles.playCircle}>
-          <SymbolView name="play.fill" size={18} tintColor="#fff" />
+          <View style={thumbStyles.playTriangle} />
         </View>
       </View>
     </View>
@@ -74,12 +74,23 @@ const thumbStyles = StyleSheet.create({
     alignItems: "center",
   },
   playCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  playTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 16,
+    borderTopWidth: 10,
+    borderBottomWidth: 10,
+    borderLeftColor: "#fff",
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    marginLeft: 4,
   },
 });
 
@@ -126,7 +137,7 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
             {isVideo && (
               <View style={thumbStyles.playOverlay}>
                 <View style={thumbStyles.playCircle}>
-                  <SymbolView name="play.fill" size={18} tintColor="#fff" />
+                  <View style={thumbStyles.playTriangle} />
                 </View>
               </View>
             )}
