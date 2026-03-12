@@ -52,7 +52,7 @@ export function VoiceMessageBubble({ audioUrl, duration: durationSec, durationMs
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        <SymbolView name={isPlaying ? "pause" : "play"} size={18} color={mine ? "#FFFFFF" : "#000000"} />
+        <SymbolView name={isPlaying ? "pause" : "play"} size={18} tintColor={mine ? "#FFFFFF" : "#000000"} />
       </TouchableOpacity>
 
       <View style={styles.waveContainer}>

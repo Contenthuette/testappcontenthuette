@@ -144,7 +144,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
         <View style={styles.actions}>
           <TouchableOpacity onPress={handleDelete} style={styles.actionBtn} activeOpacity={0.7}>
-            <Icon name="trash" size={20} color="#EF4444" />
+            <Icon name="trash" size={20} tintColor="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity onPress={stopRecording} style={styles.stopBtn} activeOpacity={0.7}>
             <View style={styles.stopSquare} />
@@ -159,17 +159,17 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       <View style={styles.container}>
         <View style={styles.previewRow}>
           <TouchableOpacity onPress={togglePreview} style={styles.playBtn} activeOpacity={0.7}>
-            <Icon name={isPreviewPlaying ? "pause" : "play"} size={18} color="#000" />
+            <Icon name={isPreviewPlaying ? "pause" : "play"} size={18} tintColor="#000" />
           </TouchableOpacity>
           <Text style={styles.previewTime}>{formatTime(recordedDuration)}</Text>
         </View>
 
         <View style={styles.actions}>
           <TouchableOpacity onPress={handleDelete} style={styles.actionBtn} activeOpacity={0.7}>
-            <Icon name="trash" size={20} color="#EF4444" />
+            <Icon name="trash" size={20} tintColor="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7}>
-            <Icon name="send" size={18} color="#FFFFFF" />
+            <Icon name="send" size={18} tintColor="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
