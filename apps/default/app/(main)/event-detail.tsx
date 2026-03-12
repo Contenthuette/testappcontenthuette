@@ -14,6 +14,14 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 
+function calcEndTime(startTime: string, durationMinutes: number): string {
+  const [h, m] = startTime.split(":").map(Number);
+  const totalMin = h * 60 + m + durationMinutes;
+  const endH = Math.floor(totalMin / 60) % 24;
+  const endM = totalMin % 60;
+  return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+}
+
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useQuery(api.events.getById, id ? { eventId: id as Id<"events"> } : "skip");
@@ -42,12 +50,6 @@ export default function EventDetailScreen() {
     } finally {
       setBuying(false);
     }
-  };
-
-  const formatDuration = (min: number) => {
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return h > 0 ? `${h} Std.${m > 0 ? ` ${m} Min.` : ""}` : `${m} Min.`;
   };
 
   return (
@@ -83,20 +85,9 @@ export default function EventDetailScreen() {
               </View>
               <View>
                 <Text style={styles.infoLabel}>{event.date}</Text>
-                <Text style={styles.infoSub}>{event.startTime} Uhr</Text>
+                <Text style={styles.infoSub}>Start: {event.startTime} Uhr · Ende: {calcEndTime(event.startTime, event.durationMinutes)} Uhr</Text>
               </View>
             </View>
-            {event.durationMinutes ? (
-              <View style={styles.infoRow}>
-                <View style={styles.infoIcon}>
-                  <SymbolView name="clock" size={18} tintColor={colors.gray500} />
-                </View>
-                <View>
-                  <Text style={styles.infoLabel}>Dauer</Text>
-                  <Text style={styles.infoSub}>{formatDuration(event.durationMinutes)}</Text>
-                </View>
-              </View>
-            ) : null}
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
                 <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />

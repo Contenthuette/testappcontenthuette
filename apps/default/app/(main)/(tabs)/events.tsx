@@ -13,6 +13,14 @@ import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 import { Image } from "expo-image";
 
+function calcEndTime(startTime: string, durationMinutes: number): string {
+  const [h, m] = startTime.split(":").map(Number);
+  const totalMin = h * 60 + m + durationMinutes;
+  const endH = Math.floor(totalMin / 60) % 24;
+  const endM = totalMin % 60;
+  return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+}
+
 export default function EventsScreen() {
   const events = useQuery(api.events.list, {});
 
@@ -50,7 +58,7 @@ export default function EventsScreen() {
           </View>
           <View style={styles.infoRow}>
             <SymbolView name="calendar" size={13} tintColor={colors.gray400} />
-            <Text style={styles.infoText}>{item.date} · {item.startTime} Uhr</Text>
+            <Text style={styles.infoText}>{item.date} · {item.startTime} - {calcEndTime(item.startTime, item.durationMinutes)} Uhr</Text>
           </View>
           <View style={styles.cardFooter}>
             <Text style={[styles.ticketCount, isSoldOut && styles.ticketCountDim]}>
