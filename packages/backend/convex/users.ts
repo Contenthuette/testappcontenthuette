@@ -185,6 +185,43 @@ export const getById = query({
   },
 });
 
+// Public: get user's group memberships with group names and roles
+export const getUserGroups = query({
+  args: { userId: v.id("users") },
+  returns: v.array(
+    v.object({
+      groupId: v.id("groups"),
+      groupName: v.string(),
+      role: v.union(v.literal("admin"), v.literal("member")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const memberships = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const activeMemberships = memberships.filter((m) => m.status === "active");
+    const results: Array<{
+      groupId: Id<"groups">;
+      groupName: string;
+      role: "admin" | "member";
+    }> = [];
+
+    for (const m of activeMemberships) {
+      const group = await ctx.db.get(m.groupId);
+      if (group) {
+        results.push({
+          groupId: m.groupId,
+          groupName: group.name,
+          role: m.role,
+        });
+      }
+    }
+    return results;
+  },
+});
+
 // Public: generate upload url
 export const generateUploadUrl = authMutation({
   args: {},

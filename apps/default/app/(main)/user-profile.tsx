@@ -11,10 +11,12 @@ import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import type { Id } from "@/convex/_generated/dataModel";
+import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useQuery(api.users.getById, id ? { userId: id as Id<"users"> } : "skip");
+  const userGroups = useQuery(api.users.getUserGroups, id ? { userId: id as Id<"users"> } : "skip");
 
   if (!profile) {
     return <SafeAreaView style={styles.safe}><View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View></SafeAreaView>;
@@ -33,6 +35,8 @@ export default function UserProfileScreen() {
         <View style={styles.profileInfo}>
           <Avatar uri={profile.avatarUrl} name={profile.name} size={80} />
           <Text style={styles.name}>{profile.name}</Text>
+          {profile.role === "admin" && <ZAdminBadge />}
+          {userGroups && userGroups.length > 0 && <GroupBadges groups={userGroups} />}
           {profile.city && <Text style={styles.location}>{profile.city}{profile.county ? `, ${profile.county}` : ""}</Text>}
           {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
 

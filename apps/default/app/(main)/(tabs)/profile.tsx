@@ -11,6 +11,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
+import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
 
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -20,6 +21,7 @@ const GRID_SIZE = (screenWidth - GRID_GAP * (GRID_COL - 1)) / GRID_COL;
 export default function ProfileScreen() {
   const me = useQuery(api.users.me);
   const myPosts = useQuery(api.posts.getUserPosts, me ? { userId: me._id } : "skip");
+  const userGroups = useQuery(api.users.getUserGroups, me ? { userId: me._id } : "skip");
 
   if (me === undefined) {
     return (
@@ -69,6 +71,8 @@ export default function ProfileScreen() {
           </View>
 
           <Text style={styles.name}>{me.name}</Text>
+          {me.role === "admin" && <ZAdminBadge />}
+          {userGroups && userGroups.length > 0 && <GroupBadges groups={userGroups} />}
           {(me.city || me.county) && (
             <View style={styles.locationRow}>
               <SymbolView name="mappin" size={12} tintColor={colors.gray400} />
