@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -14,8 +14,24 @@ import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const isValidConversationId = !!id && !id.startsWith("new-");
-  const conversationId = isValidConversationId ? (id as Id<"conversations">) : undefined;
+  const isNewChat = !!id && id.startsWith("new-");
+  const otherUserId = isNewChat ? id.replace("new-", "") : undefined;
+  const conversationId = !isNewChat && id ? (id as Id<"conversations">) : undefined;
+
+  // For new chats, resolve the conversation
+  const getOrCreateDM = useMutation(api.messaging.getOrCreateDM);
+  const resolvedRef = useRef<Id<"conversations"> | null>(null);
+
+  useEffect(() => {
+    if (isNewChat && otherUserId && !resolvedRef.current) {
+      getOrCreateDM({ otherUserId: otherUserId as Id<"users"> }).then((convId) => {
+        resolvedRef.current = convId;
+        // Replace with the real conversation id
+        router.replace({ pathname: "/(main)/chat" as "/", params: { id: convId } });
+      }).catch(console.error);
+    }
+  }, [isNewChat, otherUserId, getOrCreateDM]);
+
   const messages = useQuery(api.messaging.getDirectMessages, conversationId ? { conversationId } : "skip");
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
@@ -24,45 +40,38 @@ export default function ChatScreen() {
   const initiateCall = useMutation(api.calls.initiateCall);
 
   const handleCall = useCallback(async (type: "audio" | "video") => {
-    if (!id || !partner) return;
+    if (!conversationId || !partner) return;
     try {
       const callId = await initiateCall({
         receiverId: partner._id,
-        conversationId: id as Id<"conversations">,
+        conversationId,
         type,
       });
       router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
     } catch (e) {
       console.error("Failed to initiate call", e);
     }
-  }, [id, partner, initiateCall]);
+  }, [conversationId, partner, initiateCall]);
 
   const handleSend = async (msg: string) => {
-    if (!id) return;
-    await sendMessage({ conversationId: id as Id<"conversations">, text: msg, type: "text" });
+    if (!conversationId) return;
+    await sendMessage({ conversationId, text: msg, type: "text" });
   };
 
   const handleSendVoice = useCallback(async (uri: string, durationMs: number) => {
-    if (!id) return;
+    if (!conversationId) return;
     try {
-      // Get upload URL
       const uploadUrl = await generateUploadUrl();
-
-      // Fetch the recorded file and upload
       const response = await fetch(uri);
       const blob = await response.blob();
-
       const uploadResponse = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": "audio/mp4" },
         body: blob,
       });
-
       const { storageId } = await uploadResponse.json() as { storageId: Id<"_storage"> };
-
-      // Send voice message
       await sendMessage({
-        conversationId: id as Id<"conversations">,
+        conversationId,
         type: "voice",
         mediaStorageId: storageId,
         text: `🎤 ${Math.round(durationMs / 1000)}s`,
@@ -73,13 +82,12 @@ export default function ChatScreen() {
         Alert.alert("Fehler", "Sprachnachricht konnte nicht gesendet werden.");
       }
     }
-  }, [id, generateUploadUrl, sendMessage]);
+  }, [conversationId, generateUploadUrl, sendMessage]);
 
   const renderMessage = ({ item }: { item: NonNullable<typeof messages>[number] }) => {
     const isMine = item.senderId === me?._id;
     const timeStr = new Date(item.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 
-    // Shared post bubble
     if (item.type === "post_share" && item.sharedPostId) {
       return (
         <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
@@ -93,7 +101,6 @@ export default function ChatScreen() {
       );
     }
 
-    // Voice message bubble
     if (item.type === "voice" && item.mediaUrl) {
       return (
         <View style={[styles.msgRow, isMine && styles.msgRowMine]}>

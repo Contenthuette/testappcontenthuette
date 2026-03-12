@@ -161,26 +161,66 @@ export const getById = query({
     _id: v.id("users"),
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    bannerUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     interests: v.optional(v.array(v.string())),
     role: v.union(v.literal("user"), v.literal("admin")),
     createdAt: v.number(),
+    posts: v.array(v.object({
+      _id: v.id("posts"),
+      type: v.union(v.literal("photo"), v.literal("video")),
+      mediaUrl: v.optional(v.string()),
+      thumbnailUrl: v.optional(v.string()),
+      caption: v.optional(v.string()),
+      likeCount: v.number(),
+      commentCount: v.number(),
+      createdAt: v.number(),
+    })),
   })),
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
+
+    // Get user's posts
+    const posts = await ctx.db.query("posts")
+      .withIndex("by_authorId", (q) => q.eq("authorId", args.userId))
+      .order("desc")
+      .take(30);
+
+    const enrichedPosts = [];
+    for (const p of posts) {
+      const mediaUrl = p.mediaStorageId
+        ? await ctx.storage.getUrl(p.mediaStorageId) ?? undefined
+        : p.mediaUrl;
+      const thumbnailUrl = p.thumbnailStorageId
+        ? await ctx.storage.getUrl(p.thumbnailStorageId) ?? undefined
+        : p.thumbnailUrl;
+      enrichedPosts.push({
+        _id: p._id,
+        type: p.type,
+        mediaUrl,
+        thumbnailUrl,
+        caption: p.caption,
+        likeCount: p.likeCount,
+        commentCount: p.commentCount,
+        createdAt: p.createdAt,
+      });
+    }
+
     return {
       _id: user._id,
       name: user.name,
       avatarUrl: user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) ?? undefined : user.avatarUrl,
+      bannerUrl: user.bannerStorageId ? await ctx.storage.getUrl(user.bannerStorageId) ?? undefined : user.bannerUrl,
       bio: user.bio,
       county: user.county,
       city: user.city,
       interests: user.interests,
       role: user.role,
       createdAt: user.createdAt,
+      posts: enrichedPosts,
     };
   },
 });

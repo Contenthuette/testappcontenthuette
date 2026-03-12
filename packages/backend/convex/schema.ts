@@ -189,6 +189,18 @@ export default defineSchema({
   })
     .index("by_isActive", ["isActive"]),
 
+  // ── Friend Requests ────────────────────────────────────────────
+  friendRequests: defineTable({
+    senderId: v.id("users"),
+    receiverId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("declined")),
+    createdAt: v.number(),
+    respondedAt: v.optional(v.number()),
+  })
+    .index("by_senderId", ["senderId"])
+    .index("by_receiverId", ["receiverId"])
+    .index("by_senderId_and_receiverId", ["senderId", "receiverId"]),
+
   // ── Notifications ──────────────────────────────────────────────
   notifications: defineTable({
     userId: v.id("users"),
@@ -204,7 +216,9 @@ export default defineSchema({
       v.literal("join_request"),
       v.literal("join_accepted"),
       v.literal("join_rejected"),
-      v.literal("post_share")
+      v.literal("post_share"),
+      v.literal("friend_request"),
+      v.literal("friend_accepted")
     ),
     title: v.string(),
     body: v.string(),

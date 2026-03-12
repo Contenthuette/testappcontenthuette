@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
+  Platform, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -10,6 +11,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const ICON_MAP: Record<string, string> = {
   message: "bubble.left.fill",
@@ -20,11 +22,45 @@ const ICON_MAP: Record<string, string> = {
   announcement: "megaphone.fill",
   group: "person.3.fill",
   call: "phone.fill",
+  friend_request: "person.badge.plus",
+  friend_accepted: "person.crop.circle.badge.checkmark",
+  post_share: "square.and.arrow.up.fill",
 };
 
 export default function NotificationsScreen() {
   const notifications = useQuery(api.notifications.list, {});
   const markRead = useMutation(api.notifications.markRead);
+  const acceptFriend = useMutation(api.friends.acceptRequest);
+  const rejectFriend = useMutation(api.friends.declineRequest);
+
+  const handleAcceptFriend = useCallback(async (requestId: string, notificationId: Id<"notifications">) => {
+    try {
+      await acceptFriend({ requestId: requestId as Id<"friendRequests"> });
+      await markRead({ notificationId });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Fehler";
+      if (Platform.OS !== "web") Alert.alert("Fehler", msg);
+    }
+  }, [acceptFriend, markRead]);
+
+  const handleRejectFriend = useCallback(async (requestId: string, notificationId: Id<"notifications">) => {
+    try {
+      await rejectFriend({ requestId: requestId as Id<"friendRequests"> });
+      await markRead({ notificationId });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Fehler";
+      if (Platform.OS !== "web") Alert.alert("Fehler", msg);
+    }
+  }, [rejectFriend, markRead]);
+
+  const handlePress = useCallback((item: NonNullable<typeof notifications>[number]) => {
+    markRead({ notificationId: item._id });
+    if (item.type === "message" && item.referenceId) {
+      router.push({ pathname: "/(main)/chat", params: { id: item.referenceId } });
+    } else if (item.type === "friend_accepted" && item.referenceId) {
+      router.push({ pathname: "/(main)/user-profile", params: { id: item.referenceId } });
+    }
+  }, [markRead]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -44,7 +80,7 @@ export default function NotificationsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[styles.row, !item.isRead && styles.rowUnread]}
-            onPress={() => markRead({ notificationId: item._id })}
+            onPress={() => handlePress(item)}
             activeOpacity={0.6}
           >
             <View style={[styles.iconWrap, !item.isRead && styles.iconWrapActive]}>
@@ -55,10 +91,28 @@ export default function NotificationsScreen() {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.body}>{item.body}</Text>
+              <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
               <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+
+              {/* Friend request actions */}
+              {item.type === "friend_request" && !item.isRead && item.referenceId && (
+                <View style={styles.friendActions}>
+                  <TouchableOpacity
+                    style={styles.acceptBtn}
+                    onPress={() => handleAcceptFriend(item.referenceId!, item._id)}
+                  >
+                    <Text style={styles.acceptBtnText}>Annehmen</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rejectBtn}
+                    onPress={() => handleRejectFriend(item.referenceId!, item._id)}
+                  >
+                    <Text style={styles.rejectBtnText}>Ablehnen</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-            {!item.isRead && <View style={styles.dot} />}
+            {!item.isRead && item.type !== "friend_request" && <View style={styles.dot} />}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -103,7 +157,7 @@ const styles = StyleSheet.create({
 
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: spacing.xl,
     paddingVertical: 14,
     gap: spacing.md,
@@ -116,6 +170,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 2,
   },
   iconWrapActive: { backgroundColor: colors.black },
   body: { fontSize: 14, color: colors.black, lineHeight: 20, letterSpacing: -0.1 },
@@ -125,5 +180,34 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.black,
+    marginTop: 8,
+  },
+
+  friendActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  acceptBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: radius.lg,
+    backgroundColor: colors.black,
+  },
+  acceptBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  rejectBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: radius.lg,
+    backgroundColor: colors.gray100,
+  },
+  rejectBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray700,
   },
 });

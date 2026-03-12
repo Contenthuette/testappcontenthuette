@@ -18,7 +18,7 @@ export const list = authQuery({
       v.literal("group_invite"), v.literal("event_reminder"),
       v.literal("ticket_confirmed"), v.literal("announcement"), v.literal("call"),
       v.literal("join_request"), v.literal("join_accepted"), v.literal("join_rejected"),
-      v.literal("post_share")
+      v.literal("post_share"), v.literal("friend_request"), v.literal("friend_accepted")
     ),
     title: v.string(),
     body: v.string(),
