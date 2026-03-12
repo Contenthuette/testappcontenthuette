@@ -14,11 +14,13 @@ import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const messages = useQuery(api.messaging.getDirectMessages, id ? { conversationId: id as Id<"conversations"> } : "skip");
+  const isValidConversationId = !!id && !id.startsWith("new-");
+  const conversationId = isValidConversationId ? (id as Id<"conversations">) : undefined;
+  const messages = useQuery(api.messaging.getDirectMessages, conversationId ? { conversationId } : "skip");
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
   const me = useQuery(api.users.me);
-  const partner = useQuery(api.calls.getConversationPartner, id ? { conversationId: id as Id<"conversations"> } : "skip");
+  const partner = useQuery(api.calls.getConversationPartner, conversationId ? { conversationId } : "skip");
   const initiateCall = useMutation(api.calls.initiateCall);
 
   const handleCall = useCallback(async (type: "audio" | "video") => {
