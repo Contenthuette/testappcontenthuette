@@ -7,7 +7,6 @@ import {
   Platform,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 
@@ -75,29 +74,39 @@ export function ChatInputBar({
           style={styles.plusBtn}
           activeOpacity={0.7}
         >
-          <SymbolView name="plus" size={18} tintColor={colors.gray500} />
+          <SymbolView name="plus" size={20} tintColor="#8E8E93" />
         </TouchableOpacity>
 
-        {/* Text input */}
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          placeholderTextColor={colors.gray400}
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={2000}
-          returnKeyType="default"
-        />
+        {/* Text input with inner background */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder={placeholder}
+            placeholderTextColor="#C7C7CC"
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={2000}
+            returnKeyType="default"
+          />
+        </View>
 
         {/* Mic or Send button */}
         {hasText ? (
-          <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7}>
-            <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
+          <TouchableOpacity
+            onPress={handleSend}
+            style={styles.sendBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={handleMicPress} style={styles.micBtn} activeOpacity={0.7}>
-            <SymbolView name="mic.fill" size={16} tintColor={colors.white} />
+          <TouchableOpacity
+            onPress={handleMicPress}
+            style={styles.micBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
           </TouchableOpacity>
         )}
       </View>
@@ -107,51 +116,58 @@ export function ChatInputBar({
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    backgroundColor: colors.white,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    backgroundColor: "#FFFFFF",
   },
   bar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    backgroundColor: colors.gray100,
-    borderRadius: 26,
-    paddingLeft: 5,
-    paddingRight: 5,
-    paddingVertical: 5,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 28,
+    paddingLeft: 4,
+    paddingRight: 4,
+    paddingVertical: 4,
     minHeight: 48,
     gap: 6,
+    boxShadow: "0px 1px 8px rgba(0,0,0,0.08)",
   },
   plusBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(0,0,0,0.06)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
   },
-  input: {
+  inputContainer: {
     flex: 1,
+    backgroundColor: "#F2F2F7",
+    borderRadius: 20,
+    minHeight: 40,
+    justifyContent: "center",
+  },
+  input: {
     fontSize: 16,
-    color: colors.black,
+    color: "#000000",
     maxHeight: 100,
-    paddingVertical: Platform.OS === "ios" ? 8 : 6,
-    paddingHorizontal: 4,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+    paddingHorizontal: 14,
   },
   micBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.black,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
   },
   sendBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.black,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
   },

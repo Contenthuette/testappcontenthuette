@@ -18,6 +18,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { router } from "expo-router";
+import { useCallContext } from "@/lib/call-context";
 
 interface ActiveCallScreenProps {
   callId: Id<"calls">;
@@ -29,6 +30,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const toggleMuteMutation = useMutation(api.calls.toggleMute);
   const toggleVideoMutation = useMutation(api.calls.toggleVideo);
   const me = useQuery(api.users.me);
+  const { minimizeCall } = useCallContext();
 
   const [elapsed, setElapsed] = useState(0);
   const [isSpeaker, setIsSpeaker] = useState(false);
@@ -69,6 +71,12 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const isMuted = myParticipant?.isMuted ?? false;
   const isVideoOff = myParticipant?.isVideoOff ?? true;
   const isVideoCall = call?.type === "video";
+
+  const handleMinimize = useCallback(() => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    minimizeCall(callId);
+    if (router.canGoBack()) router.back();
+  }, [callId, minimizeCall]);
 
   const handleEndCall = useCallback(async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -132,7 +140,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
         {/* Top bar */}
         <View style={styles.topBar}>
           <TouchableOpacity
-            onPress={() => { if (router.canGoBack()) router.back(); }}
+            onPress={handleMinimize}
             style={styles.minimizeBtn}
           >
             <SymbolView name="chevron.down" size={20} tintColor="rgba(255,255,255,0.8)" />
@@ -147,15 +155,10 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
         {/* Center: Avatar / participants */}
         <View style={styles.centerArea}>
           {call.groupId && otherParticipants.length > 1 ? (
-            // Group call: show grid of avatars
             <View style={styles.avatarGrid}>
               {otherParticipants.filter((p) => p.status === "connected").map((p) => (
                 <View key={p._id} style={styles.gridItem}>
-                  <Avatar
-                    uri={p.userAvatarUrl}
-                    name={p.userName}
-                    size={80}
-                  />
+                  <Avatar uri={p.userAvatarUrl} name={p.userName} size={80} />
                   <Text style={styles.gridName} numberOfLines={1}>{p.userName}</Text>
                   {p.isMuted && (
                     <View style={styles.muteBadge}>
@@ -166,7 +169,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               ))}
             </View>
           ) : (
-            // 1:1 call: large avatar
             <View style={styles.singleAvatar}>
               <Avatar
                 uri={mainAvatar?.userAvatarUrl}
@@ -184,81 +186,124 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 
         {/* Bottom controls */}
         {!isEnded && (
-          <Animated.View
-            style={styles.controls}
-            entering={FadeIn.delay(200)}
-          >
-            <View style={styles.controlRow}>
-              {/* Mute */}
-              <TouchableOpacity
-                style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
-                onPress={handleToggleMute}
-                activeOpacity={0.7}
-              >
-                <SymbolView
-                  name={isMuted ? "mic.slash.fill" : "mic.fill"}
-                  size={22}
-                  tintColor={isMuted ? "#000" : "#FFF"}
-                />
-              </TouchableOpacity>
+          <Animated.View style={styles.controls} entering={FadeIn.delay(200)}>
+            {isVideoCall ? (
+              /* Video call: 5 buttons */
+              <>
+                <View style={styles.controlRow}>
+                  {/* Mute */}
+                  <TouchableOpacity
+                    style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
+                    onPress={handleToggleMute}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView
+                      name={isMuted ? "mic.slash.fill" : "mic.fill"}
+                      size={22}
+                      tintColor={isMuted ? "#000" : "#FFF"}
+                    />
+                  </TouchableOpacity>
 
-              {/* Video toggle */}
-              {isVideoCall && (
-                <TouchableOpacity
-                  style={[styles.controlBtn, isVideoOff && styles.controlBtnActive]}
-                  onPress={handleToggleVideo}
-                  activeOpacity={0.7}
-                >
-                  <SymbolView
-                    name={isVideoOff ? "video.slash.fill" : "video.fill"}
-                    size={22}
-                    tintColor={isVideoOff ? "#000" : "#FFF"}
-                  />
-                </TouchableOpacity>
-              )}
+                  {/* Video */}
+                  <TouchableOpacity
+                    style={[styles.controlBtn, isVideoOff && styles.controlBtnActive]}
+                    onPress={handleToggleVideo}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView
+                      name={isVideoOff ? "video.slash.fill" : "video.fill"}
+                      size={22}
+                      tintColor={isVideoOff ? "#000" : "#FFF"}
+                    />
+                  </TouchableOpacity>
 
-              {/* End call */}
-              <TouchableOpacity
-                style={styles.endCallBtn}
-                onPress={handleEndCall}
-                activeOpacity={0.7}
-              >
-                <SymbolView name="phone.down.fill" size={26} tintColor="#FFF" />
-              </TouchableOpacity>
+                  {/* End call */}
+                  <TouchableOpacity
+                    style={styles.endCallBtn}
+                    onPress={handleEndCall}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView name="phone.down.fill" size={26} tintColor="#FFF" />
+                  </TouchableOpacity>
 
-              {/* Camera flip */}
-              {isVideoCall && (
-                <TouchableOpacity
-                  style={styles.controlBtn}
-                  onPress={handleFlipCamera}
-                  activeOpacity={0.7}
-                >
-                  <SymbolView name="camera.rotate.fill" size={22} tintColor="#FFF" />
-                </TouchableOpacity>
-              )}
+                  {/* Camera flip */}
+                  <TouchableOpacity
+                    style={styles.controlBtn}
+                    onPress={handleFlipCamera}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView name="camera.rotate.fill" size={22} tintColor="#FFF" />
+                  </TouchableOpacity>
 
-              {/* Speaker */}
-              <TouchableOpacity
-                style={[styles.controlBtn, isSpeaker && styles.controlBtnActive]}
-                onPress={handleToggleSpeaker}
-                activeOpacity={0.7}
-              >
-                <SymbolView
-                  name={isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"}
-                  size={22}
-                  tintColor={isSpeaker ? "#000" : "#FFF"}
-                />
-              </TouchableOpacity>
-            </View>
+                  {/* Speaker */}
+                  <TouchableOpacity
+                    style={[styles.controlBtn, isSpeaker && styles.controlBtnActive]}
+                    onPress={handleToggleSpeaker}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView
+                      name={isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"}
+                      size={22}
+                      tintColor={isSpeaker ? "#000" : "#FFF"}
+                    />
+                  </TouchableOpacity>
+                </View>
 
-            {/* Labels */}
-            <View style={styles.labelRow}>
-              <Text style={styles.controlLabel}>Stumm</Text>
-              {isVideoCall && <Text style={styles.controlLabel}>Video</Text>}
-              <Text style={[styles.controlLabel, { width: 68 }]}> </Text>
-              {isVideoCall && <Text style={styles.controlLabel}>Wechseln</Text>}
-              <Text style={styles.controlLabel}>Lautspr.</Text>
-            </View>
+                <View style={styles.labelRow}>
+                  <Text style={styles.controlLabel}>Stumm</Text>
+                  <Text style={styles.controlLabel}>Video</Text>
+                  <Text style={[styles.controlLabel, { width: 68 }]}>{" "}</Text>
+                  <Text style={styles.controlLabel}>Wechseln</Text>
+                  <Text style={styles.controlLabel}>Lautspr.</Text>
+                </View>
+              </>
+            ) : (
+              /* Audio call: 3 buttons */
+              <>
+                <View style={styles.controlRow}>
+                  {/* Mute */}
+                  <TouchableOpacity
+                    style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
+                    onPress={handleToggleMute}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView
+                      name={isMuted ? "mic.slash.fill" : "mic.fill"}
+                      size={22}
+                      tintColor={isMuted ? "#000" : "#FFF"}
+                    />
+                  </TouchableOpacity>
+
+                  {/* End call */}
+                  <TouchableOpacity
+                    style={styles.endCallBtn}
+                    onPress={handleEndCall}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView name="phone.down.fill" size={26} tintColor="#FFF" />
+                  </TouchableOpacity>
+
+                  {/* Speaker */}
+                  <TouchableOpacity
+                    style={[styles.controlBtn, isSpeaker && styles.controlBtnActive]}
+                    onPress={handleToggleSpeaker}
+                    activeOpacity={0.7}
+                  >
+                    <SymbolView
+                      name={isSpeaker ? "speaker.wave.3.fill" : "speaker.fill"}
+                      size={22}
+                      tintColor={isSpeaker ? "#000" : "#FFF"}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.labelRow}>
+                  <Text style={styles.controlLabel}>Stumm</Text>
+                  <Text style={[styles.controlLabel, { width: 68 }]}>{" "}</Text>
+                  <Text style={styles.controlLabel}>Lautspr.</Text>
+                </View>
+              </>
+            )}
           </Animated.View>
         )}
 
