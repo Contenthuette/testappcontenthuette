@@ -4,7 +4,7 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -23,6 +23,20 @@ export default function GroupChatScreen() {
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
   const me = useQuery(api.users.me);
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
+  const initiateGroupCall = useMutation(api.calls.initiateGroupCall);
+
+  const handleGroupCall = useCallback(async (type: "audio" | "video") => {
+    if (!id) return;
+    try {
+      const callId = await initiateGroupCall({
+        groupId: id as Id<"groups">,
+        type,
+      });
+      router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
+    } catch (e) {
+      console.error("Failed to initiate group call", e);
+    }
+  }, [id, initiateGroupCall]);
 
   const handleSend = async (msg: string) => {
     if (!id) return;
@@ -128,10 +142,10 @@ export default function GroupChatScreen() {
             {group?.memberCount ?? 0} Mitglieder
           </Text>
         </View>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8}>
+        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("audio")}>
           <SymbolView name="phone" size={20} tintColor={colors.black} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8}>
+        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("video")}>
           <SymbolView name="video" size={20} tintColor={colors.black} />
         </TouchableOpacity>
       </View>

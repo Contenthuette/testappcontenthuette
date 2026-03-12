@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -18,6 +18,22 @@ export default function ChatScreen() {
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
   const me = useQuery(api.users.me);
+  const partner = useQuery(api.calls.getConversationPartner, id ? { conversationId: id as Id<"conversations"> } : "skip");
+  const initiateCall = useMutation(api.calls.initiateCall);
+
+  const handleCall = useCallback(async (type: "audio" | "video") => {
+    if (!id || !partner) return;
+    try {
+      const callId = await initiateCall({
+        receiverId: partner._id,
+        conversationId: id as Id<"conversations">,
+        type,
+      });
+      router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
+    } catch (e) {
+      console.error("Failed to initiate call", e);
+    }
+  }, [id, partner, initiateCall]);
 
   const handleSend = async (msg: string) => {
     if (!id) return;
@@ -107,12 +123,12 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => safeBack("chat")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chat</Text>
+        <Text style={styles.headerTitle}>{partner?.name ?? "Chat"}</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerAction}>
+          <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("audio")}>
             <SymbolView name="phone" size={20} tintColor={colors.black} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerAction}>
+          <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("video")}>
             <SymbolView name="video" size={20} tintColor={colors.black} />
           </TouchableOpacity>
         </View>

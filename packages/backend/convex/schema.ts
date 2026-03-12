@@ -252,4 +252,49 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_date", ["date"]),
+
+  // ── Calls ──────────────────────────────────────────────────────
+  calls: defineTable({
+    type: v.union(v.literal("audio"), v.literal("video")),
+    status: v.union(
+      v.literal("ringing"),
+      v.literal("active"),
+      v.literal("ended"),
+      v.literal("declined"),
+      v.literal("missed")
+    ),
+    callerId: v.id("users"),
+    callerName: v.string(),
+    callerAvatarUrl: v.optional(v.string()),
+    conversationId: v.optional(v.id("conversations")),
+    receiverId: v.optional(v.id("users")),
+    groupId: v.optional(v.id("groups")),
+    groupName: v.optional(v.string()),
+    startedAt: v.number(),
+    answeredAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+  })
+    .index("by_receiverId_and_status", ["receiverId", "status"])
+    .index("by_groupId_and_status", ["groupId", "status"])
+    .index("by_callerId_and_status", ["callerId", "status"]),
+
+  callParticipants: defineTable({
+    callId: v.id("calls"),
+    userId: v.id("users"),
+    userName: v.string(),
+    userAvatarUrl: v.optional(v.string()),
+    status: v.union(
+      v.literal("ringing"),
+      v.literal("connected"),
+      v.literal("declined"),
+      v.literal("left")
+    ),
+    isMuted: v.boolean(),
+    isVideoOff: v.boolean(),
+    joinedAt: v.optional(v.number()),
+    leftAt: v.optional(v.number()),
+  })
+    .index("by_callId", ["callId"])
+    .index("by_userId_and_status", ["userId", "status"])
+    .index("by_callId_and_userId", ["callId", "userId"]),
 });

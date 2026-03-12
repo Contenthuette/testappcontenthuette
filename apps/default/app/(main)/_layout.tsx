@@ -28,6 +28,7 @@ export default function MainLayout() {
       <Stack.Screen name="admin-login" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="admin" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="admin-event-form" options={{ presentation: "modal" }} />
+      <Stack.Screen name="call" options={{ animation: "fade", headerShown: false }} />
     </Stack>
   );
 }
