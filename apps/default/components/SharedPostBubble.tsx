@@ -45,6 +45,7 @@ function VideoThumbnail({ mediaUrl }: { mediaUrl: string }) {
         style={thumbStyles.video}
         nativeControls={false}
         allowsPictureInPicture={false}
+        contentFit="cover"
       />
       <View style={thumbStyles.playOverlay}>
         <View style={thumbStyles.playCircle}>
