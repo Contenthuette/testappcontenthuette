@@ -51,9 +51,9 @@ export function ChatInputBar({
             placeholderTextColor={colors.gray400}
             value={text}
             onChangeText={setText}
-            multiline
             maxLength={2000}
-            returnKeyType="default"
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
           />
         </View>
 
@@ -112,15 +112,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     borderRadius: 22,
     paddingHorizontal: spacing.md,
-    minHeight: 44,
-    maxHeight: 120,
+    height: 44,
     justifyContent: "center",
   },
   input: {
     fontSize: 16,
     color: colors.black,
-    lineHeight: 22,
-    paddingVertical: 11,
+    lineHeight: 20,
+    paddingVertical: 0,
+    textAlignVertical: "center",
   },
   sendBtn: {
     width: 44,
