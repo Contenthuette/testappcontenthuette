@@ -85,18 +85,37 @@ export default function GroupDetailScreen() {
 
         <View style={styles.content}>
           <Text style={styles.groupName}>{group.name}</Text>
-          <View style={styles.metaRow}>
-            <SymbolView name="mappin" size={13} tintColor={colors.gray400} />
-            <Text style={styles.metaText}>
-              {[group.city || group.county || "MV", group.topic].filter(Boolean).join(" \u00b7 ")}
-            </Text>
-          </View>
-          <View style={styles.metaRow}>
-            <SymbolView name="person.2" size={13} tintColor={colors.gray400} />
-            <Text style={styles.metaText}>
-              {group.memberCount} {group.memberCount === 1 ? "Mitglied" : "Mitglieder"} \u00b7{" "}
-              {getVisibilityLabel()}
-            </Text>
+
+          {/* Info Widgets */}
+          <View style={styles.widgetRow}>
+            {(group.city || group.county) && (
+              <View style={styles.widget}>
+                <SymbolView name="mappin" size={12} tintColor={colors.gray500} />
+                <Text style={styles.widgetText}>{group.city || group.county}</Text>
+              </View>
+            )}
+            {group.topic && (
+              <View style={styles.widget}>
+                <SymbolView name="tag" size={12} tintColor={colors.gray500} />
+                <Text style={styles.widgetText}>{group.topic}</Text>
+              </View>
+            )}
+            <View style={styles.widget}>
+              <SymbolView name="person.2" size={12} tintColor={colors.gray500} />
+              <Text style={styles.widgetText}>
+                {group.memberCount} {group.memberCount === 1 ? "Mitglied" : "Mitglieder"}
+              </Text>
+            </View>
+            <View style={[styles.widget, group.visibility === "public" ? styles.widgetPublic : styles.widgetPrivate]}>
+              <SymbolView
+                name={group.visibility === "public" ? "globe" : "lock"}
+                size={12}
+                tintColor={group.visibility === "public" ? "#1a8d1a" : colors.gray500}
+              />
+              <Text style={[styles.widgetText, group.visibility === "public" && styles.widgetTextPublic]}>
+                {getVisibilityLabel()}
+              </Text>
+            </View>
           </View>
 
           {group.description && (
@@ -274,8 +293,27 @@ const styles = StyleSheet.create({
     color: colors.black,
     letterSpacing: -0.4,
   },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
-  metaText: { fontSize: 14, color: colors.gray500, flex: 1 },
+  widgetRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  widget: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderCurve: "continuous",
+  },
+  widgetPublic: {
+    backgroundColor: "rgba(34,170,34,0.08)",
+    borderColor: "rgba(34,170,34,0.2)",
+  },
+  widgetPrivate: {},
+  widgetText: { fontSize: 13, color: colors.gray600, fontWeight: "500" },
+  widgetTextPublic: { color: "#1a8d1a" },
+
   desc: {
     fontSize: 15,
     color: colors.gray600,
