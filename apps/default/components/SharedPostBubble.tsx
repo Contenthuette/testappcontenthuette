@@ -60,7 +60,6 @@ const thumbStyles = StyleSheet.create({
   videoContainer: {
     width: "100%",
     aspectRatio: 3 / 4,
-    borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#1a1a1a",
   },
