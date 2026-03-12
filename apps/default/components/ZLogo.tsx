@@ -1,44 +1,28 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { colors } from "@/lib/theme";
+import { View, StyleSheet } from "react-native";
+import { Image } from "expo-image";
+
+const Z_LOGO = require("../../../assets/images/z-lgo-1xaccc.png");
 
 interface ZLogoProps {
   size?: number;
-  color?: string;
-  withBackground?: boolean;
 }
 
-export function ZLogo({ size = 32, color = colors.black, withBackground = false }: ZLogoProps) {
-  if (withBackground) {
-    return (
-      <View style={[
-        styles.bgContainer,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.28,
-          backgroundColor: color,
-        },
-      ]}>
-        <Text style={[
-          styles.text,
-          { fontSize: size * 0.52, color: color === colors.black ? colors.white : colors.black },
-        ]}>Z</Text>
-      </View>
-    );
-  }
+export function ZLogo({ size = 32 }: ZLogoProps) {
   return (
-    <Text style={[styles.text, { fontSize: size * 0.65, color }]}>Z</Text>
+    <View style={{ width: size, height: size }}>
+      <Image
+        source={Z_LOGO}
+        style={styles.image}
+        contentFit="contain"
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bgContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  text: {
-    fontWeight: "900",
-    letterSpacing: -1,
+  image: {
+    width: "100%",
+    height: "100%",
   },
 });

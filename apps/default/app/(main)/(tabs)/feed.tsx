@@ -67,7 +67,7 @@ export default function FeedScreen() {
   const renderAnnouncement = (item: NonNullable<typeof feed>[number]) => (
     <View style={styles.announcementCard} key={item._id}>
       <View style={styles.announcementHeader}>
-        <ZLogo size={28} withBackground color={colors.white} />
+        <ZLogo size={28} />
         <View style={{ flex: 1 }}>
           <Text style={styles.announcementTitle}>Z Announcement</Text>
           <Text style={styles.announcementSub}>Offiziell</Text>
