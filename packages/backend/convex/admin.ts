@@ -43,6 +43,8 @@ export const getAdminDashboard = authQuery({
     newMembersMonth: v.number(),
     ticketRevenueTotal: v.number(),
     ticketRevenueMonth: v.number(),
+    subscriptionRevenueMonthly: v.number(),
+    subscriptionRevenueTotal: v.number(),
     activeToday: v.number(),
     activeWeek: v.number(),
     photosToday: v.number(),
@@ -54,6 +56,21 @@ export const getAdminDashboard = authQuery({
     totalGroups: v.number(),
     totalEvents: v.number(),
     totalPosts: v.number(),
+    ticketRevenuePerEvent: v.array(
+      v.object({
+        eventName: v.string(),
+        revenue: v.number(),
+        soldTickets: v.number(),
+        totalTickets: v.number(),
+        currency: v.string(),
+      }),
+    ),
+    postsByDay: v.array(
+      v.object({ label: v.string(), photos: v.number(), videos: v.number() }),
+    ),
+    userGrowthByDay: v.array(
+      v.object({ label: v.string(), count: v.number() }),
+    ),
   }),
   handler: async (ctx) => {
     await requireAdmin(ctx);
@@ -72,7 +89,14 @@ export const getAdminDashboard = authQuery({
       (u) => u.subscriptionStatus === "canceled",
     ).length;
 
-    /* revenue */
+    /* subscription revenue */
+    const ABO_PRICE = 5.99;
+    const subscriptionRevenueMonthly = activeSubscriptions * ABO_PRICE;
+    const subscriptionRevenueTotal = users.filter(
+      (u) => u.subscriptionStatus === "active" || u.subscriptionStatus === "canceled",
+    ).length * ABO_PRICE;
+
+    /* ticket revenue total + monthly */
     let ticketRevenueTotal = 0;
     let ticketRevenueMonth = 0;
     for (const t of tickets) {
@@ -80,6 +104,56 @@ export const getAdminDashboard = authQuery({
       if (!ev) continue;
       ticketRevenueTotal += ev.ticketPrice;
       if (t.purchasedAt > now - MONTH) ticketRevenueMonth += ev.ticketPrice;
+    }
+
+    /* ticket revenue per event */
+    const ticketRevenuePerEvent = events.map((ev) => {
+      const evTickets = tickets.filter((t) => t.eventId === ev._id);
+      return {
+        eventName: ev.name,
+        revenue: evTickets.length * ev.ticketPrice,
+        soldTickets: ev.soldTickets,
+        totalTickets: ev.totalTickets,
+        currency: ev.currency,
+      };
+    });
+
+    /* posts by day (last 7 days) */
+    const postsByDay: Array<{ label: string; photos: number; videos: number }> = [];
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = now - i * DAY;
+      const dayEnd = dayStart + DAY;
+      const dayLabel = new Date(dayStart).toLocaleDateString("de-DE", {
+        weekday: "short",
+      });
+      const photos = posts.filter(
+        (p) => p.type === "photo" && p.createdAt >= dayStart - 6 * DAY && p.createdAt < dayEnd - 6 * DAY + DAY,
+      ).length;
+      const videos = posts.filter(
+        (p) => p.type === "video" && p.createdAt >= dayStart - 6 * DAY && p.createdAt < dayEnd - 6 * DAY + DAY,
+      ).length;
+      // Recalculate properly
+      const dStart = now - (i + 1) * DAY;
+      const dEnd = now - i * DAY;
+      postsByDay.push({
+        label: dayLabel,
+        photos: posts.filter((p) => p.type === "photo" && p.createdAt >= dStart && p.createdAt < dEnd).length,
+        videos: posts.filter((p) => p.type === "video" && p.createdAt >= dStart && p.createdAt < dEnd).length,
+      });
+    }
+
+    /* user growth by day (last 7 days) */
+    const userGrowthByDay: Array<{ label: string; count: number }> = [];
+    for (let i = 6; i >= 0; i--) {
+      const dStart = now - (i + 1) * DAY;
+      const dEnd = now - i * DAY;
+      const dayLabel = new Date(dStart).toLocaleDateString("de-DE", {
+        weekday: "short",
+      });
+      userGrowthByDay.push({
+        label: dayLabel,
+        count: users.filter((u) => u.createdAt >= dStart && u.createdAt < dEnd).length,
+      });
     }
 
     return {
@@ -90,6 +164,8 @@ export const getAdminDashboard = authQuery({
       newMembersMonth: users.filter((u) => u.createdAt > now - MONTH).length,
       ticketRevenueTotal,
       ticketRevenueMonth,
+      subscriptionRevenueMonthly,
+      subscriptionRevenueTotal,
       activeToday: users.filter(
         (u) => u.lastActiveAt != null && u.lastActiveAt > now - DAY,
       ).length,
@@ -117,6 +193,9 @@ export const getAdminDashboard = authQuery({
       totalGroups: groups.length,
       totalEvents: events.length,
       totalPosts: posts.length,
+      ticketRevenuePerEvent,
+      postsByDay,
+      userGrowthByDay,
     };
   },
 });
