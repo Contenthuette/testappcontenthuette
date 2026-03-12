@@ -88,20 +88,20 @@ export default function GroupDetailScreen() {
 
           {/* Info Widgets */}
           <View style={styles.widgetRow}>
+            {group.topic && (
+              <View style={[styles.widget, styles.widgetPrimary]}>
+                <SymbolView name="tag" size={12} tintColor="#fff" />
+                <Text style={[styles.widgetText, styles.widgetTextPrimary]}>{group.topic}</Text>
+              </View>
+            )}
             {(group.city || group.county) && (
               <View style={styles.widget}>
-                <SymbolView name="mappin" size={12} tintColor={colors.gray500} />
+                <SymbolView name="mappin" size={12} tintColor={colors.gray400} />
                 <Text style={styles.widgetText}>{group.city || group.county}</Text>
               </View>
             )}
-            {group.topic && (
-              <View style={styles.widget}>
-                <SymbolView name="tag" size={12} tintColor={colors.gray500} />
-                <Text style={styles.widgetText}>{group.topic}</Text>
-              </View>
-            )}
             <View style={styles.widget}>
-              <SymbolView name="person.2" size={12} tintColor={colors.gray500} />
+              <SymbolView name="person.2" size={12} tintColor={colors.gray400} />
               <Text style={styles.widgetText}>
                 {group.memberCount} {group.memberCount === 1 ? "Mitglied" : "Mitglieder"}
               </Text>
@@ -110,7 +110,7 @@ export default function GroupDetailScreen() {
               <SymbolView
                 name={group.visibility === "public" ? "globe" : "lock"}
                 size={12}
-                tintColor={group.visibility === "public" ? "#1a8d1a" : colors.gray500}
+                tintColor={group.visibility === "public" ? "#1a8d1a" : colors.gray400}
               />
               <Text style={[styles.widgetText, group.visibility === "public" && styles.widgetTextPublic]}>
                 {getVisibilityLabel()}
@@ -301,17 +301,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: colors.gray100,
+    backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: colors.gray200,
     borderCurve: "continuous",
+  },
+  widgetPrimary: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
   },
   widgetPublic: {
     backgroundColor: "rgba(34,170,34,0.08)",
     borderColor: "rgba(34,170,34,0.2)",
   },
   widgetPrivate: {},
-  widgetText: { fontSize: 13, color: colors.gray600, fontWeight: "500" },
+  widgetText: { fontSize: 13, color: colors.gray400, fontWeight: "500" },
+  widgetTextPrimary: { color: "#fff", fontWeight: "600" },
   widgetTextPublic: { color: "#1a8d1a" },
 
   desc: {
