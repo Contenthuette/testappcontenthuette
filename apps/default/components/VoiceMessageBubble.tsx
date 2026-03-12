@@ -1,192 +1,137 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { Audio } from "expo-audio";
-import { colors, spacing } from "@/lib/theme";
-import { SymbolView } from "@/components/Icon";
+import { useAudioPlayer } from "expo-audio";
+import { Icon } from "@/components/Icon";
 
 interface VoiceMessageBubbleProps {
-  audioUrl: string | null;
-  durationMs?: number;
-  isMine: boolean;
-  timestamp: string;
+  audioUrl: string;
+  duration?: number;
+  isMe: boolean;
 }
 
-export function VoiceMessageBubble({
-  audioUrl,
-  durationMs,
-  isMine,
-  timestamp,
-}: VoiceMessageBubbleProps) {
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export function VoiceMessageBubble({ audioUrl, duration = 0, isMe }: VoiceMessageBubbleProps) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const playerRef = useRef<Audio.AudioPlayer | null>(null);
-  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const player = useAudioPlayer(audioUrl);
 
-  const totalSeconds = durationMs ? Math.round(durationMs / 1000) : 0;
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const handlePlay = useCallback(async () => {
-    if (!audioUrl) return;
-
-    if (isPlaying && playerRef.current) {
-      playerRef.current.pause();
-      setIsPlaying(false);
-      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-      return;
-    }
-
-    try {
-      if (playerRef.current) {
-        playerRef.current.release();
+  useEffect(() => {
+    if (!player) return;
+    const sub = player.addListener("playbackStatusUpdate", (status) => {
+      if (status.playing) {
+        setCurrentTime(status.currentTime);
+        setIsPlaying(true);
+      } else {
+        setIsPlaying(false);
       }
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      }
+    });
+    return () => sub.remove();
+  }, [player]);
 
-      const player = Audio.createAudioPlayer({ uri: audioUrl });
-      playerRef.current = player;
-      setIsPlaying(true);
-      setProgress(0);
+  const togglePlay = useCallback(() => {
+    if (!player) return;
+    if (isPlaying) {
+      player.pause();
+    } else {
+      if (currentTime >= (duration || 0)) {
+        player.seekTo(0);
+      }
       player.play();
-
-      const totalMs = durationMs || 3000;
-      const startTime = Date.now();
-      progressTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const p = Math.min(elapsed / totalMs, 1);
-        setProgress(p);
-        if (p >= 1) {
-          setIsPlaying(false);
-          setProgress(0);
-          if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-        }
-      }, 100);
-    } catch (err) {
-      console.error("Failed to play audio", err);
-      setIsPlaying(false);
     }
-  }, [audioUrl, durationMs, isPlaying]);
+  }, [player, isPlaying, currentTime, duration]);
 
-  // Random but deterministic-looking waveform bars
-  const barHeights = React.useMemo(() => {
-    const heights: number[] = [];
-    for (let i = 0; i < 28; i++) {
-      heights.push(4 + Math.sin(i * 0.7) * 8 + Math.cos(i * 1.3) * 6);
-    }
-    return heights;
-  }, []);
+  const progress = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
+  const displayTime = isPlaying ? formatTime(currentTime) : formatTime(duration);
+
+  // Waveform bars
+  const bars = Array.from({ length: 24 }, (_, i) => {
+    const h = 8 + Math.sin(i * 0.8) * 6 + Math.random() * 4;
+    return Math.max(4, Math.min(20, h));
+  });
 
   return (
-    <View style={[styles.container, isMine ? styles.mine : styles.other]}>
-      <View style={styles.row}>
-        <TouchableOpacity onPress={handlePlay} style={[styles.playBtn, isMine ? styles.playBtnMine : styles.playBtnOther]}>
-          <SymbolView
-            name={isPlaying ? "pause" : "play"}
-            size={14}
-            tintColor={isMine ? colors.black : colors.white}
-          />
-        </TouchableOpacity>
+    <View style={[styles.container, isMe ? styles.meContainer : styles.otherContainer]}>
+      <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
+        <Icon name={isPlaying ? "pause" : "play"} size={18} color={isMe ? "#FFFFFF" : "#000000"} />
+      </TouchableOpacity>
 
-        <View style={styles.waveContainer}>
-          {barHeights.map((h, i) => {
-            const filled = progress > i / barHeights.length;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.bar,
-                  {
-                    height: h,
-                    backgroundColor: filled
-                      ? isMine
-                        ? colors.white
-                        : colors.black
-                      : isMine
-                        ? "rgba(255,255,255,0.35)"
-                        : colors.gray300,
-                  },
-                ]}
-              />
-            );
-          })}
+      <View style={styles.waveContainer}>
+        <View style={styles.bars}>
+          {bars.map((h, i) => (
+            <View
+              key={`bar-${i}`}
+              style={[
+                styles.bar,
+                {
+                  height: h,
+                  backgroundColor: i / bars.length <= progress
+                    ? (isMe ? "#FFFFFF" : "#000000")
+                    : (isMe ? "rgba(255,255,255,0.35)" : "#D4D4D8"),
+                },
+              ]}
+            />
+          ))}
         </View>
       </View>
 
-      <View style={styles.bottomRow}>
-        <Text style={[styles.duration, isMine && styles.durationMine]}>
-          {formatTime(totalSeconds)}
-        </Text>
-        <Text style={[styles.time, isMine && styles.timeMine]}>{timestamp}</Text>
-      </View>
+      <Text style={[styles.time, { color: isMe ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
+        {displayTime}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 20,
+    gap: 10,
     minWidth: 200,
     maxWidth: 280,
   },
-  mine: {
-    backgroundColor: colors.black,
-    borderBottomRightRadius: 6,
+  meContainer: {
+    backgroundColor: "#000000",
   },
-  other: {
-    backgroundColor: colors.gray100,
-    borderBottomLeftRadius: 6,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
+  otherContainer: {
+    backgroundColor: "#F4F4F5",
   },
   playBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: "rgba(128,128,128,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
-  playBtnMine: {
-    backgroundColor: colors.white,
-  },
-  playBtnOther: {
-    backgroundColor: colors.black,
-  },
   waveContainer: {
     flex: 1,
+    justifyContent: "center",
+  },
+  bars: {
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
-    height: 28,
+    height: 24,
   },
   bar: {
     width: 3,
-    borderRadius: 1.5,
-  },
-  bottomRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  duration: {
-    fontSize: 12,
-    color: colors.gray500,
-    fontVariant: ["tabular-nums"],
-  },
-  durationMine: {
-    color: "rgba(255,255,255,0.6)",
+    borderRadius: 2,
   },
   time: {
-    fontSize: 10,
-    color: colors.gray400,
-  },
-  timeMine: {
-    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontWeight: "500",
+    fontVariant: ["tabular-nums"],
   },
 });
