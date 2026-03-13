@@ -12,7 +12,6 @@ import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
-import { VideoThumbnail } from "@/components/VideoThumbnail";
 
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -127,16 +126,15 @@ export default function ProfileScreen() {
                 onPress={() => router.push({ pathname: "/(main)/post-detail", params: { postId: post._id } })}
                 activeOpacity={0.85}
               >
-                {post.mediaUrl ? (
-                  post.type === "video" ? (
-                    <VideoThumbnail
-                      uri={post.mediaUrl}
-                      showPlayIcon={true}
-                      playIconSize={20}
-                    />
-                  ) : (
-                    <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} contentFit="cover" transition={200} />
-                  )
+                {post.type === "video" ? (
+                  <View style={styles.videoCell}>
+                    <SymbolView name="video.fill" size={22} tintColor="rgba(255,255,255,0.7)" />
+                    <View style={styles.videoPlayBadge}>
+                      <SymbolView name="play.fill" size={10} tintColor="#fff" />
+                    </View>
+                  </View>
+                ) : post.mediaUrl ? (
+                  <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} contentFit="cover" transition={200} />
                 ) : (
                   <View style={styles.gridPlaceholder}>
                     <SymbolView name="text.quote" size={18} tintColor={colors.gray300} />
@@ -286,4 +284,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   adminBtnText: { fontSize: 15, fontWeight: "600", color: colors.white },
+
+  videoCell: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#1a1a1a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoPlayBadge: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
