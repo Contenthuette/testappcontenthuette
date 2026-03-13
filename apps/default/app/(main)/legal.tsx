@@ -1,23 +1,151 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 
-const CONTENT: Record<string, { title: string; text: string }> = {
+/* ─── Structured legal content ─── */
+
+interface Section {
+  heading?: string;
+  body: string;
+}
+
+interface LegalPage {
+  title: string;
+  sections: Section[];
+}
+
+const CONTENT: Record<string, LegalPage> = {
   imprint: {
     title: "Impressum",
-    text: "Z Social\nApp f\u00fcr Mecklenburg-Vorpommern\n\nKontakt: live@z-social.com\n\nVerantwortlich f\u00fcr den Inhalt nach \u00a7 55 Abs. 2 RStV:\nZ Social UG\nSchwerin, Deutschland\n\nRegistergericht: Amtsgericht Schwerin\nUSt-IdNr.: DE[pending]\n\nHaftungshinweis: Trotz sorgf\u00e4ltiger inhaltlicher Kontrolle \u00fcbernehmen wir keine Haftung f\u00fcr die Inhalte externer Links. F\u00fcr den Inhalt der verlinkten Seiten sind ausschlie\u00dflich deren Betreiber verantwortlich.",
+    sections: [
+      {
+        heading: "Angaben gemäß § 5 TMG",
+        body: "Leif Dunkelmann\nc/o MDC Management #4560\nWelserstraße 3\n87463 Dietmannsried\nDeutschland",
+      },
+      {
+        heading: "E-Mail",
+        body: "leif@z-social.com",
+      },
+      {
+        heading: "Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV",
+        body: "Leif Dunkelmann\nc/o MDC Management #4560\nWelserstraße 3\n87463 Dietmannsried",
+      },
+    ],
   },
+
   privacy: {
-    title: "Datenschutzerkl\u00e4rung",
-    text: "Datenschutz\n\nDie Betreiber dieser App nehmen den Schutz Ihrer pers\u00f6nlichen Daten sehr ernst. Wir behandeln Ihre personenbezogenen Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften sowie dieser Datenschutzerkl\u00e4rung.\n\nDatenerhebung:\n\u2022 Registrierungsdaten (Name, E-Mail)\n\u2022 Profilinformationen\n\u2022 Nutzungsdaten\n\u2022 Standortdaten (wenn erlaubt)\n\nDatenverarbeitung:\nIhre Daten werden zur Bereitstellung der App-Funktionen verarbeitet und nicht an Dritte verkauft.\n\nIhre Rechte:\n\u2022 Auskunft\n\u2022 Berichtigung\n\u2022 L\u00f6schung\n\u2022 Einschr\u00e4nkung der Verarbeitung\n\u2022 Daten\u00fcbertragbarkeit\n\u2022 Widerspruch\n\nKontakt: live@z-social.com",
+    title: "Datenschutzerklärung",
+    sections: [
+      {
+        heading: "1. Allgemeine Hinweise",
+        body: "Der Schutz Ihrer persönlichen Daten ist uns ein wichtiges Anliegen. In dieser Datenschutzerklärung informieren wir Sie darüber, welche Daten bei der Nutzung der Z App erhoben, verarbeitet und gespeichert werden.\n\nDie Verarbeitung Ihrer personenbezogenen Daten erfolgt gemäß den geltenden Datenschutzvorschriften, insbesondere der Datenschutz-Grundverordnung (DSGVO).",
+      },
+      {
+        heading: "2. Verantwortlicher",
+        body: "Verantwortlicher für die Datenverarbeitung:\n\nLeif Dunkelmann\nc/o MDC Management #4560\nWelserstraße 3\n87463 Dietmannsried\nDeutschland\n\nE-Mail: leif@z-social.com",
+      },
+      {
+        heading: "3. Daten, die bei der Nutzung der App erhoben werden",
+        body: "Bei der Nutzung der Z App können folgende Daten erhoben werden:",
+      },
+      {
+        heading: "Registrierungsdaten",
+        body: "Bei der Erstellung eines Accounts:\n\n• E-Mail-Adresse\n• Benutzername\n• Profilbild\n• Standort (z. B. Stadt oder Landkreis)\n• Ausgewählte Interessen\n\nDiese Daten sind erforderlich, um Ihr Nutzerkonto zu erstellen und Ihnen die Nutzung der App zu ermöglichen.",
+      },
+      {
+        heading: "Profildaten",
+        body: "Innerhalb Ihres Profils können freiwillig weitere Angaben gemacht werden:\n\n• Profilbild\n• Bannerbild\n• Interessen\n• Beiträge\n• Gruppenmitgliedschaften\n\nDiese Informationen sind für andere Nutzer der App sichtbar, sofern Sie diese veröffentlichen.",
+      },
+      {
+        heading: "Nutzungsdaten",
+        body: "Bei der Nutzung der App werden technische Daten erhoben, z. B.:\n\n• App-Aktivität\n• Interaktionen mit Beiträgen\n• Gruppenbeitritte\n• Chat-Nutzung\n• Eventteilnahmen\n• Hochgeladene Inhalte\n\nDiese Daten dienen der Verbesserung der Funktionalität und Sicherheit der App.",
+      },
+      {
+        heading: "Medieninhalte",
+        body: "Wenn Sie Inhalte hochladen, werden folgende Daten verarbeitet:\n\n• Fotos\n• Videos\n• Profilbilder\n• Gruppen-Thumbnails\n\nDiese Inhalte werden gespeichert, um sie innerhalb der Community anzuzeigen.",
+      },
+      {
+        heading: "Kommunikationsdaten",
+        body: "Wenn Sie Chatfunktionen nutzen:\n\n• Nachrichten\n• Sprachnachrichten\n• Gesendete Medien\n\nDiese Daten werden verarbeitet, um die Kommunikation zwischen Nutzern zu ermöglichen.",
+      },
+      {
+        heading: "Event- und Ticketdaten",
+        body: "Wenn Sie an Events teilnehmen oder Tickets kaufen:\n\n• Ticketkäufe\n• Eventteilnahmen\n• QR-Codes zur Eventverifikation\n\nDiese Daten werden verarbeitet, um Events zu organisieren und den Zugang zu Veranstaltungen zu ermöglichen.",
+      },
+      {
+        heading: "4. Zahlungsabwicklung",
+        body: "Für die Abwicklung von Zahlungen (z. B. App-Abonnements oder Eventtickets) nutzen wir externe Zahlungsanbieter wie:\n\n• Stripe\n• Apple Pay\n• Google Pay\n\nBei einer Zahlung werden Zahlungsdaten direkt an den jeweiligen Zahlungsanbieter übermittelt. Die Verarbeitung erfolgt gemäß den Datenschutzbestimmungen des jeweiligen Anbieters.",
+      },
+      {
+        heading: "5. Push-Benachrichtigungen",
+        body: "Die Z App kann Push-Benachrichtigungen senden, z. B. bei:\n\n• Neuen Nachrichten\n• Gruppenaktivitäten\n• Event-Erinnerungen\n• App-Ankündigungen\n\nPush-Benachrichtigungen können jederzeit in den Geräteeinstellungen deaktiviert werden.",
+      },
+      {
+        heading: "6. Verwendung von Standortdaten",
+        body: "Die App kann Standortinformationen verwenden, um:\n\n• Gruppen in Ihrer Nähe anzuzeigen\n• Lokale Events anzuzeigen\n• Inhalte regional zu filtern\n\nDie Nutzung dieser Daten erfolgt ausschließlich zur Bereitstellung der App-Funktionen.",
+      },
+      {
+        heading: "7. Weitergabe von Daten",
+        body: "Eine Weitergabe Ihrer personenbezogenen Daten erfolgt nur:\n\n• Wenn dies zur Erfüllung der App-Funktionen notwendig ist\n• Wenn gesetzliche Verpflichtungen bestehen\n• Wenn Sie ausdrücklich eingewilligt haben\n\nEine kommerzielle Weitergabe Ihrer Daten an Dritte findet nicht statt.",
+      },
+      {
+        heading: "8. Speicherung der Daten",
+        body: "Ihre Daten werden nur so lange gespeichert, wie dies für den Betrieb der App erforderlich ist.\n\nBei Löschung Ihres Accounts werden Ihre personenbezogenen Daten grundsätzlich gelöscht, sofern keine gesetzlichen Aufbewahrungspflichten bestehen.",
+      },
+      {
+        heading: "9. Rechte der Nutzer",
+        body: "Sie haben das Recht:\n\n• Auskunft über Ihre gespeicherten Daten zu erhalten\n• Die Berichtigung falscher Daten zu verlangen\n• Die Löschung Ihrer Daten zu verlangen\n• Die Einschränkung der Verarbeitung zu verlangen\n• Der Datenverarbeitung zu widersprechen\n• Ihre Daten übertragen zu lassen\n\nAnfragen können jederzeit an folgende E-Mail-Adresse gestellt werden:\nleif@z-social.com",
+      },
+      {
+        heading: "10. Datensicherheit",
+        body: "Wir setzen technische und organisatorische Sicherheitsmaßnahmen ein, um Ihre Daten vor Verlust, Manipulation oder unberechtigtem Zugriff zu schützen.",
+      },
+      {
+        heading: "11. Änderungen dieser Datenschutzerklärung",
+        body: "Wir behalten uns vor, diese Datenschutzerklärung anzupassen, wenn neue Funktionen der App dies erforderlich machen.\n\nDie jeweils aktuelle Version ist jederzeit innerhalb der App einsehbar.",
+      },
+      {
+        heading: "12. Kontakt",
+        body: "Bei Fragen zum Datenschutz können Sie uns jederzeit kontaktieren:\n\nleif@z-social.com",
+      },
+    ],
   },
+
   terms: {
     title: "AGB",
-    text: "Allgemeine Gesch\u00e4ftsbedingungen\n\n1. Geltungsbereich\nDiese AGB gelten f\u00fcr die Nutzung der Z App.\n\n2. Registrierung\nDie Nutzung setzt eine Registrierung und ein aktives Abonnement voraus.\n\n3. Nutzungsbedingungen\n\u2022 Respektvoller Umgang\n\u2022 Keine rechtswidrigen Inhalte\n\u2022 Keine Spam-Nachrichten\n\u2022 Keine Manipulation der App\n\n4. Abonnement\n\u2022 Monatlich oder j\u00e4hrlich k\u00fcndbar\n\u2022 K\u00fcndigung jederzeit m\u00f6glich\n\u2022 Keine R\u00fcckerstattung f\u00fcr angebrochene Zeitr\u00e4ume\n\n5. Haftung\nWir haften nicht f\u00fcr nutzergenerierte Inhalte.\n\n6. Sperrung\nBei Versto\u00df gegen diese AGB kann das Konto gesperrt werden.\n\nKontakt: live@z-social.com",
+    sections: [
+      {
+        heading: "1. Geltungsbereich",
+        body: "Diese AGB gelten für die Nutzung der Z App.",
+      },
+      {
+        heading: "2. Registrierung",
+        body: "Die Nutzung setzt eine Registrierung und ein aktives Abonnement voraus.",
+      },
+      {
+        heading: "3. Nutzungsbedingungen",
+        body: "• Respektvoller Umgang\n• Keine rechtswidrigen Inhalte\n• Keine Spam-Nachrichten\n• Keine Manipulation der App",
+      },
+      {
+        heading: "4. Abonnement",
+        body: "• Monatlich oder jährlich kündbar\n• Kündigung jederzeit möglich\n• Keine Rückerstattung für angebrochene Zeiträume",
+      },
+      {
+        heading: "5. Haftung",
+        body: "Wir haften nicht für nutzergenerierte Inhalte.",
+      },
+      {
+        heading: "6. Sperrung",
+        body: "Bei Verstoß gegen diese AGB kann das Konto gesperrt werden.",
+      },
+      {
+        body: "Kontakt: leif@z-social.com",
+      },
+    ],
   },
 };
 
@@ -27,14 +155,35 @@ export default function LegalScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => safeBack("legal")} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeBack("legal")} style={styles.backBtn} hitSlop={12}>
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.title}>{page.title}</Text>
+        <Text style={styles.headerTitle}>{page.title}</Text>
+        <View style={{ width: 36 }} />
       </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.body}>{page.text}</Text>
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Page title */}
+        <Text style={styles.pageTitle}>{page.title} – Z App</Text>
+
+        {page.sections.map((section, i) => (
+          <View key={i} style={styles.section}>
+            {section.heading && (
+              <Text style={styles.sectionHeading}>{section.heading}</Text>
+            )}
+            <Text style={styles.body}>{section.body}</Text>
+          </View>
+        ))}
+
+        <View style={styles.footer}>
+          <View style={styles.divider} />
+          <Text style={styles.footerText}>Z App · {new Date().getFullYear()}</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -42,9 +191,60 @@ export default function LegalScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
-  backBtn: { padding: spacing.xs },
-  title: { fontSize: 22, fontWeight: "700", color: colors.black },
-  scroll: { paddingHorizontal: spacing.xl, paddingBottom: 40 },
-  body: { fontSize: 15, color: colors.gray700, lineHeight: 24 },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  backBtn: { width: 36, height: 36, justifyContent: "center" },
+  headerTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
+
+  scroll: { paddingHorizontal: spacing.xl, paddingBottom: 60 },
+
+  pageTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.black,
+    letterSpacing: -0.5,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
+  },
+
+  section: {
+    marginTop: spacing.xl,
+  },
+  sectionHeading: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: colors.black,
+    marginBottom: spacing.sm,
+    letterSpacing: -0.2,
+  },
+  body: {
+    fontSize: 15,
+    color: colors.gray700,
+    lineHeight: 24,
+    letterSpacing: -0.1,
+  },
+
+  footer: {
+    marginTop: spacing.xxxl,
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  divider: {
+    width: 40,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.gray200,
+  },
+  footerText: {
+    fontSize: 12,
+    color: colors.gray400,
+  },
 });
