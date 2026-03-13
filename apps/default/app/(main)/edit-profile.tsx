@@ -20,11 +20,13 @@ import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 import { INTERESTS } from "@/lib/constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function EditProfileScreen() {
   const me = useQuery(api.users.me);
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateUploadUrl);
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -153,7 +155,7 @@ export default function EditProfileScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => safeBack("edit-profile")}
           style={styles.headerBtn}
@@ -389,7 +391,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,

@@ -21,6 +21,7 @@ import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 import { INTERESTS } from "@/lib/constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type GroupVisibility = "public" | "request";
 
@@ -28,6 +29,7 @@ export default function CreateGroupScreen() {
   const router = useRouter();
   const createGroup = useMutation(api.groups.create);
   const generateUploadUrl = useMutation(api.groups.generateUploadUrl);
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -112,7 +114,7 @@ export default function CreateGroupScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => safeBack("create-group")}
           style={styles.headerBtn}
@@ -358,7 +360,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,

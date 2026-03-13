@@ -21,12 +21,14 @@ import { safeBack } from "@/lib/navigation";
 import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function EditGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
   const updateGroup = useMutation(api.groups.update);
   const generateUploadUrl = useMutation(api.groups.generateUploadUrl);
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -115,7 +117,7 @@ export default function EditGroupScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => safeBack("edit-group")}
           style={styles.headerBtn}
@@ -261,7 +263,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,

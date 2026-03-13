@@ -23,6 +23,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type PostType = "photo" | "video";
 type AspectMode = "original" | "cropped";
@@ -35,10 +36,11 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
 const FEED_ASPECT = 3 / 4; // 3:4 portrait
 
 export default function CreatePostScreen() {
-  const { type } = useLocalSearchParams<{ type?: string }>();
+  const { type } = useLocalSearchParams<{ type: string }>();
   const postType: PostType = type === "video" ? "video" : "photo";
   const config = typeConfig[postType];
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
   const createPost = useMutation(api.posts.create);
@@ -338,7 +340,7 @@ export default function CreatePostScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => safeBack("create-post")} style={styles.headerBtn}>
           <Icon name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
@@ -410,7 +412,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,
