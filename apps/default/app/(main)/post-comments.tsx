@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Platform, ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -18,44 +18,60 @@ export default function PostCommentsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState("");
+  const inputRef = useRef<TextInput>(null);
+
   const me = useQuery(api.users.me);
+  const meId = me?._id;
+
   const comments = useQuery(
     api.posts.getComments,
-    id ? { postId: id as Id<"posts">, currentUserId: me?._id } : "skip"
+    id ? { postId: id as Id<"posts">, currentUserId: meId ?? undefined } : "skip"
   );
   const addComment = useMutation(api.posts.addComment);
   const toggleCommentLike = useMutation(api.posts.toggleCommentLike);
 
   const handleSend = async () => {
-    if (!text.trim() || !id) return;
     const msg = text.trim();
+    if (!msg || !id) return;
     setText("");
-    await addComment({ postId: id as Id<"posts">, text: msg });
+    Keyboard.dismiss();
+    try {
+      await addComment({ postId: id as Id<"posts">, text: msg });
+    } catch (e) {
+      console.error("Failed to add comment", e);
+    }
   };
 
   const handleToggleLike = async (commentId: Id<"comments">) => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    await toggleCommentLike({ commentId });
+    try {
+      await toggleCommentLike({ commentId });
+    } catch (e) {
+      console.error("Failed to toggle like", e);
+    }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Grabber handle */}
-      <View style={styles.grabberRow}>
-        <View style={styles.grabber} />
-      </View>
-
-      {/* Header */}
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header with close button */}
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => router.back()}
+          hitSlop={12}
+        >
+          <SymbolView name="chevron.down" size={20} tintColor={colors.black} />
+        </TouchableOpacity>
         <Text style={styles.title}>Kommentare</Text>
+        <View style={styles.closePlaceholder} />
       </View>
 
       {/* Comments list */}
       <FlatList
-        style={styles.listFlex}
-        data={comments}
+        style={styles.list}
+        data={comments ?? []}
         keyExtractor={item => item._id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -91,7 +107,9 @@ export default function PostCommentsScreen() {
         )}
         ListEmptyComponent={
           comments === undefined ? (
-            <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+            <View style={styles.emptyWrap}>
+              <ActivityIndicator color={colors.gray300} />
+            </View>
           ) : (
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>Noch keine Kommentare</Text>
@@ -102,29 +120,28 @@ export default function PostCommentsScreen() {
       />
 
       {/* Input bar */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-      >
-        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-          <TextInput
-            style={styles.input}
-            placeholder="Kommentar schreiben..."
-            placeholderTextColor={colors.gray400}
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={1000}
-          />
-          {text.trim().length > 0 && (
-            <TouchableOpacity onPress={handleSend} hitSlop={8}>
-              <View style={styles.sendBtn}>
-                <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+        <TextInput
+          ref={inputRef}
+          style={styles.input}
+          placeholder="Kommentar schreiben..."
+          placeholderTextColor={colors.gray400}
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={1000}
+          returnKeyType="send"
+          onSubmitEditing={handleSend}
+          blurOnSubmit={false}
+        />
+        {text.trim().length > 0 && (
+          <TouchableOpacity onPress={handleSend} hitSlop={8}>
+            <View style={styles.sendBtn}>
+              <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -144,41 +161,52 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
-  grabberRow: {
-    alignItems: "center",
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  grabber: {
-    width: 36,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.gray300,
-  },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
-    paddingVertical: spacing.sm,
-    paddingBottom: spacing.md,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closePlaceholder: {
+    width: 36,
   },
   title: {
     fontSize: 16,
     fontWeight: "600",
     color: colors.black,
-    textAlign: "center",
   },
-  listFlex: {
+  list: {
     flex: 1,
   },
   listContent: {
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
-  loadingWrap: { paddingVertical: 40, alignItems: "center" },
-  emptyWrap: { alignItems: "center", paddingVertical: 48 },
-  emptyText: { fontSize: 15, fontWeight: "600", color: colors.gray500 },
-  emptySub: { fontSize: 13, color: colors.gray400, marginTop: 4 },
-
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: colors.gray400,
+    marginTop: 4,
+  },
   commentRow: {
     flexDirection: "row",
     paddingHorizontal: spacing.xl,
@@ -186,22 +214,39 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     alignItems: "flex-start",
   },
-  commentBody: { flex: 1 },
-  commentAuthor: { fontSize: 14, fontWeight: "600", color: colors.black },
-  commentText: { fontSize: 14, color: colors.gray700, lineHeight: 20, marginTop: 2 },
+  commentBody: {
+    flex: 1,
+  },
+  commentAuthor: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  commentText: {
+    fontSize: 14,
+    color: colors.gray700,
+    lineHeight: 20,
+    marginTop: 2,
+  },
   commentMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginTop: 6,
   },
-  commentTime: { fontSize: 12, color: colors.gray400 },
-  commentLikeCount: { fontSize: 12, fontWeight: "600", color: colors.gray500 },
+  commentTime: {
+    fontSize: 12,
+    color: colors.gray400,
+  },
+  commentLikeCount: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
   likeBtn: {
     paddingTop: 4,
     paddingLeft: 8,
   },
-
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",

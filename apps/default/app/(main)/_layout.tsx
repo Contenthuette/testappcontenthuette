@@ -21,7 +21,7 @@ export default function MainLayout() {
       <Stack.Screen name="subscription" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="user-profile" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="create-post" options={{ presentation: "modal" }} />
-      <Stack.Screen name="post-comments" options={{ presentation: "modal", gestureDirection: "vertical", headerShown: false }} />
+      <Stack.Screen name="post-comments" options={{ animation: "slide_from_bottom", headerShown: false }} />
       <Stack.Screen name="search" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="my-tickets" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="legal" options={{ animation: "slide_from_right" }} />
