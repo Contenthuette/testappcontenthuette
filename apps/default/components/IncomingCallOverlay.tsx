@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  Modal,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -131,62 +132,69 @@ export function IncomingCallOverlay({
   }));
 
   return (
-    <Animated.View
-      style={styles.overlay}
-      entering={FadeIn.duration(300)}
-      exiting={FadeOut.duration(200)}
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      statusBarTranslucent
     >
-      {/* Top label */}
-      <View style={styles.topSection}>
-        <Text style={styles.callLabel}>
-          {groupName
-            ? `Gruppenanruf • ${groupName}`
-            : callType === "video"
-              ? "Z Videoanruf"
-              : "Z Audioanruf"}
-        </Text>
-      </View>
+      <Animated.View
+        style={styles.overlay}
+        entering={FadeIn.duration(300)}
+        exiting={FadeOut.duration(200)}
+      >
+        {/* Top label */}
+        <View style={styles.topSection}>
+          <Text style={styles.callLabel}>
+            {groupName
+              ? `Gruppenanruf • ${groupName}`
+              : callType === "video"
+                ? "Z Videoanruf"
+                : "Z Audioanruf"}
+          </Text>
+        </View>
 
-      {/* Center: Avatar with rings */}
-      <View style={styles.centerSection}>
-        <View style={styles.avatarContainer}>
-          <Animated.View style={[styles.ring, ringStyle3]} />
-          <Animated.View style={[styles.ring, ringStyle2]} />
-          <Animated.View style={[styles.ring, ringStyle1]} />
-          <Avatar uri={callerAvatarUrl} name={callerName} size={110} />
+        {/* Center: Avatar with rings */}
+        <View style={styles.centerSection}>
+          <View style={styles.avatarContainer}>
+            <Animated.View style={[styles.ring, ringStyle3]} />
+            <Animated.View style={[styles.ring, ringStyle2]} />
+            <Animated.View style={[styles.ring, ringStyle1]} />
+            <Avatar uri={callerAvatarUrl} name={callerName} size={110} />
+          </View>
+          <Text style={styles.callerName}>{callerName}</Text>
+          <Text style={styles.statusText}>klingelt…</Text>
         </View>
-        <Text style={styles.callerName}>{callerName}</Text>
-        <Text style={styles.statusText}>klingelt…</Text>
-      </View>
 
-      {/* Bottom: Accept / Decline */}
-      <View style={styles.bottomSection}>
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.declineBtn]}
-            onPress={onDecline}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.acceptBtn]}
-            onPress={onAccept}
-            activeOpacity={0.7}
-          >
-            <SymbolView
-              name={callType === "video" ? "video.fill" : "phone.fill"}
-              size={28}
-              tintColor="#FFF"
-            />
-          </TouchableOpacity>
+        {/* Bottom: Accept / Decline */}
+        <View style={styles.bottomSection}>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.declineBtn]}
+              onPress={onDecline}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.acceptBtn]}
+              onPress={onAccept}
+              activeOpacity={0.7}
+            >
+              <SymbolView
+                name={callType === "video" ? "video.fill" : "phone.fill"}
+                size={28}
+                tintColor="#FFF"
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.labelRow}>
+            <Text style={styles.actionLabel}>Ablehnen</Text>
+            <Text style={styles.actionLabel}>Annehmen</Text>
+          </View>
         </View>
-        <View style={styles.labelRow}>
-          <Text style={styles.actionLabel}>Ablehnen</Text>
-          <Text style={styles.actionLabel}>Annehmen</Text>
-        </View>
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </Modal>
   );
 }
 
