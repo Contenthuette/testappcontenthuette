@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, KeyboardAvoidingView, Platform,
-  ActivityIndicator,
+  TouchableOpacity, Platform, ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -40,12 +39,12 @@ export default function PostCommentsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Fixed header */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Kommentare</Text>
       </View>
 
-      {/* Scrollable comment list */}
+      {/* Comments list */}
       <FlatList
         style={styles.listFlex}
         data={comments}
@@ -53,6 +52,7 @@ export default function PostCommentsScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
           <View style={styles.commentRow}>
             <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
@@ -93,30 +93,25 @@ export default function PostCommentsScreen() {
         }
       />
 
-      {/* Fixed input bar at bottom */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
-      >
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            placeholder="Kommentar schreiben..."
-            placeholderTextColor={colors.gray400}
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={1000}
-          />
-          {text.trim().length > 0 && (
-            <TouchableOpacity onPress={handleSend} hitSlop={8}>
-              <View style={styles.sendBtn}>
-                <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      {/* Input bar – no KeyboardAvoidingView needed, formSheet handles keyboard natively */}
+      <View style={styles.inputBar}>
+        <TextInput
+          style={styles.input}
+          placeholder="Kommentar schreiben..."
+          placeholderTextColor={colors.gray400}
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={1000}
+        />
+        {text.trim().length > 0 && (
+          <TouchableOpacity onPress={handleSend} hitSlop={8}>
+            <View style={styles.sendBtn}>
+              <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -186,8 +181,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingVertical: 10,
+    paddingBottom: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.gray200,
     gap: spacing.sm,
