@@ -33,3 +33,12 @@ export const run = migrations.runner();
 //   args: {}                                          // run all pending
 //   args: { fn: "migrations:backfillCreatedAt" }      // run specific
 //   args: { dryRun: true }                            // dry run (one batch, no commit)
+
+export const backfillCommentLikeCount = migrations.define({
+  table: "comments",
+  migrateOne: async (_ctx, doc) => {
+    if ((doc as Record<string, unknown>).likeCount === undefined) {
+      return { likeCount: 0 };
+    }
+  },
+});

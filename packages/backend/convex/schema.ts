@@ -122,9 +122,18 @@ export default defineSchema({
     postId: v.id("posts"),
     authorId: v.id("users"),
     text: v.string(),
+    likeCount: v.number(),
     createdAt: v.number(),
   })
     .index("by_postId", ["postId"]),
+
+  commentLikes: defineTable({
+    commentId: v.id("comments"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_commentId", ["commentId"])
+    .index("by_commentId_and_userId", ["commentId", "userId"]),
 
   savedPosts: defineTable({
     postId: v.id("posts"),

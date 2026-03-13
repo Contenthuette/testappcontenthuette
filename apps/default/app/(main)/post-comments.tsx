@@ -9,10 +9,10 @@ import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius } from "@/lib/theme";
-import { safeBack } from "@/lib/navigation";
+import { colors, spacing } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
+import * as Haptics from "expo-haptics";
 
 export default function PostCommentsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,12 +20,25 @@ export default function PostCommentsScreen() {
   const insets = useSafeAreaInsets();
   const comments = useQuery(api.posts.getComments, id ? { postId: id as Id<"posts"> } : "skip");
   const addComment = useMutation(api.posts.addComment);
+  const likeComment = useMutation(api.posts.likeComment);
+  const unlikeComment = useMutation(api.posts.unlikeComment);
 
   const handleSend = async () => {
     if (!text.trim() || !id) return;
     const msg = text.trim();
     setText("");
     await addComment({ postId: id as Id<"posts">, text: msg });
+  };
+
+  const handleToggleLike = async (commentId: Id<"comments">, isLiked: boolean) => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (isLiked) {
+      await unlikeComment({ commentId });
+    } else {
+      await likeComment({ commentId });
+    }
   };
 
   return (
@@ -36,7 +49,9 @@ export default function PostCommentsScreen() {
     >
       {/* Grabber */}
       <View style={styles.grabber} />
-      <Text style={styles.title}>Kommentare</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Kommentare</Text>
+      </View>
 
       <FlatList
         data={comments}
@@ -49,8 +64,26 @@ export default function PostCommentsScreen() {
             <View style={styles.commentBody}>
               <Text style={styles.commentAuthor}>{item.authorName}</Text>
               <Text style={styles.commentText}>{item.text}</Text>
-              <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
+              <View style={styles.commentMeta}>
+                <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
+                {item.likeCount > 0 && (
+                  <Text style={styles.commentLikeCount}>
+                    {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
+                  </Text>
+                )}
+              </View>
             </View>
+            <TouchableOpacity
+              style={styles.likeBtn}
+              onPress={() => handleToggleLike(item._id, item.isLikedByMe)}
+              hitSlop={12}
+            >
+              <SymbolView
+                name={item.isLikedByMe ? "heart.fill" : "heart"}
+                size={16}
+                tintColor={item.isLikedByMe ? "#FF3B30" : colors.gray400}
+              />
+            </TouchableOpacity>
           </View>
         )}
         ListEmptyComponent={
@@ -108,16 +141,18 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginTop: spacing.sm,
   },
+  header: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
   title: {
     fontSize: 16,
     fontWeight: "600",
     color: colors.black,
     textAlign: "center",
     paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.gray200,
   },
-  list: { paddingBottom: spacing.lg },
+  list: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
   loadingWrap: { paddingVertical: 40, alignItems: "center" },
   emptyWrap: { alignItems: "center", paddingVertical: 48 },
   emptyText: { fontSize: 15, fontWeight: "600", color: colors.gray500 },
@@ -128,11 +163,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     gap: spacing.md,
+    alignItems: "flex-start",
   },
   commentBody: { flex: 1 },
   commentAuthor: { fontSize: 14, fontWeight: "600", color: colors.black },
   commentText: { fontSize: 14, color: colors.gray700, lineHeight: 20, marginTop: 2 },
-  commentTime: { fontSize: 12, color: colors.gray400, marginTop: 4 },
+  commentMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 6,
+  },
+  commentTime: { fontSize: 12, color: colors.gray400 },
+  commentLikeCount: { fontSize: 12, fontWeight: "600", color: colors.gray500 },
+  likeBtn: {
+    paddingTop: 4,
+    paddingLeft: 8,
+  },
 
   inputBar: {
     flexDirection: "row",

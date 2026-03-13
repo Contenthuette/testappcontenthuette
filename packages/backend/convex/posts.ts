@@ -256,13 +256,15 @@ export const toggleSave = authMutation({
 
 // Comments
 export const getComments = query({
-  args: { postId: v.id("posts") },
+  args: { postId: v.id("posts"), currentUserId: v.optional(v.id("users")) },
   returns: v.array(v.object({
     _id: v.id("comments"),
     authorId: v.id("users"),
     authorName: v.string(),
     authorAvatarUrl: v.optional(v.string()),
     text: v.string(),
+    likeCount: v.number(),
+    isLiked: v.boolean(),
     createdAt: v.number(),
   })),
   handler: async (ctx, args) => {
@@ -273,12 +275,21 @@ export const getComments = query({
     const results = [];
     for (const c of comments) {
       const author = await ctx.db.get(c.authorId);
+      let isLiked = false;
+      if (args.currentUserId) {
+        const existing = await ctx.db.query("commentLikes")
+          .withIndex("by_commentId_and_userId", q => q.eq("commentId", c._id).eq("userId", args.currentUserId!))
+          .first();
+        isLiked = !!existing;
+      }
       results.push({
         _id: c._id,
         authorId: c.authorId,
         authorName: author?.name ?? "Unknown",
         authorAvatarUrl: author?.avatarStorageId ? await ctx.storage.getUrl(author.avatarStorageId) ?? undefined : author?.avatarUrl,
         text: c.text,
+        likeCount: c.likeCount ?? 0,
+        isLiked,
         createdAt: c.createdAt,
       });
     }
@@ -292,10 +303,70 @@ export const addComment = authMutation({
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-    await ctx.db.insert("comments", { postId: args.postId, authorId: myUserId, text: args.text, createdAt: Date.now() });
+    await ctx.db.insert("comments", { postId: args.postId, authorId: myUserId, text: args.text, likeCount: 0, createdAt: Date.now() });
     const post = await ctx.db.get(args.postId);
     if (post) {
       await ctx.db.patch(args.postId, { commentCount: post.commentCount + 1 });
+    }
+    return null;
+  },
+});
+
+export const toggleCommentLike = authMutation({
+  args: { commentId: v.id("comments") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    const existing = await ctx.db.query("commentLikes")
+      .withIndex("by_commentId_and_userId", q => q.eq("commentId", args.commentId).eq("userId", myUserId))
+      .first();
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      await ctx.db.patch(args.commentId, { likeCount: Math.max(0, (comment.likeCount ?? 0) - 1) });
+    } else {
+      await ctx.db.insert("commentLikes", { commentId: args.commentId, userId: myUserId, createdAt: Date.now() });
+      await ctx.db.patch(args.commentId, { likeCount: (comment.likeCount ?? 0) + 1 });
+    }
+    return null;
+  },
+});
+
+export const likeComment = authMutation({
+  args: { commentId: v.id("comments") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    const existing = await ctx.db.query("commentLikes")
+      .withIndex("by_commentId_and_userId", q => q.eq("commentId", args.commentId).eq("userId", myUserId))
+      .first();
+    if (existing) return null;
+    await ctx.db.insert("commentLikes", { commentId: args.commentId, userId: myUserId, createdAt: Date.now() });
+    const comment = await ctx.db.get(args.commentId);
+    if (comment) {
+      await ctx.db.patch(args.commentId, { likeCount: (comment.likeCount ?? 0) + 1 });
+    }
+    return null;
+  },
+});
+
+export const unlikeComment = authMutation({
+  args: { commentId: v.id("comments") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    const existing = await ctx.db.query("commentLikes")
+      .withIndex("by_commentId_and_userId", q => q.eq("commentId", args.commentId).eq("userId", myUserId))
+      .first();
+    if (!existing) return null;
+    await ctx.db.delete(existing._id);
+    const comment = await ctx.db.get(args.commentId);
+    if (comment) {
+      await ctx.db.patch(args.commentId, { likeCount: Math.max(0, (comment.likeCount ?? 0) - 1) });
     }
     return null;
   },
