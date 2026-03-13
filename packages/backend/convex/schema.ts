@@ -122,7 +122,7 @@ export default defineSchema({
     postId: v.id("posts"),
     authorId: v.id("users"),
     text: v.string(),
-    likeCount: v.number(),
+    likeCount: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_postId", ["postId"]),
