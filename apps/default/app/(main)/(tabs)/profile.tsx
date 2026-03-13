@@ -12,6 +12,7 @@ import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
+import { VideoThumbnail } from "@/components/VideoThumbnail";
 
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -123,16 +124,15 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 key={post._id}
                 style={styles.gridItem}
-                onPress={() => router.push({ pathname: "/(main)/post-detail", params: { postId: post._id } })}
+                onPress={() => router.push({ pathname: "/(main)/post-detail", params: { id: post._id } })}
                 activeOpacity={0.85}
               >
-                {post.type === "video" ? (
-                  <View style={styles.videoCell}>
-                    <SymbolView name="video.fill" size={22} tintColor="rgba(255,255,255,0.7)" />
-                    <View style={styles.videoPlayBadge}>
-                      <SymbolView name="play.fill" size={10} tintColor="#fff" />
-                    </View>
-                  </View>
+                {post.type === "video" && post.mediaUrl ? (
+                  <VideoThumbnail
+                    uri={post.mediaUrl}
+                    style={styles.gridImage}
+                    playIconSize={20}
+                  />
                 ) : post.mediaUrl ? (
                   <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} contentFit="cover" transition={200} />
                 ) : (

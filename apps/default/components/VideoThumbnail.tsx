@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { View, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { View, StyleSheet } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { SymbolView } from "@/components/Icon";
 
@@ -16,7 +16,9 @@ export function VideoThumbnail({
   showPlayIcon = true,
   playIconSize = 28,
 }: VideoThumbnailProps) {
-  const [isReady, setIsReady] = useState(false);
+  const [hasSeeked, setHasSeeked] = useState(false);
+  const retryCount = useRef(0);
+  const maxRetries = 5;
 
   const player = useVideoPlayer(uri, (p) => {
     p.loop = false;
@@ -27,51 +29,58 @@ export function VideoThumbnail({
     try {
       player.pause();
       player.currentTime = 0.1;
-      setIsReady(true);
+      setHasSeeked(true);
     } catch {
-      // player not ready yet
+      // player not ready yet, will retry
     }
   }, [player]);
 
   useEffect(() => {
-    // Listen for the player to be ready before seeking
     const sub = player.addListener("statusChange", ({ status }) => {
-      if (status === "readyToPlay") {
+      if (status === "readyToPlay" && !hasSeeked) {
         seekToPreview();
       }
     });
 
-    // If the player is already ready (e.g. cached), seek immediately
-    if ((player as unknown as { status: string }).status === "readyToPlay") {
+    // Try immediately in case player is already ready
+    const immediateTimer = setTimeout(() => {
       seekToPreview();
-    }
+    }, 100);
 
-    // Fallback: try after a longer delay
-    const fallback = setTimeout(() => {
-      if (!isReady) seekToPreview();
-    }, 800);
+    // Multiple retry attempts with increasing delays
+    const retryTimers: ReturnType<typeof setTimeout>[] = [];
+    const scheduleRetry = () => {
+      if (retryCount.current >= maxRetries) return;
+      const delay = 300 + retryCount.current * 400;
+      const timer = setTimeout(() => {
+        if (!hasSeeked) {
+          retryCount.current += 1;
+          seekToPreview();
+          scheduleRetry();
+        }
+      }, delay);
+      retryTimers.push(timer);
+    };
+    scheduleRetry();
 
     return () => {
       sub.remove();
-      clearTimeout(fallback);
+      clearTimeout(immediateTimer);
+      retryTimers.forEach(clearTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, seekToPreview]);
 
   return (
     <View style={[styles.container, style]}>
+      {/* Always show VideoView - no hidden state */}
       <VideoView
         player={player}
-        style={[styles.video, !isReady && styles.hidden]}
+        style={styles.video}
         nativeControls={false}
         allowsPictureInPicture={false}
         contentFit="cover"
       />
-      {!isReady && (
-        <View style={styles.placeholder}>
-          <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
-        </View>
-      )}
       {showPlayIcon && (
         <View style={styles.playOverlay}>
           <View
@@ -106,15 +115,6 @@ const styles = StyleSheet.create({
   video: {
     width: "100%",
     height: "100%",
-  },
-  hidden: {
-    opacity: 0,
-  },
-  placeholder: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#1a1a1a",
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
