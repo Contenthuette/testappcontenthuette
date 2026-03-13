@@ -324,6 +324,57 @@ export const search = authQuery({
   },
 });
 
+// List all users with optional search by name & interests
+export const listAll = authQuery({
+  args: { searchQuery: v.optional(v.string()) },
+  returns: v.array(v.object({
+    _id: v.id("users"),
+    name: v.string(),
+    avatarUrl: v.optional(v.string()),
+    city: v.optional(v.string()),
+    interests: v.optional(v.array(v.string())),
+  })),
+  handler: async (ctx, args) => {
+    const authId = ctx.user._id;
+    const me = await getUserByAuthId(ctx, authId);
+    const myId = me?._id;
+
+    let users;
+    const sq = args.searchQuery;
+    if (sq && sq.trim()) {
+      const q = sq.toLowerCase().trim();
+      const allUsers = await ctx.db.query("users").take(300);
+      users = allUsers.filter(u => {
+        if (myId && u._id === myId) return false;
+        const nameMatch = u.name.toLowerCase().includes(q);
+        const interestMatch = u.interests?.some(i => i.toLowerCase().includes(q)) ?? false;
+        return nameMatch || interestMatch;
+      }).slice(0, 50);
+    } else {
+      const allUsers = await ctx.db.query("users").order("desc").take(60);
+      users = myId ? allUsers.filter(u => u._id !== myId) : allUsers;
+    }
+
+    const results: Array<{
+      _id: Id<"users">;
+      name: string;
+      avatarUrl?: string;
+      city?: string;
+      interests?: string[];
+    }> = [];
+    for (const u of users) {
+      results.push({
+        _id: u._id,
+        name: u.name,
+        avatarUrl: u.avatarStorageId ? await ctx.storage.getUrl(u.avatarStorageId) ?? undefined : u.avatarUrl,
+        city: u.city,
+        interests: u.interests,
+      });
+    }
+    return results;
+  },
+});
+
 // Cancel subscription
 export const cancelSubscription = authMutation({
   args: {},

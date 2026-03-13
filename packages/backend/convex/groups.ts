@@ -36,9 +36,13 @@ export const list = authQuery({
     let groups;
     const searchQuery = args.searchQuery;
     if (searchQuery && searchQuery.trim()) {
-      groups = await ctx.db.query("groups")
-        .withSearchIndex("search_name", q => q.search("name", searchQuery))
-        .take(50);
+      const q = searchQuery.toLowerCase();
+      const allGroups = await ctx.db.query("groups").take(200);
+      groups = allGroups.filter(g => {
+        const nameMatch = g.name.toLowerCase().includes(q);
+        const interestMatch = g.interests?.some(i => i.toLowerCase().includes(q)) ?? false;
+        return nameMatch || interestMatch;
+      }).slice(0, 50);
     } else {
       const county = args.county;
       const city = args.city;

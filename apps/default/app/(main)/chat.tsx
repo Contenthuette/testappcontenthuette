@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -14,6 +15,7 @@ import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const isNewChat = !!id && id.startsWith("new-");
   const otherUserId = isNewChat ? id.replace("new-", "") : undefined;
   const conversationId = !isNewChat && id ? (id as Id<"conversations">) : undefined;
@@ -143,7 +145,7 @@ export default function ChatScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}>
         <FlatList
           data={messages}
           renderItem={renderMessage}

@@ -4,6 +4,7 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform,
   ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -16,6 +17,7 @@ import { SymbolView } from "@/components/Icon";
 export default function PostCommentsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [text, setText] = useState("");
+  const insets = useSafeAreaInsets();
   const comments = useQuery(api.posts.getComments, id ? { postId: id as Id<"posts"> } : "skip");
   const addComment = useMutation(api.posts.addComment);
 
@@ -30,6 +32,7 @@ export default function PostCommentsScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 60 : 0}
     >
       {/* Grabber */}
       <View style={styles.grabber} />

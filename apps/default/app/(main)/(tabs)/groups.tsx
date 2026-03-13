@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Platform,
@@ -15,17 +15,28 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 
+type Tab = "groups" | "people";
+
 export default function GroupsScreen() {
+  const [tab, setTab] = useState<Tab>("groups");
   const [searchQuery, setSearchQuery] = useState("");
-  const groups = useQuery(api.groups.list, { searchQuery: searchQuery || undefined });
+
+  const groups = useQuery(api.groups.list, tab === "groups" ? { searchQuery: searchQuery || undefined } : "skip");
+  const people = useQuery(api.users.listAll, tab === "people" ? { searchQuery: searchQuery || undefined } : "skip");
   const joinGroup = useMutation(api.groups.join);
 
   const handleJoin = async (groupId: Id<"groups">) => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await joinGroup({ groupId });
-    } catch (e) {
-      // already member or error
+    } catch (_e) { /* already member */ }
+  };
+
+  const switchTab = (t: Tab) => {
+    if (t !== tab) {
+      if (Platform.OS !== "web") Haptics.selectionAsync();
+      setTab(t);
+      setSearchQuery("");
     }
   };
 
@@ -70,12 +81,44 @@ export default function GroupsScreen() {
     </TouchableOpacity>
   );
 
+  const renderPerson = ({ item }: { item: NonNullable<typeof people>[number] }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item._id } })}
+      activeOpacity={0.65}
+    >
+      <View style={styles.avatarWrap}>
+        {item.avatarUrl ? (
+          <Image source={{ uri: item.avatarUrl }} style={styles.avatar} contentFit="cover" transition={200} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <SymbolView name="person.fill" size={20} tintColor={colors.gray300} />
+          </View>
+        )}
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+        {item.city ? <Text style={styles.cardMeta} numberOfLines={1}>{item.city}</Text> : null}
+        {item.interests && item.interests.length > 0 ? (
+          <Text style={styles.cardInterests} numberOfLines={1}>
+            {item.interests.slice(0, 3).join(" · ")}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.arrowWrap}>
+        <SymbolView name="chevron.right" size={14} tintColor={colors.gray300} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const activeData = tab === "groups" ? groups : people;
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <ZLogo size={47} />
-        <Text style={styles.headerTitle}>Gruppen</Text>
+        <Text style={styles.headerTitle}>Entdecken</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
           <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
@@ -85,13 +128,33 @@ export default function GroupsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Tab Toggle */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === "groups" && styles.tabBtnActive]}
+          onPress={() => switchTab("groups")}
+          activeOpacity={0.7}
+        >
+          <SymbolView name="person.3" size={16} tintColor={tab === "groups" ? colors.white : colors.gray500} />
+          <Text style={[styles.tabText, tab === "groups" && styles.tabTextActive]}>Gruppen</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, tab === "people" && styles.tabBtnActive]}
+          onPress={() => switchTab("people")}
+          activeOpacity={0.7}
+        >
+          <SymbolView name="person" size={16} tintColor={tab === "people" ? colors.white : colors.gray500} />
+          <Text style={[styles.tabText, tab === "people" && styles.tabTextActive]}>Personen</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Search */}
       <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
           <SymbolView name="magnifyingglass" size={16} tintColor={colors.gray400} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Gruppen oder Personen suchen"
+            placeholder={tab === "groups" ? "Name oder Interesse suchen…" : "Name oder Interesse suchen…"}
             placeholderTextColor={colors.gray400}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -103,41 +166,59 @@ export default function GroupsScreen() {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity onPress={() => router.push("/(main)/search")} style={styles.filterBtn}>
-          <SymbolView name="slider.horizontal.3" size={18} tintColor={colors.black} />
-        </TouchableOpacity>
       </View>
 
       {/* List */}
-      <FlatList
-        data={groups}
-        renderItem={renderGroup}
-        keyExtractor={item => item._id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          groups === undefined ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator color={colors.gray300} />
-            </View>
-          ) : (
-            <EmptyState
-              icon="person.3"
-              title="Noch keine Gruppen"
-              subtitle="Erstelle die erste Gruppe und vernetze deine Community in MV."
-            />
-          )
-        }
-      />
+      {tab === "groups" ? (
+        <FlatList
+          data={groups}
+          renderItem={renderGroup}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            groups === undefined ? (
+              <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+            ) : (
+              <EmptyState
+                icon="person.3"
+                title="Keine Gruppen gefunden"
+                subtitle="Erstelle die erste Gruppe und vernetze deine Community in MV."
+              />
+            )
+          }
+        />
+      ) : (
+        <FlatList
+          data={people}
+          renderItem={renderPerson}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            people === undefined ? (
+              <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+            ) : (
+              <EmptyState
+                icon="person"
+                title="Keine Personen gefunden"
+                subtitle="Alle Z-Mitglieder werden hier angezeigt."
+              />
+            )
+          }
+        />
+      )}
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push("/(main)/create-group")}
-        activeOpacity={0.8}
-      >
-        <SymbolView name="plus" size={22} tintColor={colors.white} />
-      </TouchableOpacity>
+      {/* FAB for groups */}
+      {tab === "groups" && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => router.push("/(main)/create-group")}
+          activeOpacity={0.8}
+        >
+          <SymbolView name="plus" size={22} tintColor={colors.white} />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -165,6 +246,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
+  /* Tab Toggle */
+  tabRow: {
+    flexDirection: "row",
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    padding: 3,
+    gap: 0,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 9,
+    borderRadius: radius.full,
+    gap: 6,
+  },
+  tabBtnActive: {
+    backgroundColor: colors.black,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray500,
+    letterSpacing: -0.2,
+  },
+  tabTextActive: {
+    color: colors.white,
+  },
+
+  /* Search */
   searchWrap: {
     flexDirection: "row",
     paddingHorizontal: spacing.xl,
@@ -182,14 +297,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   searchInput: { flex: 1, fontSize: 15, color: colors.black, letterSpacing: -0.2 },
-  filterBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.sm,
-    backgroundColor: colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
+  /* List */
   list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
   card: {
@@ -218,9 +327,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  avatarWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: "hidden",
+    backgroundColor: colors.gray100,
+  },
+  avatar: { width: 50, height: 50, borderRadius: 25 },
+  avatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cardBody: { flex: 1, gap: 2 },
   cardName: { fontSize: 16, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
   cardMeta: { fontSize: 13, color: colors.gray500, letterSpacing: -0.1 },
+  cardInterests: { fontSize: 12, color: colors.gray400, marginTop: 1, letterSpacing: -0.1 },
   cardMembers: { fontSize: 12, color: colors.gray400, marginTop: 1 },
   joinedPill: {
     flexDirection: "row",
@@ -239,6 +364,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
   },
   joinText: { fontSize: 13, fontWeight: "600", color: colors.white },
+  arrowWrap: {
+    width: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   fab: {
     position: "absolute",
     bottom: 110,

@@ -29,10 +29,19 @@ export const list = authQuery({
   handler: async (ctx) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) return [];
-    return await ctx.db.query("notifications")
+    const docs = await ctx.db.query("notifications")
       .withIndex("by_userId", q => q.eq("userId", myUserId))
       .order("desc")
       .take(50);
+    return docs.map(d => ({
+      _id: d._id,
+      type: d.type,
+      title: d.title,
+      body: d.body,
+      referenceId: d.referenceId,
+      isRead: d.isRead,
+      createdAt: d.createdAt,
+    }));
   },
 });
 

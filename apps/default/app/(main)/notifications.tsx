@@ -62,72 +62,89 @@ export default function NotificationsScreen() {
     }
   }, [markRead]);
 
-  return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => safeBack("notifications")} style={styles.backBtn} hitSlop={12}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Benachrichtigungen</Text>
-        <View style={{ width: 36 }} />
+  if (notifications === undefined) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.white }}>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => safeBack("notifications")} style={styles.backBtn} hitSlop={12}>
+              <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
+            </TouchableOpacity>
+            <Text style={styles.title}>Benachrichtigungen</Text>
+            <View style={{ width: 36 }} />
+          </View>
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+            <ActivityIndicator color={colors.gray300} />
+          </View>
+        </SafeAreaView>
       </View>
+    );
+  }
 
-      <FlatList
-        data={notifications}
-        keyExtractor={item => item._id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.row, !item.isRead && styles.rowUnread]}
-            onPress={() => handlePress(item)}
-            activeOpacity={0.6}
-          >
-            <View style={[styles.iconWrap, !item.isRead && styles.iconWrapActive]}>
-              <SymbolView
-                name={(ICON_MAP[item.type] || "bell.fill") as Parameters<typeof SymbolView>[0]["name"]}
-                size={16}
-                tintColor={!item.isRead ? colors.white : colors.gray500}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
-              <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
-
-              {/* Friend request actions */}
-              {item.type === "friend_request" && !item.isRead && item.referenceId && (
-                <View style={styles.friendActions}>
-                  <TouchableOpacity
-                    style={styles.acceptBtn}
-                    onPress={() => handleAcceptFriend(item.referenceId!, item._id)}
-                  >
-                    <Text style={styles.acceptBtnText}>Annehmen</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.rejectBtn}
-                    onPress={() => handleRejectFriend(item.referenceId!, item._id)}
-                  >
-                    <Text style={styles.rejectBtnText}>Ablehnen</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-            {!item.isRead && item.type !== "friend_request" && <View style={styles.dot} />}
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.white }}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => safeBack("notifications")} style={styles.backBtn} hitSlop={12}>
+            <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          notifications === undefined ? (
-            <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
-          ) : (
+          <Text style={styles.title}>Benachrichtigungen</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        <FlatList
+          data={notifications}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.row, !item.isRead && styles.rowUnread]}
+              onPress={() => handlePress(item)}
+              activeOpacity={0.6}
+            >
+              <View style={[styles.iconWrap, !item.isRead && styles.iconWrapActive]}>
+                <SymbolView
+                  name={(ICON_MAP[item.type] || "bell.fill") as Parameters<typeof SymbolView>[0]["name"]}
+                  size={16}
+                  tintColor={!item.isRead ? colors.white : colors.gray500}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
+                <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+
+                {/* Friend request actions */}
+                {item.type === "friend_request" && !item.isRead && item.referenceId && (
+                  <View style={styles.friendActions}>
+                    <TouchableOpacity
+                      style={styles.acceptBtn}
+                      onPress={() => handleAcceptFriend(item.referenceId!, item._id)}
+                    >
+                      <Text style={styles.acceptBtnText}>Annehmen</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      onPress={() => handleRejectFriend(item.referenceId!, item._id)}
+                    >
+                      <Text style={styles.rejectBtnText}>Ablehnen</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+              {!item.isRead && item.type !== "friend_request" && <View style={styles.dot} />}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
             <EmptyState
               icon="bell"
               title="Alles ruhig"
               subtitle="Hier erscheinen deine Benachrichtigungen."
             />
-          )
-        }
-      />
-    </SafeAreaView>
+          }
+        />
+      </SafeAreaView>
+    </View>
   );
 }
 
