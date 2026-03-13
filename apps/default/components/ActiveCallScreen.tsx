@@ -7,10 +7,6 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Animated, {
-  FadeIn,
-  FadeOut,
-} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -82,21 +78,27 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
       await endCallMutation({ callId });
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error("Failed to end call", e);
+    }
   }, [callId, endCallMutation]);
 
   const handleToggleMute = useCallback(async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await toggleMuteMutation({ callId });
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error("Failed to toggle mute", e);
+    }
   }, [callId, toggleMuteMutation]);
 
   const handleToggleVideo = useCallback(async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await toggleVideoMutation({ callId });
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error("Failed to toggle video", e);
+    }
   }, [callId, toggleVideoMutation]);
 
   const handleFlipCamera = useCallback(() => {
@@ -131,17 +133,14 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
         : "Verbinde…";
 
   return (
-    <Animated.View
-      style={styles.container}
-      entering={FadeIn.duration(300)}
-      exiting={FadeOut.duration(200)}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         {/* Top bar */}
         <View style={styles.topBar}>
           <TouchableOpacity
             onPress={handleMinimize}
             style={styles.minimizeBtn}
+            activeOpacity={0.7}
           >
             <SymbolView name="chevron.down" size={20} tintColor="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
@@ -186,12 +185,10 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 
         {/* Bottom controls */}
         {!isEnded && (
-          <Animated.View style={styles.controls} entering={FadeIn.delay(200)}>
+          <View style={styles.controls}>
             {isVideoCall ? (
-              /* Video call: 5 buttons */
               <>
                 <View style={styles.controlRow}>
-                  {/* Mute */}
                   <TouchableOpacity
                     style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
                     onPress={handleToggleMute}
@@ -204,7 +201,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                     />
                   </TouchableOpacity>
 
-                  {/* Video */}
                   <TouchableOpacity
                     style={[styles.controlBtn, isVideoOff && styles.controlBtnActive]}
                     onPress={handleToggleVideo}
@@ -217,7 +213,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                     />
                   </TouchableOpacity>
 
-                  {/* End call */}
                   <TouchableOpacity
                     style={styles.endCallBtn}
                     onPress={handleEndCall}
@@ -226,7 +221,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                     <SymbolView name="phone.down.fill" size={26} tintColor="#FFF" />
                   </TouchableOpacity>
 
-                  {/* Camera flip */}
                   <TouchableOpacity
                     style={styles.controlBtn}
                     onPress={handleFlipCamera}
@@ -235,7 +229,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                     <SymbolView name="camera.rotate.fill" size={22} tintColor="#FFF" />
                   </TouchableOpacity>
 
-                  {/* Speaker */}
                   <TouchableOpacity
                     style={[styles.controlBtn, isSpeaker && styles.controlBtnActive]}
                     onPress={handleToggleSpeaker}
@@ -258,10 +251,8 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 </View>
               </>
             ) : (
-              /* Audio call: 3 buttons */
               <>
                 <View style={styles.controlRow}>
-                  {/* Mute */}
                   <TouchableOpacity
                     style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
                     onPress={handleToggleMute}
@@ -274,7 +265,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                     />
                   </TouchableOpacity>
 
-                  {/* End call */}
                   <TouchableOpacity
                     style={styles.endCallBtn}
                     onPress={handleEndCall}
@@ -283,7 +273,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                     <SymbolView name="phone.down.fill" size={26} tintColor="#FFF" />
                   </TouchableOpacity>
 
-                  {/* Speaker */}
                   <TouchableOpacity
                     style={[styles.controlBtn, isSpeaker && styles.controlBtnActive]}
                     onPress={handleToggleSpeaker}
@@ -304,16 +293,16 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 </View>
               </>
             )}
-          </Animated.View>
+          </View>
         )}
 
         {isEnded && (
-          <Animated.View style={styles.endedContainer} entering={FadeIn}>
+          <View style={styles.endedContainer}>
             <Text style={styles.endedText}>Anruf beendet</Text>
-          </Animated.View>
+          </View>
         )}
       </SafeAreaView>
-    </Animated.View>
+    </View>
   );
 }
 

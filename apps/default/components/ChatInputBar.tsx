@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, Component } from "react";
 import {
   View,
+  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -9,6 +10,67 @@ import {
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
+
+// ErrorBoundary to prevent voice recorder crashes from taking down the screen
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class VoiceRecorderErrorBoundary extends Component<
+  { children: React.ReactNode; onError: () => void },
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("VoiceRecorder crashed:", error);
+    this.props.onError();
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={ebStyles.errorCard}>
+          <SymbolView name="exclamationmark.triangle" size={20} tintColor="#9CA3AF" />
+          <Text style={ebStyles.errorText}>Aufnahme nicht verfügbar</Text>
+          <TouchableOpacity onPress={this.props.onError} style={ebStyles.closeBtn}>
+            <SymbolView name="xmark" size={14} tintColor="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const ebStyles = StyleSheet.create({
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  closeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 
 interface ChatInputBarProps {
   onSend: (text: string) => void;
@@ -55,10 +117,12 @@ export function ChatInputBar({
   if (showVoiceRecorder) {
     return (
       <View style={styles.wrapper}>
-        <VoiceRecorder
-          onSend={handleVoiceSend}
-          onCancel={handleVoiceCancel}
-        />
+        <VoiceRecorderErrorBoundary onError={handleVoiceCancel}>
+          <VoiceRecorder
+            onSend={handleVoiceSend}
+            onCancel={handleVoiceCancel}
+          />
+        </VoiceRecorderErrorBoundary>
       </View>
     );
   }
