@@ -1,15 +1,16 @@
 import React, { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { useConvexAuth } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { router } from "expo-router";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { colors } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
+import { usePushNotifications } from "@/lib/push-notifications";
 
 function AuthenticatedRouter() {
   const me = useQuery(api.users.me);
+  usePushNotifications();
 
   useEffect(() => {
     if (me === undefined) return; // loading

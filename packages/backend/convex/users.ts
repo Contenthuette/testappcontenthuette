@@ -168,6 +168,7 @@ export const getById = query({
     interests: v.optional(v.array(v.string())),
     role: v.union(v.literal("user"), v.literal("admin")),
     createdAt: v.number(),
+    friendCount: v.number(),
     posts: v.array(v.object({
       _id: v.id("posts"),
       type: v.union(v.literal("photo"), v.literal("video")),
@@ -209,6 +210,16 @@ export const getById = query({
       });
     }
 
+    // Count friends
+    const friendsAsSender = await ctx.db.query("friendRequests")
+      .withIndex("by_senderId", (q) => q.eq("senderId", args.userId))
+      .collect();
+    const friendsAsReceiver = await ctx.db.query("friendRequests")
+      .withIndex("by_receiverId", (q) => q.eq("receiverId", args.userId))
+      .collect();
+    const friendCount = friendsAsSender.filter((r) => r.status === "accepted").length
+      + friendsAsReceiver.filter((r) => r.status === "accepted").length;
+
     return {
       _id: user._id,
       name: user.name,
@@ -220,6 +231,7 @@ export const getById = query({
       interests: user.interests,
       role: user.role,
       createdAt: user.createdAt,
+      friendCount,
       posts: enrichedPosts,
     };
   },

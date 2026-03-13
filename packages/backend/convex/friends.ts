@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
   const authId = ctx.user._id;
@@ -101,6 +102,13 @@ export const sendRequest = authMutation({
       createdAt: Date.now(),
     });
 
+    // Send push notification
+    await ctx.scheduler.runAfter(0, internal.pushNotifications.sendToUser, {
+      userId: args.receiverId,
+      title: "Neue Freundschaftsanfrage",
+      body: `${myUser?.name ?? "Jemand"} möchte mit dir befreundet sein`,
+    });
+
     return reqId;
   },
 });
@@ -128,6 +136,13 @@ export const acceptRequest = authMutation({
       referenceId: myUserId,
       isRead: false,
       createdAt: Date.now(),
+    });
+
+    // Send push notification
+    await ctx.scheduler.runAfter(0, internal.pushNotifications.sendToUser, {
+      userId: req.senderId,
+      title: "Freundschaft bestätigt",
+      body: `${myUser?.name ?? "Jemand"} hat deine Freundschaftsanfrage angenommen`,
     });
     return null;
   },

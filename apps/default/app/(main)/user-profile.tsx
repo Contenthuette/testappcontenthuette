@@ -1,293 +1,551 @@
 import React, { useCallback, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Dimensions, Platform, Alert,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius } from "@/lib/theme";
-import { safeBack } from "@/lib/navigation";
-import { Avatar } from "@/components/Avatar";
-import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  ArrowLeft,
+  MessageCircle,
+  UserPlus,
+  UserCheck,
+  Clock,
+  Play,
+} from "lucide-react-native";
+import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
-import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
 
-const SCREEN_W = Dimensions.get("window").width;
-const GRID_GAP = 2;
-const GRID_COL = 3;
-const THUMB_SIZE = (SCREEN_W - GRID_GAP * (GRID_COL - 1)) / GRID_COL;
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const GRID_GAP = 1.5;
+const NUM_COLUMNS = 3;
+const TILE_SIZE = (SCREEN_WIDTH - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const profile = useQuery(api.users.getById, id ? { userId: id as Id<"users"> } : "skip");
-  const userGroups = useQuery(api.users.getUserGroups, id ? { userId: id as Id<"users"> } : "skip");
-  const friendStatus = useQuery(api.friends.getStatus, id ? { otherUserId: id as Id<"users"> } : "skip");
-  const sendFriendRequest = useMutation(api.friends.sendRequest);
-  const [sendingRequest, setSendingRequest] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [friendLoading, setFriendLoading] = useState(false);
 
-  const handleSendFriendRequest = useCallback(async () => {
-    if (!id) return;
-    setSendingRequest(true);
+  const userId = id as Id<"users"> | undefined;
+
+  const user = useQuery(api.users.getById, userId ? { userId } : "skip");
+  const friendStatus = useQuery(
+    api.friends.getStatus,
+    userId ? { otherUserId: userId } : "skip"
+  );
+
+  const sendFriendRequest = useMutation(api.friends.sendRequest);
+
+  const handleFriendAction = useCallback(async () => {
+    if (!userId || friendLoading) return;
+    setFriendLoading(true);
     try {
-      await sendFriendRequest({ receiverId: id as Id<"users"> });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Fehler";
-      if (Platform.OS !== "web") Alert.alert("Fehler", msg);
+      if (Platform.OS !== "web")
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (friendStatus === "none") {
+        await sendFriendRequest({ receiverId: userId });
+      }
+    } catch (e: unknown) {
+      console.error("Friend action error:", e);
     } finally {
-      setSendingRequest(false);
+      setFriendLoading(false);
     }
-  }, [id, sendFriendRequest]);
+  }, [userId, friendLoading, friendStatus, sendFriendRequest]);
 
   const handleMessage = useCallback(() => {
     if (!id) return;
-    router.push({ pathname: "/(main)/chat", params: { id: "new-" + id } });
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({ pathname: "/(main)/chat", params: { id: `new-${id}` } });
   }, [id]);
 
-  if (!profile) {
+  if (user === undefined) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.loading}><ActivityIndicator color={colors.gray400} /></View>
-      </SafeAreaView>
+      <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color="#000" />
+      </View>
     );
   }
 
-  const friendLabel = friendStatus === "friends"
-    ? "Befreundet \u2713"
-    : friendStatus === "pending_sent"
-      ? "Anfrage gesendet"
-      : friendStatus === "pending_received"
-        ? "Anfrage annehmen"
-        : "Freundschaftsanfrage";
+  if (!user) {
+    return (
+      <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
+        <Text style={styles.errorText}>Benutzer nicht gefunden</Text>
+      </View>
+    );
+  }
 
-  const canSendRequest = friendStatus === "none" || friendStatus === "pending_received";
+  const getFriendButtonConfig = () => {
+    switch (friendStatus) {
+      case "friends":
+        return {
+          label: "Befreundet",
+          icon: UserCheck,
+          style: styles.friendBtnAccepted,
+          textStyle: styles.friendBtnAcceptedText,
+          iconColor: "#34C759",
+          disabled: true,
+        };
+      case "pending_sent":
+        return {
+          label: "Gesendet",
+          icon: Clock,
+          style: styles.friendBtnPending,
+          textStyle: styles.friendBtnPendingText,
+          iconColor: "#888",
+          disabled: true,
+        };
+      case "pending_received":
+        return {
+          label: "Antworten",
+          icon: UserPlus,
+          style: styles.friendBtnReceived,
+          textStyle: styles.friendBtnReceivedText,
+          iconColor: "#888",
+          disabled: true,
+        };
+      default:
+        return {
+          label: "Hinzufügen",
+          icon: UserPlus,
+          style: styles.friendBtnDefault,
+          textStyle: styles.friendBtnDefaultText,
+          iconColor: "#fff",
+          disabled: false,
+        };
+    }
+  };
+
+  const friendConfig = getFriendButtonConfig();
+  const FriendIcon = friendConfig.icon;
+  const posts = user.posts ?? [];
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={22} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {user.name || "Profil"}
+        </Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Banner */}
-        <View style={styles.banner}>
-          {profile.bannerUrl ? (
-            <Image source={{ uri: profile.bannerUrl }} style={styles.bannerImage} contentFit="cover" />
+        <View style={styles.bannerContainer}>
+          {user.bannerUrl ? (
+            <Image
+              source={{ uri: user.bannerUrl }}
+              style={styles.bannerImage}
+              contentFit="cover"
+            />
           ) : (
             <View style={styles.bannerPlaceholder} />
           )}
-          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("user-profile")}>
-            <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
+          <View style={styles.avatarWrapper}>
+            {user.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={styles.avatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>
+                  {(user.name || "?")[0].toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* User Info */}
+        <View style={styles.infoSection}>
+          <Text style={styles.displayName}>{user.name || "Unbekannt"}</Text>
+          {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
+
+          {/* Stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{posts.length}</Text>
+              <Text style={styles.statLabel}>Beiträge</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{user.friendCount ?? 0}</Text>
+              <Text style={styles.statLabel}>Freunde</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionBtn, friendConfig.style]}
+            onPress={handleFriendAction}
+            disabled={friendConfig.disabled || friendLoading}
+            activeOpacity={0.7}
+          >
+            {friendLoading ? (
+              <ActivityIndicator size="small" color={friendConfig.iconColor} />
+            ) : (
+              <>
+                <FriendIcon size={16} color={friendConfig.iconColor} />
+                <Text
+                  style={[styles.actionBtnText, friendConfig.textStyle]}
+                  numberOfLines={1}
+                >
+                  {friendConfig.label}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.messageBtn]}
+            onPress={handleMessage}
+            activeOpacity={0.7}
+          >
+            <MessageCircle size={16} color="#000" />
+            <Text
+              style={[styles.actionBtnText, styles.messageBtnText]}
+              numberOfLines={1}
+            >
+              Nachricht
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Profile Info */}
-        <View style={styles.profileInfo}>
-          <Avatar uri={profile.avatarUrl} name={profile.name} size={80} />
-          <Text style={styles.name}>{profile.name}</Text>
-          {profile.role === "admin" && <ZAdminBadge />}
-          {userGroups && userGroups.length > 0 && <GroupBadges groups={userGroups} />}
-          {profile.city && (
-            <Text style={styles.location}>
-              {profile.city}{profile.county ? `, ${profile.county}` : ""}
-            </Text>
-          )}
-          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+        {/* Posts Grid */}
+        <View style={styles.postsSection}>
+          <Text style={styles.sectionTitle}>Beiträge</Text>
+          {posts.length === 0 ? (
+            <View style={styles.emptyPosts}>
+              <Text style={styles.emptyText}>Noch keine Beiträge</Text>
+            </View>
+          ) : (
+            <View style={styles.postsGrid}>
+              {posts.map((post, index) => {
+                const isVideo = post.type === "video";
+                const displayUrl =
+                  post.thumbnailUrl || (!isVideo ? post.mediaUrl : null);
 
-          {/* Action Buttons */}
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                styles.friendBtn,
-                friendStatus === "friends" && styles.friendBtnAccepted,
-                friendStatus === "pending_sent" && styles.friendBtnPending,
-              ]}
-              onPress={canSendRequest ? handleSendFriendRequest : undefined}
-              disabled={!canSendRequest || sendingRequest}
-              activeOpacity={canSendRequest ? 0.7 : 1}
-            >
-              <SymbolView
-                name={friendStatus === "friends" ? "person.crop.circle.badge.checkmark" : "person.badge.plus"}
-                size={16}
-                tintColor={friendStatus === "friends" ? colors.black : colors.white}
-              />
-              <Text style={[
-                styles.actionBtnText,
-                friendStatus === "friends" && styles.friendBtnTextAccepted,
-              ]}>
-                {sendingRequest ? "..." : friendLabel}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.actionBtn, styles.messageBtn]} onPress={handleMessage}>
-              <SymbolView name="bubble.left.fill" size={16} tintColor={colors.black} />
-              <Text style={[styles.actionBtnText, styles.messageBtnText]}>Nachricht</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Interests */}
-          {profile.interests && profile.interests.length > 0 && (
-            <View style={styles.interestsSection}>
-              <Text style={styles.sectionTitle}>Interessen</Text>
-              <View style={styles.chipContainer}>
-                {profile.interests.slice(0, 10).map((interest: string) => (
-                  <View key={interest} style={styles.chip}>
-                    <Text style={styles.chipText}>{interest}</Text>
-                  </View>
-                ))}
-              </View>
+                return (
+                  <TouchableOpacity
+                    key={post._id}
+                    style={[
+                      styles.postTile,
+                      {
+                        marginRight:
+                          (index + 1) % NUM_COLUMNS === 0 ? 0 : GRID_GAP,
+                        marginBottom: GRID_GAP,
+                      },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(main)/post-detail",
+                        params: { id: post._id },
+                      })
+                    }
+                  >
+                    {displayUrl ? (
+                      <Image
+                        source={{ uri: displayUrl }}
+                        style={styles.postImage}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[styles.postImage, styles.postVideoFallback]}
+                      >
+                        <Play size={28} color="#fff" fill="#fff" />
+                      </View>
+                    )}
+                    {isVideo && displayUrl && (
+                      <View style={styles.videoOverlay}>
+                        <Play size={12} color="#fff" fill="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
         </View>
-
-        {/* Posts Grid */}
-        {profile.posts.length > 0 && (
-          <View style={styles.postsSection}>
-            <Text style={styles.sectionTitlePosts}>
-              Beiträge ({profile.posts.length})
-            </Text>
-            <View style={styles.postsGrid}>
-              {profile.posts.map((post) => (
-                <TouchableOpacity
-                  key={post._id}
-                  style={styles.postThumb}
-                  activeOpacity={0.8}
-                  onPress={() => router.push({
-                    pathname: "/(main)/post-detail" as "/",
-                    params: { id: post._id },
-                  })}
-                >
-                  <Image
-                    source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
-                    style={styles.postThumbImage}
-                    contentFit="cover"
-                  />
-                  {post.type === "video" && (
-                    <View style={styles.videoIndicator}>
-                      <SymbolView name="play.fill" size={12} tintColor={colors.white} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {profile.posts.length === 0 && (
-          <View style={styles.emptyPosts}>
-            <SymbolView name="photo.on.rectangle" size={40} tintColor={colors.gray300} />
-            <Text style={styles.emptyPostsText}>Noch keine Beiträge</Text>
-          </View>
-        )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.white },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  banner: { height: 180, position: "relative" },
-  bannerImage: { width: "100%", height: "100%" },
-  bannerPlaceholder: { flex: 1, backgroundColor: colors.gray200 },
-  backBtn: {
-    position: "absolute", top: spacing.md, left: spacing.md,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    alignItems: "center", justifyContent: "center",
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
   },
-  profileInfo: { paddingHorizontal: spacing.xl, marginTop: -40 },
-  name: { fontSize: 24, fontWeight: "700", color: colors.black, marginTop: spacing.md },
-  location: { fontSize: 15, color: colors.gray500, marginTop: spacing.xs },
-  bio: { fontSize: 15, color: colors.gray700, marginTop: spacing.sm, lineHeight: 22 },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#999",
+  },
 
-  actions: {
+  // Header
+  header: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.lg,
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f2f2f2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#000",
+  },
+  headerSpacer: {
+    width: 36,
+  },
+
+  // Scroll
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+
+  // Banner
+  bannerContainer: {
+    height: 180,
+    position: "relative",
+    marginBottom: 50,
+  },
+  bannerImage: {
+    width: "100%",
+    height: 180,
+  },
+  bannerPlaceholder: {
+    width: "100%",
+    height: 180,
+    backgroundColor: "#e8e8e8",
+  },
+  avatarWrapper: {
+    position: "absolute",
+    bottom: -40,
+    left: SCREEN_WIDTH / 2 - 45,
+    borderRadius: 45,
+    borderWidth: 4,
+    borderColor: "#fff",
+    backgroundColor: "#fff",
+  },
+  avatar: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+  },
+  avatarPlaceholder: {
+    backgroundColor: "#ddd",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#888",
+  },
+
+  // Info
+  infoSection: {
+    alignItems: "center",
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  displayName: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#000",
+    marginBottom: 2,
+  },
+  bio: {
+    fontSize: 14,
+    color: "#555",
+    textAlign: "center",
+    lineHeight: 20,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  statItem: {
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#000",
+    fontVariant: ["tabular-nums"],
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "#e0e0e0",
+  },
+
+  // Action Buttons
+  actionButtons: {
+    flexDirection: "row",
+    paddingHorizontal: 24,
+    gap: 10,
+    marginBottom: 24,
   },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: radius.lg,
-  },
-  friendBtn: {
-    backgroundColor: colors.black,
-  },
-  friendBtnPending: {
-    backgroundColor: colors.gray400,
-  },
-  friendBtnAccepted: {
-    backgroundColor: colors.gray100,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-  },
-  messageBtn: {
-    backgroundColor: colors.gray100,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    height: 44,
+    borderRadius: 22,
+    gap: 7,
+    paddingHorizontal: 14,
   },
   actionBtnText: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.white,
   },
-  friendBtnTextAccepted: {
-    color: colors.black,
+
+  // Friend button states
+  friendBtnDefault: {
+    backgroundColor: "#000",
+  },
+  friendBtnDefaultText: {
+    color: "#fff",
+  },
+  friendBtnPending: {
+    backgroundColor: "#f2f2f2",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  friendBtnPendingText: {
+    color: "#888",
+  },
+  friendBtnAccepted: {
+    backgroundColor: "#f0faf0",
+    borderWidth: 1,
+    borderColor: "#c8e6c8",
+  },
+  friendBtnAcceptedText: {
+    color: "#34C759",
+  },
+  friendBtnReceived: {
+    backgroundColor: "#f2f2f2",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  friendBtnReceivedText: {
+    color: "#888",
+  },
+
+  // Message button
+  messageBtn: {
+    backgroundColor: "#f2f2f2",
   },
   messageBtnText: {
-    color: colors.black,
+    color: "#000",
   },
 
-  interestsSection: { marginTop: spacing.xl },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.black, marginBottom: spacing.md },
-  chipContainer: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-    borderRadius: radius.full, backgroundColor: colors.gray100,
+  // Posts
+  postsSection: {
+    paddingHorizontal: 0,
   },
-  chipText: { fontSize: 13, color: colors.gray700 },
-
-  postsSection: { marginTop: spacing.xl },
-  sectionTitlePosts: {
-    fontSize: 16, fontWeight: "600", color: colors.black,
-    paddingHorizontal: spacing.xl, marginBottom: spacing.md,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#000",
+    marginBottom: 12,
+    paddingHorizontal: 24,
+  },
+  emptyPosts: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#bbb",
   },
   postsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: GRID_GAP,
   },
-  postThumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
+  postTile: {
+    width: TILE_SIZE,
+    height: TILE_SIZE * 1.2,
+    backgroundColor: "#f0f0f0",
     position: "relative",
+    overflow: "hidden",
   },
-  postThumbImage: {
+  postImage: {
     width: "100%",
     height: "100%",
   },
-  videoIndicator: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.5)",
+  postVideoFallback: {
+    backgroundColor: "#1a1a1a",
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyPosts: {
+  videoOverlay: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
-    paddingVertical: 48,
-    gap: spacing.sm,
-  },
-  emptyPostsText: {
-    fontSize: 15,
-    color: colors.gray400,
+    justifyContent: "center",
   },
 });
