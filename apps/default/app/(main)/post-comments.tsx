@@ -4,7 +4,6 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform,
   ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -17,11 +16,13 @@ import * as Haptics from "expo-haptics";
 export default function PostCommentsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [text, setText] = useState("");
-  const insets = useSafeAreaInsets();
-  const comments = useQuery(api.posts.getComments, id ? { postId: id as Id<"posts"> } : "skip");
+  const me = useQuery(api.users.me);
+  const comments = useQuery(
+    api.posts.getComments,
+    id ? { postId: id as Id<"posts">, currentUserId: me?._id } : "skip"
+  );
   const addComment = useMutation(api.posts.addComment);
-  const likeComment = useMutation(api.posts.likeComment);
-  const unlikeComment = useMutation(api.posts.unlikeComment);
+  const toggleCommentLike = useMutation(api.posts.toggleCommentLike);
 
   const handleSend = async () => {
     if (!text.trim() || !id) return;
@@ -30,34 +31,28 @@ export default function PostCommentsScreen() {
     await addComment({ postId: id as Id<"posts">, text: msg });
   };
 
-  const handleToggleLike = async (commentId: Id<"comments">, isLiked: boolean) => {
+  const handleToggleLike = async (commentId: Id<"comments">) => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    if (isLiked) {
-      await unlikeComment({ commentId });
-    } else {
-      await likeComment({ commentId });
-    }
+    await toggleCommentLike({ commentId });
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 60 : 0}
-    >
-      {/* Grabber */}
-      <View style={styles.grabber} />
+    <View style={styles.container}>
+      {/* Fixed header */}
       <View style={styles.header}>
         <Text style={styles.title}>Kommentare</Text>
       </View>
 
+      {/* Scrollable comment list */}
       <FlatList
+        style={styles.listFlex}
         data={comments}
         keyExtractor={item => item._id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="interactive"
         renderItem={({ item }) => (
           <View style={styles.commentRow}>
             <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
@@ -75,13 +70,13 @@ export default function PostCommentsScreen() {
             </View>
             <TouchableOpacity
               style={styles.likeBtn}
-              onPress={() => handleToggleLike(item._id, item.isLikedByMe)}
+              onPress={() => handleToggleLike(item._id)}
               hitSlop={12}
             >
               <SymbolView
-                name={item.isLikedByMe ? "heart.fill" : "heart"}
+                name={item.isLiked ? "heart.fill" : "heart"}
                 size={16}
-                tintColor={item.isLikedByMe ? "#FF3B30" : colors.gray400}
+                tintColor={item.isLiked ? "#FF3B30" : colors.gray400}
               />
             </TouchableOpacity>
           </View>
@@ -98,26 +93,31 @@ export default function PostCommentsScreen() {
         }
       />
 
-      {/* Input */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={styles.input}
-          placeholder="Kommentar schreiben..."
-          placeholderTextColor={colors.gray400}
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={1000}
-        />
-        {text.trim().length > 0 && (
-          <TouchableOpacity onPress={handleSend} hitSlop={8}>
-            <View style={styles.sendBtn}>
-              <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+      {/* Fixed input bar at bottom */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+      >
+        <View style={styles.inputBar}>
+          <TextInput
+            style={styles.input}
+            placeholder="Kommentar schreiben..."
+            placeholderTextColor={colors.gray400}
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={1000}
+          />
+          {text.trim().length > 0 && (
+            <TouchableOpacity onPress={handleSend} hitSlop={8}>
+              <View style={styles.sendBtn}>
+                <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -132,27 +132,28 @@ function formatTime(ts: number): string {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  grabber: {
-    width: 36,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.gray300,
-    alignSelf: "center",
-    marginTop: spacing.sm,
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
   },
   header: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
+    paddingVertical: spacing.md,
   },
   title: {
     fontSize: 16,
     fontWeight: "600",
     color: colors.black,
     textAlign: "center",
-    paddingVertical: spacing.md,
   },
-  list: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  listFlex: {
+    flex: 1,
+  },
+  listContent: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+  },
   loadingWrap: { paddingVertical: 40, alignItems: "center" },
   emptyWrap: { alignItems: "center", paddingVertical: 48 },
   emptyText: { fontSize: 15, fontWeight: "600", color: colors.gray500 },
@@ -186,10 +187,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    paddingBottom: Platform.OS === "ios" ? spacing.md : spacing.sm,
+    paddingBottom: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.gray200,
     gap: spacing.sm,
+    backgroundColor: colors.white,
   },
   input: {
     flex: 1,
