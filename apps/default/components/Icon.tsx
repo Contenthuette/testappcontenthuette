@@ -81,6 +81,7 @@ import {
   Hand,
   Images,
   FileSearch,
+  Crown,
   type LucideProps,
 } from "lucide-react-native";
 
@@ -218,6 +219,8 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   envelope: Mail,
   pencil: Pencil,
   "pencil.circle": PencilLine,
+  crown: Crown,
+  "crown.fill": Crown,
 };
 
 interface SymbolViewProps {
