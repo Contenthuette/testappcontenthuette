@@ -39,7 +39,9 @@ export function GroupBadges({ groups }: { groups: GroupInfo[] }) {
           activeOpacity={0.7}
           onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
         >
-          <SymbolView name="shield.fill" size={11} tintColor={colors.white} />
+          <View style={styles.crownCircle}>
+            <SymbolView name="crown.fill" size={10} tintColor={colors.white} />
+          </View>
           <Text style={styles.adminChipText} numberOfLines={1}>
             Admin: {g.groupName}
           </Text>
@@ -93,17 +95,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 5,
-    backgroundColor: colors.black,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 6,
+    backgroundColor: colors.gray100,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
     borderRadius: radius.full,
     borderCurve: "continuous",
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  crownCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
   },
   adminChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: colors.white,
+    color: colors.black,
     maxWidth: 180,
   },
 
