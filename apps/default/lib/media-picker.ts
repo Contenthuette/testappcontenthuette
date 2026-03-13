@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Platform, Alert } from "react-native";
 
 export type MediaType = "images" | "videos" | "all";
@@ -16,6 +17,7 @@ interface PickerResult {
   fileName: string;
   width: number;
   height: number;
+  duration?: number; // milliseconds for videos
 }
 
 function getMediaType(t: MediaType): ImagePicker.MediaType[] {
@@ -42,6 +44,21 @@ async function ensurePermission(): Promise<boolean> {
   return true;
 }
 
+/** Compress image: resize down to max 1920px on longest side, quality 0.8 */
+async function compressImage(uri: string, maxDimension = 1920): Promise<{ uri: string; width: number; height: number }> {
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: maxDimension } }],
+      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    return { uri: result.uri, width: result.width, height: result.height };
+  } catch {
+    // Fallback: return original
+    return { uri, width: 0, height: 0 };
+  }
+}
+
 export async function pickImage(opts?: PickerOptions): Promise<PickerResult | null> {
   const ok = await ensurePermission();
   if (!ok) return null;
@@ -53,6 +70,22 @@ export async function pickImage(opts?: PickerOptions): Promise<PickerResult | nu
   });
   if (result.canceled || !result.assets?.[0]) return null;
   const asset = result.assets[0];
+
+  // Compress large images
+  const needsCompress = asset.width > 1920 || asset.height > 1920;
+  if (needsCompress) {
+    const compressed = await compressImage(asset.uri, 1920);
+    if (compressed.width > 0) {
+      return {
+        uri: compressed.uri,
+        mimeType: "image/jpeg",
+        fileName: asset.fileName ?? "photo.jpg",
+        width: compressed.width,
+        height: compressed.height,
+      };
+    }
+  }
+
   return {
     uri: asset.uri,
     mimeType: asset.mimeType ?? "image/jpeg",
@@ -69,6 +102,8 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     mediaTypes: ["videos"],
     allowsEditing: opts?.allowsEditing ?? false,
     quality: opts?.quality ?? 0.7,
+    videoMaxDuration: 120, // 2 min max
+    videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
   });
   if (result.canceled || !result.assets?.[0]) return null;
   const asset = result.assets[0];
@@ -78,6 +113,7 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     fileName: asset.fileName ?? "video.mp4",
     width: asset.width,
     height: asset.height,
+    duration: asset.duration ?? undefined,
   };
 }
 

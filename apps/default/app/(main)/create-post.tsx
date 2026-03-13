@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Alert,
   useWindowDimensions,
-  PanResponder,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
@@ -19,11 +18,23 @@ import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import Icon from "@/components/Icon";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { ThumbnailPicker } from "@/components/ThumbnailPicker";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from "react-native-reanimated";
 
 type PostType = "photo" | "video";
 type AspectMode = "original" | "cropped";
@@ -34,6 +45,7 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
 };
 
 const FEED_ASPECT = 3 / 4; // 3:4 portrait
+const LONG_PRESS_DURATION = 2000; // 2 seconds
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
@@ -55,14 +67,17 @@ export default function CreatePostScreen() {
   const [published, setPublished] = useState(false);
   const [aspectMode, setAspectMode] = useState<AspectMode>("cropped");
   const [cropOffsetY, setCropOffsetY] = useState(0.5);
+  const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
+
+  // Thumbnail state
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+  const [thumbnailIsCustom, setThumbnailIsCustom] = useState(false);
 
   // Videos are always cropped to 3:4
   const effectiveAspectMode: AspectMode = postType === "video" ? "cropped" : aspectMode;
 
-  const cropOffsetRef = useRef(0.5);
-
   const previewWidth = width - spacing.lg * 2;
-  const cropContainerHeight = previewWidth / FEED_ASPECT; // 3:4 → taller than wide
+  const cropContainerHeight = previewWidth / FEED_ASPECT;
 
   // Scaled media dimensions at preview width
   const scaledMediaHeight = mediaDims
@@ -71,32 +86,102 @@ export default function CreatePostScreen() {
   const overflowY = Math.max(0, scaledMediaHeight - cropContainerHeight);
   const canCrop = overflowY > 0;
 
-  const overflowRef = useRef(overflowY);
-  useEffect(() => {
-    overflowRef.current = overflowY;
-  }, [overflowY]);
+  // --- Gesture-based crop (long-press 2s → pan + pinch) ---
+  const cropActive = useSharedValue(false);
+  const offsetY = useSharedValue(0.5);
+  const savedOffsetY = useSharedValue(0.5);
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
 
-  // Pan gesture for crop positioning
-  const startOffsetRef = useRef(0.5);
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 3,
-        onPanResponderGrant: () => {
-          startOffsetRef.current = cropOffsetRef.current;
-        },
-        onPanResponderMove: (_, gesture) => {
-          const overflow = overflowRef.current;
-          if (overflow <= 0) return;
-          const delta = gesture.dy / overflow;
-          const newVal = Math.max(0, Math.min(1, startOffsetRef.current - delta));
-          cropOffsetRef.current = newVal;
-          setCropOffsetY(newVal);
-        },
-      }),
-    [],
+  const updateCropOffset = useCallback((val: number) => {
+    setCropOffsetY(val);
+  }, []);
+
+  const triggerHaptic = useCallback(() => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }
+  }, []);
+
+  // Long press to activate crop mode
+  const longPress = Gesture.LongPress()
+    .minDuration(LONG_PRESS_DURATION)
+    .onStart(() => {
+      cropActive.value = true;
+      runOnJS(triggerHaptic)();
+    });
+
+  // Pan gesture (move up/down) - only when crop is active
+  const panGesture = Gesture.Pan()
+    .enabled(canCrop)
+    .onStart(() => {
+      savedOffsetY.value = offsetY.value;
+    })
+    .onUpdate((e) => {
+      if (!cropActive.value) return;
+      const overflow = overflowY * scale.value;
+      if (overflow <= 0) return;
+      const delta = e.translationY / overflow;
+      const newVal = Math.max(0, Math.min(1, savedOffsetY.value - delta));
+      offsetY.value = newVal;
+      runOnJS(updateCropOffset)(newVal);
+    })
+    .onEnd(() => {
+      // Keep crop active until tap outside
+    });
+
+  // Pinch gesture (zoom in/out) - only when crop is active
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      savedScale.value = scale.value;
+    })
+    .onUpdate((e) => {
+      if (!cropActive.value) return;
+      const newScale = Math.max(1, Math.min(3, savedScale.value * e.scale));
+      scale.value = newScale;
+    })
+    .onEnd(() => {
+      // Snap back if below 1
+      if (scale.value < 1.05) {
+        scale.value = withSpring(1, { damping: 15 });
+      }
+    });
+
+  // Tap to deactivate crop mode
+  const tapGesture = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      if (cropActive.value) {
+        cropActive.value = false;
+      }
+    });
+
+  // Compose gestures: long-press activates, then pan+pinch simultaneously, tap deactivates
+  const composedGesture = Gesture.Race(
+    longPress,
+    Gesture.Simultaneous(panGesture, pinchGesture),
+    tapGesture,
   );
+
+  // Animated style for the media inside crop container
+  const animatedMediaStyle = useAnimatedStyle(() => {
+    const currentOverflow = overflowY * scale.value;
+    const translateYVal = -offsetY.value * currentOverflow;
+    return {
+      transform: [
+        { translateY: translateYVal },
+        { scale: scale.value },
+      ],
+    };
+  });
+
+  // Animated border for crop activation feedback
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    return {
+      borderWidth: cropActive.value ? 2 : 0,
+      borderColor: cropActive.value ? colors.black : "transparent",
+    };
+  });
 
   const translateY = -cropOffsetY * overflowY;
 
@@ -117,7 +202,23 @@ export default function CreatePostScreen() {
         setMediaFile({ uri: result.uri, mimeType: result.mimeType });
         setMediaDims({ width: result.width, height: result.height });
         setCropOffsetY(0.5);
-        cropOffsetRef.current = 0.5;
+        offsetY.value = 0.5;
+        savedOffsetY.value = 0.5;
+        scale.value = 1;
+        savedScale.value = 1;
+        cropActive.value = false;
+        setThumbnailUri(null);
+        setThumbnailIsCustom(false);
+
+        // Try to extract duration from asset if available
+        // Duration comes from expo-image-picker as seconds
+        const anyResult = result as Record<string, unknown>;
+        if (typeof anyResult.duration === "number" && anyResult.duration > 0) {
+          setVideoDuration(anyResult.duration / 1000);
+        } else {
+          setVideoDuration(undefined);
+        }
+
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
@@ -134,12 +235,33 @@ export default function CreatePostScreen() {
     }
   };
 
+  const handleThumbnailSelected = useCallback((uri: string, isCustom: boolean) => {
+    setThumbnailUri(uri);
+    setThumbnailIsCustom(isCustom);
+  }, []);
+
   const handlePublish = async () => {
     if (!mediaFile) return;
     setPublishing(true);
     try {
+      // Upload main media
       const uploadUrl = await generateUploadUrl();
       const storageId = await uploadToConvex(uploadUrl, mediaFile.uri, mediaFile.mimeType);
+
+      // Upload thumbnail if selected
+      let thumbStorageId: string | undefined;
+      if (thumbnailUri && postType === "video") {
+        try {
+          const thumbUploadUrl = await generateUploadUrl();
+          thumbStorageId = await uploadToConvex(
+            thumbUploadUrl,
+            thumbnailUri,
+            thumbnailIsCustom ? "image/jpeg" : "image/png",
+          );
+        } catch (e) {
+          console.warn("Thumbnail upload failed, continuing without:", e);
+        }
+      }
 
       const mediaAspectRatio = mediaDims
         ? mediaDims.width / mediaDims.height
@@ -149,6 +271,7 @@ export default function CreatePostScreen() {
         type: postType,
         caption: caption.trim() || undefined,
         mediaStorageId: storageId as never,
+        thumbnailStorageId: thumbStorageId as never,
         aspectMode: effectiveAspectMode,
         cropOffsetY: effectiveAspectMode === "cropped" ? cropOffsetY : undefined,
         mediaAspectRatio,
@@ -223,57 +346,62 @@ export default function CreatePostScreen() {
         )}
 
         {isCropped ? (
-          /* ── Cropped preview with drag ── */
+          /* ── Cropped preview with gesture-based crop ── */
           <View>
-            <View
-              style={[
-                styles.cropContainer,
-                { width: previewWidth, height: cropContainerHeight },
-              ]}
-              {...panResponder.panHandlers}
-            >
-              {postType === "video" ? (
-                <View style={{ transform: [{ translateY }] }}>
-                  <VideoPlayer
-                    uri={mediaPreview}
-                    height={scaledMediaHeight}
-                    width={previewWidth}
-                    autoPlay={false}
-                    muted
-                    hideControls
-                  />
-                </View>
-              ) : (
-                <Image
-                  source={{ uri: mediaPreview }}
-                  style={[
-                    styles.cropImage,
-                    {
-                      width: previewWidth,
-                      height: scaledMediaHeight,
-                      transform: [{ translateY }],
-                    },
-                  ]}
-                  contentFit="cover"
-                />
-              )}
+            <GestureDetector gesture={composedGesture}>
+              <Animated.View
+                style={[
+                  styles.cropContainer,
+                  { width: previewWidth, height: cropContainerHeight },
+                  animatedContainerStyle,
+                ]}
+              >
+                {postType === "video" ? (
+                  <Animated.View style={animatedMediaStyle}>
+                    <VideoPlayer
+                      uri={mediaPreview}
+                      height={scaledMediaHeight}
+                      width={previewWidth}
+                      autoPlay={false}
+                      muted
+                      hideControls
+                    />
+                  </Animated.View>
+                ) : (
+                  <Animated.View style={animatedMediaStyle}>
+                    <Image
+                      source={{ uri: mediaPreview }}
+                      style={[
+                        styles.cropImage,
+                        {
+                          width: previewWidth,
+                          height: scaledMediaHeight,
+                        },
+                      ]}
+                      contentFit="cover"
+                    />
+                  </Animated.View>
+                )}
 
-              {/* Drag indicators */}
-              {canCrop && (
-                <View style={styles.dragOverlay} pointerEvents="none">
-                  <View style={styles.dragHandle}>
-                    <Icon name="chevron.up" size={14} tintColor="rgba(255,255,255,0.9)" />
+                {/* Drag indicators */}
+                {canCrop && (
+                  <View style={styles.dragOverlay} pointerEvents="none">
+                    <View style={styles.dragHandle}>
+                      <Icon name="chevron.up" size={14} tintColor="rgba(255,255,255,0.9)" />
+                    </View>
+                    <View style={{ flex: 1 }} />
+                    <View style={styles.dragHandle}>
+                      <Icon name="chevron.down" size={14} tintColor="rgba(255,255,255,0.9)" />
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }} />
-                  <View style={styles.dragHandle}>
-                    <Icon name="chevron.down" size={14} tintColor="rgba(255,255,255,0.9)" />
-                  </View>
-                </View>
-              )}
-            </View>
+                )}
+              </Animated.View>
+            </GestureDetector>
 
             {canCrop && (
-              <Text style={styles.cropHint}>Ziehe um den Ausschnitt zu waehlen</Text>
+              <Text style={styles.cropHint}>
+                2 Sek. gedr\u00fcckt halten, dann verschieben oder zoomen
+              </Text>
             )}
           </View>
         ) : (
@@ -308,10 +436,20 @@ export default function CreatePostScreen() {
         <Text style={styles.aspectHint}>
           {isCropped
             ? postType === "video"
-              ? "Ziehe das Video um den sichtbaren 3:4 Ausschnitt zu waehlen."
-              : "Das Medium wird auf 3:4 zugeschnitten und fuellt den Feed."
-            : "Das Medium wird im Originalformat mit Raendern angezeigt."}
+              ? "2 Sek. gedr\u00fcckt halten \u2192 1 Finger verschieben, 2 Finger zoomen."
+              : "Das Medium wird auf 3:4 zugeschnitten und f\u00fcllt den Feed."
+            : "Das Medium wird im Originalformat mit R\u00e4ndern angezeigt."}
         </Text>
+
+        {/* Thumbnail picker for videos */}
+        {postType === "video" && mediaPreview && (
+          <ThumbnailPicker
+            videoUri={mediaPreview}
+            videoDuration={videoDuration}
+            onThumbnailSelected={handleThumbnailSelected}
+            selectedThumbnailUri={thumbnailUri}
+          />
+        )}
 
         {/* Change media button */}
         <TouchableOpacity
@@ -336,72 +474,74 @@ export default function CreatePostScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => safeBack("create-post")} style={styles.headerBtn}>
-          <Icon name="chevron.left" size={20} tintColor={colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{config.title}</Text>
-        <TouchableOpacity
-          onPress={handlePublish}
-          disabled={publishing || !mediaFile}
-          style={[styles.publishBtn, (publishing || !mediaFile) && styles.publishBtnDisabled]}
-        >
-          {publishing ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <Text style={styles.publishBtnText}>Posten</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <GestureHandlerRootView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {mediaPreview && mediaDims ? (
-          renderCropPreview()
-        ) : (
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity onPress={() => safeBack("create-post")} style={styles.headerBtn}>
+            <Icon name="chevron.left" size={20} tintColor={colors.black} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{config.title}</Text>
           <TouchableOpacity
-            style={styles.mediaArea}
-            onPress={handlePick}
-            disabled={picking || publishing}
-            activeOpacity={0.7}
+            onPress={handlePublish}
+            disabled={publishing || !mediaFile}
+            style={[styles.publishBtn, (publishing || !mediaFile) && styles.publishBtnDisabled]}
           >
-            {picking ? (
-              <View style={styles.emptyMedia}>
-                <ActivityIndicator size="large" color={colors.gray400} />
-                <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
-              </View>
+            {publishing ? (
+              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <View style={styles.emptyMedia}>
-                <Icon name={config.icon} size={40} tintColor={colors.gray400} />
-                <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
-                <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwaehlen</Text>
-              </View>
+              <Text style={styles.publishBtnText}>Posten</Text>
             )}
           </TouchableOpacity>
-        )}
-
-        <View style={styles.captionSection}>
-          <Text style={styles.sectionLabel}>Beschreibung</Text>
-          <TextInput
-            style={styles.captionInput}
-            value={caption}
-            onChangeText={setCaption}
-            placeholder="Schreibe etwas zu deinem Beitrag..."
-            placeholderTextColor={colors.gray400}
-            multiline
-            maxLength={500}
-            editable={!publishing}
-          />
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {mediaPreview && mediaDims ? (
+            renderCropPreview()
+          ) : (
+            <TouchableOpacity
+              style={styles.mediaArea}
+              onPress={handlePick}
+              disabled={picking || publishing}
+              activeOpacity={0.7}
+            >
+              {picking ? (
+                <View style={styles.emptyMedia}>
+                  <ActivityIndicator size="large" color={colors.gray400} />
+                  <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyMedia}>
+                  <Icon name={config.icon} size={40} tintColor={colors.gray400} />
+                  <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
+                  <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwaehlen</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.captionSection}>
+            <Text style={styles.sectionLabel}>Beschreibung</Text>
+            <TextInput
+              style={styles.captionInput}
+              value={caption}
+              onChangeText={setCaption}
+              placeholder="Schreibe etwas zu deinem Beitrag..."
+              placeholderTextColor={colors.gray400}
+              multiline
+              maxLength={500}
+              editable={!publishing}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GestureHandlerRootView>
   );
 }
 
