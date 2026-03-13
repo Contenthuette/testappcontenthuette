@@ -1,6 +1,28 @@
 import * as ImagePicker from "expo-image-picker";
-import * as ImageManipulator from "expo-image-manipulator";
 import { Platform, Alert } from "react-native";
+
+// expo-image-manipulator types
+interface ManipulateResult {
+  uri: string;
+  width: number;
+  height: number;
+}
+
+let ImageManipulator: {
+  manipulateAsync: (
+    uri: string,
+    actions: Array<{ resize?: { width?: number; height?: number } }>,
+    opts: { compress?: number; format?: string },
+  ) => Promise<ManipulateResult>;
+  SaveFormat: { JPEG: string };
+} | null = null;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  ImageManipulator = require("expo-image-manipulator") as typeof ImageManipulator;
+} catch {
+  // not available
+}
 
 export type MediaType = "images" | "videos" | "all";
 
@@ -46,6 +68,7 @@ async function ensurePermission(): Promise<boolean> {
 
 /** Compress image: resize down to max 1920px on longest side, quality 0.8 */
 async function compressImage(uri: string, maxDimension = 1920): Promise<{ uri: string; width: number; height: number }> {
+  if (!ImageManipulator) return { uri, width: 0, height: 0 };
   try {
     const result = await ImageManipulator.manipulateAsync(
       uri,
@@ -54,7 +77,6 @@ async function compressImage(uri: string, maxDimension = 1920): Promise<{ uri: s
     );
     return { uri: result.uri, width: result.width, height: result.height };
   } catch {
-    // Fallback: return original
     return { uri, width: 0, height: 0 };
   }
 }
@@ -102,8 +124,6 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     mediaTypes: ["videos"],
     allowsEditing: opts?.allowsEditing ?? false,
     quality: opts?.quality ?? 0.7,
-    videoMaxDuration: 120, // 2 min max
-    videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
   });
   if (result.canceled || !result.assets?.[0]) return null;
   const asset = result.assets[0];

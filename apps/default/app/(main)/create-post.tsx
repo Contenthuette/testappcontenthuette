@@ -211,10 +211,8 @@ export default function CreatePostScreen() {
         setThumbnailIsCustom(false);
 
         // Try to extract duration from asset if available
-        // Duration comes from expo-image-picker as seconds
-        const anyResult = result as Record<string, unknown>;
-        if (typeof anyResult.duration === "number" && anyResult.duration > 0) {
-          setVideoDuration(anyResult.duration / 1000);
+        if (result.duration !== undefined && result.duration > 0) {
+          setVideoDuration(result.duration / 1000);
         } else {
           setVideoDuration(undefined);
         }

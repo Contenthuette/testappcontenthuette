@@ -9,11 +9,33 @@ import {
   Platform,
 } from "react-native";
 import { Image } from "expo-image";
-import * as VideoThumbnails from "expo-video-thumbnails";
 import Icon from "@/components/Icon";
 import { colors, spacing, radius } from "@/lib/theme";
 import { pickImage } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
+
+// expo-video-thumbnails types
+interface ThumbnailResult {
+  uri: string;
+  width: number;
+  height: number;
+}
+
+interface ThumbnailOptions {
+  time: number;
+  quality?: number;
+}
+
+let VideoThumbnails: {
+  getThumbnailAsync: (uri: string, opts: ThumbnailOptions) => Promise<ThumbnailResult>;
+} | null = null;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  VideoThumbnails = require("expo-video-thumbnails") as typeof VideoThumbnails;
+} catch {
+  // not available
+}
 
 const THUMB_COUNT = 8;
 const THUMB_SIZE = 56;
@@ -51,11 +73,11 @@ export function ThumbnailPicker({
     for (let i = 1; i <= THUMB_COUNT; i++) {
       const timeMs = Math.round(interval * i);
       try {
-        const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        const result = await VideoThumbnails?.getThumbnailAsync(videoUri, {
           time: timeMs,
           quality: 0.5,
         });
-        extracted.push(uri);
+        if (result?.uri) extracted.push(result.uri);
       } catch {
         // Some frames may fail, skip
       }
@@ -64,11 +86,11 @@ export function ThumbnailPicker({
     // Fallback: at least get frame at 0
     if (extracted.length === 0) {
       try {
-        const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        const result = await VideoThumbnails?.getThumbnailAsync(videoUri, {
           time: 100,
           quality: 0.5,
         });
-        extracted.push(uri);
+        if (result?.uri) extracted.push(result.uri);
       } catch {
         // nothing we can do
       }

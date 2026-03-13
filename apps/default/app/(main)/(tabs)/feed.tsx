@@ -88,41 +88,83 @@ export default function FeedScreen() {
 
     const isOriginal = item.aspectMode === "original";
     const isVideo = item.type === "video";
+    const isThisVideoVisible = isFocused && visibleVideoId === item._id;
 
     if (isVideo) {
+      const thumbUri = item.thumbnailUrl;
+
       if (isOriginal) {
-        // Original: video fits inside 3:4 container with contain
         return (
           <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
-            <VideoPlayer
-              uri={item.mediaUrl}
-              height={feedMediaHeight}
-              width={screenWidth}
-              autoPlay
-              loop
-              hideControls
-              isVisible={isFocused && visibleVideoId === item._id}
-              contentFit="contain"
-            />
+            {isThisVideoVisible ? (
+              <VideoPlayer
+                uri={item.mediaUrl}
+                height={feedMediaHeight}
+                width={screenWidth}
+                autoPlay
+                loop
+                hideControls
+                isVisible
+                contentFit="contain"
+              />
+            ) : (
+              <View style={{ width: screenWidth, height: feedMediaHeight, justifyContent: "center", alignItems: "center" }}>
+                {thumbUri ? (
+                  <Image
+                    source={{ uri: thumbUri }}
+                    style={{ width: screenWidth, height: feedMediaHeight }}
+                    contentFit="contain"
+                    transition={100}
+                  />
+                ) : (
+                  <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
+                )}
+                <View style={styles.videoPlayOverlay}>
+                  <View style={styles.videoPlayCircle}>
+                    <SymbolView name="play.fill" size={22} tintColor="#fff" />
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
         );
       }
-      // Cropped: video fills 3:4 container, positioned with offset
       const nativeHeight = getVideoNativeHeight(item);
       const translateY = getCropTranslateY(item);
+      const cropPercent = ((item.cropOffsetY ?? 0.5) * 100).toString() + "%";
       return (
         <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
-          <View style={{ transform: [{ translateY }] }}>
-            <VideoPlayer
-              uri={item.mediaUrl}
-              height={nativeHeight}
-              width={screenWidth}
-              autoPlay
-              loop
-              hideControls
-              isVisible={isFocused && visibleVideoId === item._id}
-            />
-          </View>
+          {isThisVideoVisible ? (
+            <View style={{ transform: [{ translateY }] }}>
+              <VideoPlayer
+                uri={item.mediaUrl}
+                height={nativeHeight}
+                width={screenWidth}
+                autoPlay
+                loop
+                hideControls
+                isVisible
+              />
+            </View>
+          ) : (
+            <View>
+              {thumbUri ? (
+                <Image
+                  source={{ uri: thumbUri }}
+                  style={{ width: screenWidth, height: feedMediaHeight }}
+                  contentFit="cover"
+                  transition={100}
+                />
+              ) : (
+                <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
+              )}
+              <View style={styles.videoPlayOverlay}>
+                <View style={styles.videoPlayCircle}>
+                  <SymbolView name="play.fill" size={22} tintColor="#fff" />
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       );
     }
@@ -391,5 +433,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoPlayCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

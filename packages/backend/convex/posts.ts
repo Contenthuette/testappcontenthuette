@@ -113,6 +113,7 @@ export const getById = authQuery({
       type: v.union(v.literal("photo"), v.literal("video")),
       caption: v.optional(v.string()),
       mediaUrl: v.optional(v.string()),
+      thumbnailUrl: v.optional(v.string()),
       aspectMode: v.optional(v.union(v.literal("original"), v.literal("cropped"))),
       cropOffsetY: v.optional(v.number()),
       mediaAspectRatio: v.optional(v.number()),
@@ -163,6 +164,9 @@ export const getById = authQuery({
       mediaUrl: post.mediaStorageId
         ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
         : post.mediaUrl,
+      thumbnailUrl: post.thumbnailStorageId
+        ? ((await ctx.storage.getUrl(post.thumbnailStorageId)) ?? undefined)
+        : post.thumbnailUrl,
       aspectMode: post.aspectMode,
       cropOffsetY: post.cropOffsetY,
       mediaAspectRatio: post.mediaAspectRatio,
