@@ -272,8 +272,23 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     );
   }
 
-  // idle – nothing visible (auto-starts recording)
-  return null;
+  // idle – show preparing state (never return null to avoid black screen)
+  return (
+    <View style={styles.card}>
+      <View style={styles.topRow}>
+        <View style={styles.recordingDot} />
+        <Text style={styles.timer}>Vorbereiten…</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={handleDelete}
+          style={styles.deleteBtn}
+          activeOpacity={0.7}
+        >
+          <SymbolView name="xmark" size={16} tintColor="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -284,6 +299,12 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 12,
     gap: 14,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#EF4444",
   },
 
   /* ---- Top row ---- */

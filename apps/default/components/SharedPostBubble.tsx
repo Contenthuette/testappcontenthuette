@@ -1,9 +1,9 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Image } from "expo-image";
-import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter } from "expo-router";
 import { SymbolView } from "@/components/Icon";
+import { VideoThumbnail } from "@/components/VideoThumbnail";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface SharedPostBubbleProps {
@@ -18,80 +18,6 @@ interface SharedPostBubbleProps {
   isMine: boolean;
   timestamp?: string;
 }
-
-function VideoThumbnail({ mediaUrl }: { mediaUrl: string }) {
-  const player = useVideoPlayer(mediaUrl, (p) => {
-    p.loop = false;
-    p.muted = true;
-    p.pause();
-  });
-
-  useEffect(() => {
-    // Seek to 0.1s to get a frame (avoid black first frame)
-    const timer = setTimeout(() => {
-      try {
-        player.currentTime = 0.1;
-      } catch {
-        // ignore if not ready
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [player]);
-
-  return (
-    <View style={thumbStyles.videoContainer}>
-      <VideoView
-        player={player}
-        style={thumbStyles.video}
-        nativeControls={false}
-        allowsPictureInPicture={false}
-        contentFit="cover"
-      />
-      <View style={thumbStyles.playOverlay}>
-        <View style={thumbStyles.playCircle}>
-          <View style={thumbStyles.playTriangle} />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-const thumbStyles = StyleSheet.create({
-  videoContainer: {
-    width: "100%",
-    aspectRatio: 3 / 4,
-    overflow: "hidden",
-    backgroundColor: "#1a1a1a",
-  },
-  video: {
-    width: "100%",
-    height: "100%",
-  },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playTriangle: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 16,
-    borderTopWidth: 10,
-    borderBottomWidth: 10,
-    borderLeftColor: "#fff",
-    borderTopColor: "transparent",
-    borderBottomColor: "transparent",
-    marginLeft: 4,
-  },
-});
 
 export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedPostBubbleProps) {
   const router = useRouter();
@@ -123,8 +49,11 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
       activeOpacity={0.8}
     >
       <View style={styles.mediaWrap}>
-        {isVideo && hasMedia && !hasThumb ? (
-          <VideoThumbnail mediaUrl={preview.mediaUrl!} />
+        {isVideo && hasMedia ? (
+          <VideoThumbnail
+            uri={preview.mediaUrl!}
+            playIconSize={24}
+          />
         ) : hasThumb ? (
           <View style={styles.imageWrap}>
             <Image
@@ -134,9 +63,9 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
               transition={200}
             />
             {isVideo && (
-              <View style={thumbStyles.playOverlay}>
-                <View style={thumbStyles.playCircle}>
-                  <View style={thumbStyles.playTriangle} />
+              <View style={styles.videoPlayOverlay}>
+                <View style={styles.videoPlayCircle}>
+                  <View style={styles.videoPlayTriangle} />
                 </View>
               </View>
             )}
@@ -206,6 +135,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#e0e0e0",
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoPlayCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoPlayTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 16,
+    borderTopWidth: 10,
+    borderBottomWidth: 10,
+    borderLeftColor: "#fff",
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    marginLeft: 4,
   },
   meta: {
     padding: 10,

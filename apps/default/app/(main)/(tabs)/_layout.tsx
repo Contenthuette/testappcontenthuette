@@ -40,7 +40,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="groups"
         options={{
-          title: "Gruppen",
+          title: "Community",
           tabBarIcon: ({ color, focused }) => (
             <SymbolView
               name={focused ? "person.3.fill" : "person.3"}

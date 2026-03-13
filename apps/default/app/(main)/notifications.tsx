@@ -14,17 +14,20 @@ import { SymbolView } from "@/components/Icon";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const ICON_MAP: Record<string, string> = {
-  message: "bubble.left.fill",
+  message: "bubble.right",
   like: "heart.fill",
-  comment: "text.bubble.fill",
-  event: "calendar",
-  ticket: "ticket.fill",
+  comment: "bubble.right",
+  group_invite: "person.3.fill",
+  event_reminder: "calendar",
+  ticket_confirmed: "ticket",
   announcement: "megaphone.fill",
-  group: "person.3.fill",
   call: "phone.fill",
+  join_request: "person.badge.plus",
+  join_accepted: "checkmark.circle.fill",
+  join_rejected: "xmark.circle.fill",
+  post_share: "square.and.arrow.up",
   friend_request: "person.badge.plus",
-  friend_accepted: "person.crop.circle.badge.checkmark",
-  post_share: "square.and.arrow.up.fill",
+  friend_accepted: "checkmark.circle.fill",
 };
 
 export default function NotificationsScreen() {

@@ -118,7 +118,7 @@ export default function GroupsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <ZLogo size={47} />
-        <Text style={styles.headerTitle}>Entdecken</Text>
+        <Text style={styles.headerTitle}>Community</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
           <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
