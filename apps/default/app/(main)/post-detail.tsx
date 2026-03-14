@@ -93,6 +93,7 @@ export default function PostDetailScreen() {
               loop
               hideControls
               contentFit="contain"
+              posterUri={post.thumbnailUrl}
             />
           </View>
         );
@@ -109,6 +110,7 @@ export default function PostDetailScreen() {
               autoPlay
               loop
               hideControls
+              posterUri={post.thumbnailUrl}
             />
           </View>
         </View>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { View, StyleSheet, Pressable, LayoutChangeEvent, AppState, AppStateStatus } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
 import { useIsFocused } from "@react-navigation/native";
 
@@ -15,6 +16,8 @@ interface VideoPlayerProps {
   isVisible?: boolean;
   borderRadius?: number;
   contentFit?: "cover" | "contain";
+  /** Thumbnail shown until the first video frame renders — eliminates black flash */
+  posterUri?: string;
 }
 
 export function VideoPlayer({
@@ -28,10 +31,12 @@ export function VideoPlayer({
   isVisible = true,
   borderRadius = 0,
   contentFit = "cover",
+  posterUri,
 }: VideoPlayerProps) {
   const isFocused = useIsFocused();
   const appStateRef = useRef(AppState.currentState);
   const [appActive, setAppActive] = useState(true);
+  const [firstFrameRendered, setFirstFrameRendered] = useState(false);
 
   const player = useVideoPlayer(uri, (p) => {
     p.loop = loop;
@@ -76,6 +81,10 @@ export function VideoPlayer({
       }
     };
   }, [player]);
+
+  const handleFirstFrameRender = useCallback(() => {
+    setFirstFrameRendered(true);
+  }, []);
 
   const handleTapToPlay = useCallback(() => {
     if (isPlaying) {
@@ -138,6 +147,9 @@ export function VideoPlayer({
     borderRadius > 0 && { borderRadius, overflow: "hidden" as const },
   ];
 
+  // Poster overlay: shown until first video frame renders
+  const showPoster = posterUri && !firstFrameRendered;
+
   return (
     <View style={containerStyle}>
       {hideControls ? (
@@ -151,6 +163,7 @@ export function VideoPlayer({
             style={styles.video}
             contentFit={contentFit}
             nativeControls={false}
+            onFirstFrameRender={handleFirstFrameRender}
           />
         </Pressable>
       ) : (
@@ -160,6 +173,7 @@ export function VideoPlayer({
             style={styles.video}
             contentFit={contentFit}
             nativeControls={isPlaying}
+            onFirstFrameRender={handleFirstFrameRender}
           />
           {!isPlaying && (
             <View style={styles.playOverlay}>
@@ -170,6 +184,19 @@ export function VideoPlayer({
           )}
         </Pressable>
       )}
+
+      {/* Poster thumbnail — covers black flash until first frame renders */}
+      {showPoster && (
+        <Image
+          source={{ uri: posterUri }}
+          style={[StyleSheet.absoluteFill, borderRadius > 0 && { borderRadius }]}
+          contentFit={contentFit}
+          cachePolicy="memory-disk"
+          priority="high"
+          transition={0}
+        />
+      )}
+
       {/* Scrubber bar */}
       {hideControls && duration > 0 && (
         <Pressable

@@ -105,7 +105,7 @@ const FeedPost = memo(function FeedPost({
         return (
           <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
             {isVideoPlaying ? (
-              <VideoPlayer uri={item.mediaUrl} height={feedMediaHeight} width={screenWidth} autoPlay loop hideControls isVisible contentFit="contain" />
+              <VideoPlayer uri={item.mediaUrl} height={feedMediaHeight} width={screenWidth} autoPlay loop hideControls isVisible contentFit="contain" posterUri={thumbUri} />
             ) : (
               <View style={{ width: screenWidth, height: feedMediaHeight, justifyContent: "center", alignItems: "center" }}>
                 {thumbUri ? (
@@ -128,7 +128,7 @@ const FeedPost = memo(function FeedPost({
         <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
           {isVideoPlaying ? (
             <View style={{ transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
-              <VideoPlayer uri={item.mediaUrl} height={nativeHeight} width={screenWidth} autoPlay loop hideControls isVisible />
+              <VideoPlayer uri={item.mediaUrl} height={nativeHeight} width={screenWidth} autoPlay loop hideControls isVisible posterUri={thumbUri} />
             </View>
           ) : (
             <View>

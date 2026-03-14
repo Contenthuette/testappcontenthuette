@@ -80,6 +80,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
               autoPlay
               loop
               muted={false}
+              posterUri={displayImage}
             />
           </View>
         ) : isVideo ? (
