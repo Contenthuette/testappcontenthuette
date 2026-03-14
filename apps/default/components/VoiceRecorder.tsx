@@ -13,13 +13,13 @@ import Animated, {
   withTiming,
   withSequence,
   FadeIn,
-  FadeOut,
   Easing,
 } from "react-native-reanimated";
 import {
   useAudioRecorder,
-  requestRecordingPermissionsAsync,
   RecordingPresets,
+  AudioModule,
+  setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
 } from "@/lib/audio-safe";
@@ -37,19 +37,24 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-type RecorderPhase = "idle" | "recording" | "preview";
+type RecorderPhase = "idle" | "recording" | "preview" | "error";
 
 const BAR_COUNT = 32;
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
   const [elapsed, setElapsed] = useState(0);
-  const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
+  const [errorMsg, setErrorMsg] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasStartedRef = useRef(false);
 
+  // expo-audio hooks (must be at top level)
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const previewPlayer = useAudioPlayer(recordedUri ?? undefined);
+
+  // For preview playback we use the recorded URI
+  const recordedUri = audioRecorder.uri;
+  const previewPlayer = useAudioPlayer(phase === "preview" && recordedUri ? recordedUri : undefined);
   const previewStatus = useAudioPlayerStatus(previewPlayer);
   const isPreviewPlaying = previewStatus.playing;
 
@@ -91,7 +96,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     };
   }, [phase]);
 
-  // Waveform bars (pseudo-random but deterministic per bar index + time)
+  // Waveform bars
   const waveformHeights = useMemo(() => {
     return Array.from({ length: BAR_COUNT }, (_, i) => {
       const seed = Math.sin(i * 0.9 + elapsed * 1.2) * 0.5 + 0.5;
@@ -101,17 +106,28 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     });
   }, [elapsed]);
 
-  // Static waveform for preview (frozen at record time)
   const frozenWaveform = useRef<number[]>([]);
 
   const startRecording = useCallback(async () => {
     try {
-      const status = await requestRecordingPermissionsAsync();
+      // Request permissions via AudioModule
+      const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) {
-        onCancel();
+        setPhase("error");
+        setErrorMsg("Mikrofon-Zugriff verweigert");
         return;
       }
+
+      // Set audio mode for recording on iOS
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
+      });
+
+      // Prepare + record (this is the correct expo-audio flow)
+      await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
+
       setElapsed(0);
       setPhase("recording");
       if (Platform.OS !== "web") {
@@ -119,49 +135,66 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       }
     } catch (err) {
       console.error("Start recording error:", err);
-      onCancel();
+      setPhase("error");
+      setErrorMsg("Aufnahme konnte nicht gestartet werden");
     }
-  }, [audioRecorder, onCancel]);
+  }, [audioRecorder]);
 
   const stopRecording = useCallback(async () => {
     try {
-      // Freeze waveform before stopping
-      frozenWaveform.current = waveformHeights;
+      frozenWaveform.current = [...waveformHeights];
       await audioRecorder.stop();
-      const uri = audioRecorder.uri;
-      if (uri) {
-        setRecordedUri(uri);
+
+      // audioRecorder.uri is updated after stop
+      if (audioRecorder.uri) {
         setRecordedDuration(elapsed);
         setPhase("preview");
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
       } else {
-        onCancel();
+        setPhase("error");
+        setErrorMsg("Aufnahme fehlgeschlagen");
       }
     } catch (err) {
       console.error("Stop recording error:", err);
-      onCancel();
+      setPhase("error");
+      setErrorMsg("Aufnahme konnte nicht gestoppt werden");
     }
-  }, [audioRecorder, elapsed, onCancel, waveformHeights]);
+  }, [audioRecorder, elapsed, waveformHeights]);
+
+  const togglePreview = useCallback(() => {
+    if (!previewPlayer) return;
+    if (isPreviewPlaying) {
+      previewPlayer.pause();
+    } else {
+      if (
+        previewStatus.duration > 0 &&
+        previewStatus.currentTime >= previewStatus.duration
+      ) {
+        previewPlayer.seekTo(0);
+      }
+      previewPlayer.play();
+    }
+  }, [previewPlayer, isPreviewPlaying, previewStatus]);
 
   const handleSend = useCallback(() => {
-    if (recordedUri) {
+    const uri = audioRecorder.uri;
+    if (uri) {
       if (previewPlayer && isPreviewPlaying) {
         previewPlayer.pause();
       }
-      onSend(recordedUri, recordedDuration * 1000);
+      onSend(uri, recordedDuration * 1000);
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
-  }, [recordedUri, recordedDuration, onSend, previewPlayer, isPreviewPlaying]);
+  }, [audioRecorder.uri, recordedDuration, onSend, previewPlayer, isPreviewPlaying]);
 
   const handleDelete = useCallback(() => {
     if (previewPlayer && isPreviewPlaying) {
       previewPlayer.pause();
     }
-    setRecordedUri(null);
     setElapsed(0);
     setPhase("idle");
     onCancel();
@@ -170,37 +203,43 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     }
   }, [onCancel, previewPlayer, isPreviewPlaying]);
 
-  const togglePreview = useCallback(() => {
-    if (!previewPlayer) return;
-    if (isPreviewPlaying) {
-      previewPlayer.pause();
-    } else {
-      if (
-        previewStatus.currentTime >= previewStatus.duration &&
-        previewStatus.duration > 0
-      ) {
-        previewPlayer.seekTo(0);
-      }
-      previewPlayer.play();
-    }
-  }, [previewPlayer, isPreviewPlaying, previewStatus]);
-
-  // Auto-start on mount
+  // Auto-start on mount (once)
   useEffect(() => {
-    if (phase === "idle") {
+    if (!hasStartedRef.current) {
+      hasStartedRef.current = true;
       startRecording();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // === ERROR STATE ===
+  if (phase === "error") {
+    return (
+      <View style={styles.bar}>
+        <TouchableOpacity
+          onPress={handleDelete}
+          style={styles.iconBtn}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <SymbolView name="xmark" size={15} tintColor="#9CA3AF" />
+        </TouchableOpacity>
+        <View style={styles.center}>
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={16}
+            tintColor="#EF4444"
+          />
+          <Text style={styles.errorText}>{errorMsg || "Fehler"}</Text>
+        </View>
+      </View>
+    );
+  }
+
   // === RECORDING STATE ===
   if (phase === "recording") {
     return (
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        style={styles.bar}
-      >
-        {/* Delete */}
+      <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
         <TouchableOpacity
           onPress={handleDelete}
           style={styles.iconBtn}
@@ -210,7 +249,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
 
-        {/* Waveform area */}
         <View style={styles.center}>
           <Animated.View style={[styles.redDot, dotAnimStyle]} />
           <View style={styles.waveform}>
@@ -231,7 +269,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           <Text style={styles.timer}>{formatTime(elapsed)}</Text>
         </View>
 
-        {/* Stop → goes to preview */}
         <TouchableOpacity
           onPress={stopRecording}
           style={styles.stopBtn}
@@ -261,11 +298,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       : formatTime(recordedDuration);
 
     return (
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        style={styles.bar}
-      >
-        {/* Delete */}
+      <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
         <TouchableOpacity
           onPress={handleDelete}
           style={styles.iconBtn}
@@ -275,7 +308,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
 
-        {/* Play/Pause */}
         <TouchableOpacity
           onPress={togglePreview}
           style={styles.playBtn}
@@ -289,7 +321,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           />
         </TouchableOpacity>
 
-        {/* Waveform + time */}
         <View style={styles.center}>
           <View style={styles.waveform}>
             {previewBars.map((h, i) => (
@@ -309,7 +340,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           <Text style={styles.previewTime}>{displayTime}</Text>
         </View>
 
-        {/* Send */}
         <TouchableOpacity
           onPress={handleSend}
           style={styles.sendBtn}
@@ -324,7 +354,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   // === IDLE (preparing) ===
   return (
-    <Animated.View entering={FadeIn.duration(150)} style={styles.bar}>
+    <View style={styles.bar}>
       <TouchableOpacity
         onPress={handleDelete}
         style={styles.iconBtn}
@@ -337,7 +367,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         <View style={styles.preparingDot} />
         <Text style={styles.preparingText}>Aufnahme wird vorbereitet…</Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -351,8 +381,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     gap: 4,
   },
-
-  // Shared icon button
   iconBtn: {
     width: 36,
     height: 36,
@@ -361,8 +389,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  // Center area (fills remaining space)
   center: {
     flex: 1,
     flexDirection: "row",
@@ -370,16 +396,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 4,
   },
-
-  // Red pulsing dot
   redDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: "#EF4444",
   },
-
-  // Waveform
   waveform: {
     flex: 1,
     flexDirection: "row",
@@ -392,8 +414,6 @@ const styles = StyleSheet.create({
     width: 2.5,
     borderRadius: 1.5,
   },
-
-  // Timer during recording
   timer: {
     fontSize: 13,
     fontWeight: "600",
@@ -402,8 +422,6 @@ const styles = StyleSheet.create({
     minWidth: 32,
     textAlign: "right",
   },
-
-  // Stop button (square icon)
   stopBtn: {
     width: 36,
     height: 36,
@@ -418,8 +436,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#FFF",
   },
-
-  // Play button in preview
   playBtn: {
     width: 32,
     height: 32,
@@ -428,8 +444,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  // Preview time
   previewTime: {
     fontSize: 12,
     fontWeight: "600",
@@ -438,8 +452,6 @@ const styles = StyleSheet.create({
     minWidth: 30,
     textAlign: "right",
   },
-
-  // Send button
   sendBtn: {
     width: 36,
     height: 36,
@@ -448,8 +460,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  // Preparing state
   preparingDot: {
     width: 8,
     height: 8,
@@ -459,6 +469,11 @@ const styles = StyleSheet.create({
   preparingText: {
     fontSize: 13,
     color: "#9CA3AF",
+    fontWeight: "500",
+  },
+  errorText: {
+    fontSize: 13,
+    color: "#EF4444",
     fontWeight: "500",
   },
 });

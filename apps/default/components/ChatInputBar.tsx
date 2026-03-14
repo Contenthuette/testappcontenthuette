@@ -1,4 +1,4 @@
-import React, { useState, Component } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,78 +7,9 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
-
-// ErrorBoundary to prevent voice recorder crashes from taking down the screen
-interface ErrorBoundaryState {
-  hasError: boolean;
-}
-
-class VoiceRecorderErrorBoundary extends Component<
-  { children: React.ReactNode; onError: () => void },
-  ErrorBoundaryState
-> {
-  state: ErrorBoundaryState = { hasError: false };
-
-  static getDerivedStateFromError(): ErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error("VoiceRecorder crashed:", error);
-    this.props.onError();
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={ebStyles.errorCard}>
-          <SymbolView
-            name="exclamationmark.triangle"
-            size={18}
-            tintColor="#9CA3AF"
-          />
-          <Text style={ebStyles.errorText}>Aufnahme nicht verfügbar</Text>
-          <TouchableOpacity
-            onPress={this.props.onError}
-            style={ebStyles.closeBtn}
-          >
-            <SymbolView name="xmark" size={13} tintColor="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const ebStyles = StyleSheet.create({
-  errorCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F2F2F7",
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    height: 48,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: "#6B7280",
-  },
-  closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "rgba(0,0,0,0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
 
 interface ChatInputBarProps {
   onSend: (text: string) => void;
@@ -125,27 +56,24 @@ export function ChatInputBar({
   const hasText = text.trim().length > 0;
 
   return (
-    <Animated.View layout={LinearTransition.duration(200)} style={styles.wrapper}>
+    <View style={styles.wrapper}>
       {showVoiceRecorder ? (
-        <VoiceRecorderErrorBoundary onError={handleVoiceCancel}>
-          <VoiceRecorder
-            onSend={handleVoiceSend}
-            onCancel={handleVoiceCancel}
-          />
-        </VoiceRecorderErrorBoundary>
+        <VoiceRecorder
+          onSend={handleVoiceSend}
+          onCancel={handleVoiceCancel}
+        />
       ) : (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          style={styles.bar}
-        >
+        <View style={styles.bar}>
           {/* Plus button */}
-          <TouchableOpacity
-            onPress={onPlusPress}
-            style={styles.plusBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="plus" size={20} tintColor="#8E8E93" />
-          </TouchableOpacity>
+          {onPlusPress && (
+            <TouchableOpacity
+              onPress={onPlusPress}
+              style={styles.plusBtn}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="plus" size={20} tintColor="#8E8E93" />
+            </TouchableOpacity>
+          )}
 
           {/* Text input */}
           <View style={styles.inputContainer}>
@@ -179,9 +107,9 @@ export function ChatInputBar({
               <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
             </TouchableOpacity>
           )}
-        </Animated.View>
+        </View>
       )}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -200,7 +128,7 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
     paddingRight: 4,
     paddingVertical: 4,
-    height: 48,
+    minHeight: 48,
     gap: 6,
     boxShadow: "0px 1px 8px rgba(0,0,0,0.08)",
   },
@@ -216,14 +144,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F2F2F7",
     borderRadius: 18,
-    height: 36,
+    minHeight: 36,
     justifyContent: "center",
   },
   input: {
     fontSize: 15,
     color: "#000000",
-    height: 36,
-    paddingVertical: 0,
+    minHeight: 36,
+    paddingVertical: 8,
     paddingHorizontal: 14,
   },
   micBtn: {
