@@ -19,7 +19,7 @@ import { ShareSheet } from "@/components/ShareSheet";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const HEADER_HEIGHT = 56;
-const FEED_ASPECT_RATIO = 4 / 3; // 4:3 landscape (width:height)
+const FEED_ASPECT_RATIO = 3 / 4; // 3:4 portrait (width:height)
 
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();

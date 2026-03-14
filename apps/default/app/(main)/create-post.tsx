@@ -43,8 +43,8 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
   video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
 };
 
-// 4:3 landscape container (width:height = 4:3)
-const FEED_ASPECT_RATIO = 4 / 3;
+// 3:4 portrait container (width:height = 3:4)
+const FEED_ASPECT_RATIO = 3 / 4;
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
