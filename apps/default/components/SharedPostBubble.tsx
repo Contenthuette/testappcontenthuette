@@ -60,7 +60,9 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
               source={{ uri: preview.thumbnailUrl }}
               style={styles.media}
               contentFit="cover"
-              transition={200}
+              cachePolicy="memory-disk"
+              transition={0}
+              recyclingKey={`shared-${postId}`}
             />
             {isVideo && (
               <View style={styles.videoPlayOverlay}>
@@ -75,7 +77,9 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
             source={{ uri: preview.mediaUrl }}
             style={styles.media}
             contentFit="cover"
-            transition={200}
+            cachePolicy="memory-disk"
+            transition={0}
+            recyclingKey={`shared-media-${postId}`}
           />
         ) : (
           <View style={[styles.media, styles.placeholder]}>

@@ -160,6 +160,9 @@ export default function UserProfileScreen() {
               source={{ uri: user.bannerUrl }}
               style={styles.bannerImage}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              priority="high"
+              transition={0}
             />
           ) : (
             <View style={styles.bannerPlaceholder} />
@@ -170,6 +173,9 @@ export default function UserProfileScreen() {
                 source={{ uri: user.avatarUrl }}
                 style={styles.avatar}
                 contentFit="cover"
+                cachePolicy="memory-disk"
+                priority="high"
+                transition={0}
               />
             ) : (
               <View style={[styles.avatar, styles.avatarPlaceholder]}>
@@ -271,17 +277,21 @@ export default function UserProfileScreen() {
                       })
                     }
                   >
-                    {isVideo && post.mediaUrl ? (
-                      <VideoThumbnail
-                        uri={post.mediaUrl}
-                        style={styles.postImage}
-                        playIconSize={22}
-                      />
-                    ) : displayUrl ? (
+                    {displayUrl ? (
                       <Image
                         source={{ uri: displayUrl }}
                         style={styles.postImage}
                         contentFit="cover"
+                        cachePolicy="memory-disk"
+                        priority="high"
+                        transition={0}
+                        recyclingKey={post._id + "-ugrid"}
+                      />
+                    ) : isVideo && post.mediaUrl ? (
+                      <VideoThumbnail
+                        uri={post.mediaUrl}
+                        style={styles.postImage}
+                        playIconSize={22}
                       />
                     ) : (
                       <View
@@ -290,7 +300,7 @@ export default function UserProfileScreen() {
                         <Play size={28} color="#fff" fill="#fff" />
                       </View>
                     )}
-                    {isVideo && displayUrl && (
+                    {isVideo && (
                       <View style={styles.videoOverlay}>
                         <Play size={12} color="#fff" fill="#fff" />
                       </View>

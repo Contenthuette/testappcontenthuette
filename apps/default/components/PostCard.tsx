@@ -90,7 +90,9 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
                   source={{ uri: displayImage }}
                   style={s.media}
                   contentFit="cover"
-                  transition={150}
+                  transition={0}
+                  cachePolicy="memory-disk"
+                  priority="high"
                   recyclingKey={post._id + "-thumb"}
                 />
               ) : (
@@ -108,8 +110,9 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
             source={{ uri: post.mediaUrl }}
             style={s.media}
             contentFit="cover"
+            cachePolicy="memory-disk"
             priority="high"
-            transition={150}
+            transition={0}
             recyclingKey={post._id}
           />
         )

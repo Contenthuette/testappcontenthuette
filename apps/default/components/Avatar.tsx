@@ -27,7 +27,10 @@ export function Avatar({ uri, name = "?", size = 40 }: AvatarProps) {
           { width: size, height: size, borderRadius: size / 2 },
         ]}
         contentFit="cover"
-        transition={200}
+        cachePolicy="memory-disk"
+        priority="high"
+        transition={0}
+        recyclingKey={uri}
       />
     );
   }

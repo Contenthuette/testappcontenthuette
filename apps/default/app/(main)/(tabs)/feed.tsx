@@ -86,7 +86,7 @@ export default function FeedScreen() {
         </View>
       </View>
       {item.mediaUrl && (
-        <Image source={{ uri: item.mediaUrl }} style={styles.announcementImage} contentFit="cover" transition={300} />
+        <Image source={{ uri: item.mediaUrl }} style={styles.announcementImage} contentFit="cover" cachePolicy="memory-disk" transition={0} />
       )}
       {item.caption && <Text style={styles.announcementText}>{item.caption}</Text>}
     </View>
@@ -126,7 +126,10 @@ export default function FeedScreen() {
                     source={{ uri: thumbUri }}
                     style={{ width: screenWidth, height: feedMediaHeight }}
                     contentFit="contain"
-                    transition={100}
+                    cachePolicy="memory-disk"
+                    priority="high"
+                    transition={0}
+                    recyclingKey={item._id + "-orig-thumb"}
                   />
                 ) : (
                   <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
@@ -173,7 +176,10 @@ export default function FeedScreen() {
                   style={{ width: screenWidth, height: feedMediaHeight }}
                   contentFit="cover"
                   contentPosition={getImagePosition(item)}
-                  transition={100}
+                  cachePolicy="memory-disk"
+                  priority="high"
+                  transition={0}
+                  recyclingKey={item._id + "-crop-thumb"}
                 />
               ) : (
                 <View
@@ -199,11 +205,14 @@ export default function FeedScreen() {
     if (isOriginal) {
       return (
         <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
-          <Image
+        <Image
             source={{ uri: item.mediaUrl }}
             style={{ width: screenWidth, height: feedMediaHeight }}
             contentFit="contain"
-            transition={200}
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={0}
+            recyclingKey={item._id + "-orig"}
           />
         </View>
       );
@@ -232,7 +241,10 @@ export default function FeedScreen() {
               source={{ uri: item.mediaUrl }}
               style={{ width: screenWidth, height: photoH }}
               contentFit="cover"
-              transition={200}
+              cachePolicy="memory-disk"
+              priority="high"
+              transition={0}
+              recyclingKey={item._id + "-zoom"}
             />
           </View>
         </View>
@@ -246,7 +258,10 @@ export default function FeedScreen() {
         style={[styles.postImage, { width: screenWidth, height: feedMediaHeight }]}
         contentFit="cover"
         contentPosition={getImagePosition(item)}
-        transition={200}
+        cachePolicy="memory-disk"
+        priority="high"
+        transition={0}
+        recyclingKey={item._id + "-crop"}
       />
     );
   };
@@ -354,6 +369,11 @@ export default function FeedScreen() {
         showsVerticalScrollIndicator={false}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
+        removeClippedSubviews
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        initialNumToRender={3}
+        updateCellsBatchingPeriod={50}
         ListEmptyComponent={
           feed === undefined ? (
             <View style={styles.loadingWrap}>

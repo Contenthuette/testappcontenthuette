@@ -40,7 +40,7 @@ export default function ProfileScreen() {
         {/* Banner */}
         <View style={styles.banner}>
           {me.bannerUrl ? (
-            <Image source={{ uri: me.bannerUrl }} style={styles.bannerImage} contentFit="cover" transition={200} />
+            <Image source={{ uri: me.bannerUrl }} style={styles.bannerImage} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={0} />
           ) : (
             <View style={styles.bannerGradient} />
           )}
@@ -132,7 +132,10 @@ export default function ProfileScreen() {
                     source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                     style={styles.gridImage}
                     contentFit="cover"
-                    transition={200}
+                    cachePolicy="memory-disk"
+                    priority="high"
+                    transition={0}
+                    recyclingKey={post._id + "-grid"}
                   />
                 ) : (
                   <View style={styles.gridPlaceholder}>
