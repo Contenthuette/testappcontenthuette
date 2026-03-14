@@ -98,6 +98,8 @@ export default defineSchema({
     thumbnailUrl: v.optional(v.string()),
     aspectMode: v.optional(v.union(v.literal("original"), v.literal("cropped"))),
     cropOffsetY: v.optional(v.number()),
+    cropOffsetX: v.optional(v.number()),
+    cropZoom: v.optional(v.number()),
     mediaAspectRatio: v.optional(v.number()),
     likeCount: v.number(),
     commentCount: v.number(),

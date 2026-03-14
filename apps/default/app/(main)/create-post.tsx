@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import Icon from "@/components/Icon";
-import { VideoPlayer } from "@/components/VideoPlayer";
 import { ThumbnailPicker } from "@/components/ThumbnailPicker";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -44,8 +43,8 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
   video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
 };
 
-const FEED_ASPECT = 3 / 4; // 3:4 portrait
-const LONG_PRESS_DURATION = 2000; // 2 seconds
+// 4:3 landscape container (width:height = 4:3)
+const FEED_ASPECT_RATIO = 4 / 3;
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
@@ -66,151 +65,165 @@ export default function CreatePostScreen() {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [aspectMode, setAspectMode] = useState<AspectMode>("cropped");
-  const [cropOffsetY, setCropOffsetY] = useState(0.5);
   const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
 
   // Thumbnail state
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [thumbnailIsCustom, setThumbnailIsCustom] = useState(false);
 
-  // Videos are always cropped to 3:4
+  // Crop state (stored as JS values for saving)
+  const [cropState, setCropState] = useState({ x: 0, y: 0, zoom: 1 });
+
+  // Videos always cropped to 4:3
   const effectiveAspectMode: AspectMode = postType === "video" ? "cropped" : aspectMode;
 
   const previewWidth = width - spacing.lg * 2;
-  const cropContainerHeight = previewWidth / FEED_ASPECT;
+  const containerHeight = previewWidth / FEED_ASPECT_RATIO; // 4:3 landscape
 
-  // Scaled media dimensions at preview width
-  const scaledMediaHeight = mediaDims
-    ? previewWidth * (mediaDims.height / mediaDims.width)
-    : cropContainerHeight;
-  const overflowY = Math.max(0, scaledMediaHeight - cropContainerHeight);
-  const canCrop = overflowY > 0;
+  // Media dimensions at base scale (fitting width)
+  const mediaAspectRatio = mediaDims ? mediaDims.width / mediaDims.height : 1;
+  const baseMediaHeight = previewWidth / mediaAspectRatio;
+  const baseMediaWidth = previewWidth;
 
-  // --- Gesture-based crop (long-press 2s → pan + pinch) ---
-  const cropActive = useSharedValue(false);
-  const offsetY = useSharedValue(0.5);
-  const savedOffsetY = useSharedValue(0.5);
+  // --- Gesture values ---
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-  const updateCropOffset = useCallback((val: number) => {
-    setCropOffsetY(val);
-  }, []);
+  // Clamp helper
+  const clampTranslation = useCallback(
+    (tx: number, ty: number, s: number) => {
+      const scaledW = baseMediaWidth * s;
+      const scaledH = baseMediaHeight * s;
+      const overflowX = Math.max(0, scaledW - previewWidth);
+      const overflowY = Math.max(0, scaledH - containerHeight);
 
-  const triggerHaptic = useCallback(() => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    }
-  }, []);
+      // Media can only go negative (moving left/up) to show more of right/bottom
+      const clampedX = Math.max(-overflowX / 2, Math.min(overflowX / 2, tx));
+      const clampedY = Math.max(-overflowY / 2, Math.min(overflowY / 2, ty));
+      return { x: clampedX, y: clampedY };
+    },
+    [baseMediaWidth, baseMediaHeight, previewWidth, containerHeight],
+  );
 
-  // Long press to activate crop mode
-  const longPress = Gesture.LongPress()
-    .minDuration(LONG_PRESS_DURATION)
-    .onStart(() => {
-      cropActive.value = true;
-      runOnJS(triggerHaptic)();
-    });
+  const syncCropState = useCallback(
+    (tx: number, ty: number, s: number) => {
+      const scaledW = baseMediaWidth * s;
+      const scaledH = baseMediaHeight * s;
+      const overflowX = Math.max(0, scaledW - previewWidth);
+      const overflowY = Math.max(0, scaledH - containerHeight);
 
-  // Pan gesture (move up/down) - only when crop is active
+      // Convert pixel offset to normalized 0..1 (0.5 = centered)
+      const normX = overflowX > 0 ? 0.5 - tx / overflowX : 0.5;
+      const normY = overflowY > 0 ? 0.5 - ty / overflowY : 0.5;
+
+      setCropState({
+        x: Math.max(0, Math.min(1, normX)),
+        y: Math.max(0, Math.min(1, normY)),
+        zoom: s,
+      });
+    },
+    [baseMediaWidth, baseMediaHeight, previewWidth, containerHeight],
+  );
+
+  // Pan gesture - direct drag, no long-press needed
   const panGesture = Gesture.Pan()
-    .enabled(canCrop)
     .onStart(() => {
-      savedOffsetY.value = offsetY.value;
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
     })
     .onUpdate((e) => {
-      if (!cropActive.value) return;
-      const overflow = overflowY * scale.value;
-      if (overflow <= 0) return;
-      const delta = e.translationY / overflow;
-      const newVal = Math.max(0, Math.min(1, savedOffsetY.value - delta));
-      offsetY.value = newVal;
-      runOnJS(updateCropOffset)(newVal);
+      const newX = savedTranslateX.value + e.translationX;
+      const newY = savedTranslateY.value + e.translationY;
+
+      const scaledW = baseMediaWidth * scale.value;
+      const scaledH = baseMediaHeight * scale.value;
+      const overflowX = Math.max(0, scaledW - previewWidth);
+      const overflowY = Math.max(0, scaledH - containerHeight);
+
+      translateX.value = Math.max(-overflowX / 2, Math.min(overflowX / 2, newX));
+      translateY.value = Math.max(-overflowY / 2, Math.min(overflowY / 2, newY));
     })
     .onEnd(() => {
-      // Keep crop active until tap outside
+      runOnJS(syncCropState)(translateX.value, translateY.value, scale.value);
     });
 
-  // Pinch gesture (zoom in/out) - only when crop is active
+  // Pinch gesture - 2-finger zoom
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
       savedScale.value = scale.value;
     })
     .onUpdate((e) => {
-      if (!cropActive.value) return;
-      const newScale = Math.max(1, Math.min(3, savedScale.value * e.scale));
+      const newScale = Math.max(1, Math.min(4, savedScale.value * e.scale));
       scale.value = newScale;
+
+      // Re-clamp translation during zoom
+      const scaledW = baseMediaWidth * newScale;
+      const scaledH = baseMediaHeight * newScale;
+      const overflowX = Math.max(0, scaledW - previewWidth);
+      const overflowY = Math.max(0, scaledH - containerHeight);
+      translateX.value = Math.max(-overflowX / 2, Math.min(overflowX / 2, translateX.value));
+      translateY.value = Math.max(-overflowY / 2, Math.min(overflowY / 2, translateY.value));
     })
     .onEnd(() => {
-      // Snap back if below 1
       if (scale.value < 1.05) {
         scale.value = withSpring(1, { damping: 15 });
+        translateX.value = withSpring(0, { damping: 15 });
+        translateY.value = withSpring(0, { damping: 15 });
+        runOnJS(syncCropState)(0, 0, 1);
+      } else {
+        runOnJS(syncCropState)(translateX.value, translateY.value, scale.value);
       }
     });
 
-  // Tap to deactivate crop mode
-  const tapGesture = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd(() => {
-      if (cropActive.value) {
-        cropActive.value = false;
-      }
-    });
+  // Compose: pan + pinch simultaneously
+  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  // Compose gestures: long-press activates, then pan+pinch simultaneously, tap deactivates
-  const composedGesture = Gesture.Race(
-    longPress,
-    Gesture.Simultaneous(panGesture, pinchGesture),
-    tapGesture,
-  );
-
-  // Animated style for the media inside crop container
+  // Animated style for media inside the 4:3 container
   const animatedMediaStyle = useAnimatedStyle(() => {
-    const currentOverflow = overflowY * scale.value;
-    const translateYVal = -offsetY.value * currentOverflow;
     return {
       transform: [
-        { translateY: translateYVal },
+        { translateX: translateX.value },
+        { translateY: translateY.value },
         { scale: scale.value },
       ],
     };
   });
-
-  // Animated border for crop activation feedback
-  const animatedContainerStyle = useAnimatedStyle(() => {
-    return {
-      borderWidth: cropActive.value ? 2 : 0,
-      borderColor: cropActive.value ? colors.black : "transparent",
-    };
-  });
-
-  const translateY = -cropOffsetY * overflowY;
 
   useEffect(() => {
     const timeout = setTimeout(() => handlePick(), 400);
     return () => clearTimeout(timeout);
   }, []);
 
+  const resetCrop = () => {
+    translateX.value = 0;
+    translateY.value = 0;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    scale.value = 1;
+    savedScale.value = 1;
+    setCropState({ x: 0.5, y: 0.5, zoom: 1 });
+  };
+
   const handlePick = async () => {
     setPicking(true);
     try {
-      const result = postType === "video"
-        ? await pickVideo({ quality: 0.8 })
-        : await pickImage({ quality: 0.8, allowsEditing: false });
+      const result =
+        postType === "video"
+          ? await pickVideo({ quality: 0.8 })
+          : await pickImage({ quality: 0.8, allowsEditing: false });
 
       if (result) {
         setMediaPreview(result.uri);
         setMediaFile({ uri: result.uri, mimeType: result.mimeType });
         setMediaDims({ width: result.width, height: result.height });
-        setCropOffsetY(0.5);
-        offsetY.value = 0.5;
-        savedOffsetY.value = 0.5;
-        scale.value = 1;
-        savedScale.value = 1;
-        cropActive.value = false;
+        resetCrop();
         setThumbnailUri(null);
         setThumbnailIsCustom(false);
 
-        // Try to extract duration from asset if available
         if (result.duration !== undefined && result.duration > 0) {
           setVideoDuration(result.duration / 1000);
         } else {
@@ -228,6 +241,7 @@ export default function CreatePostScreen() {
 
   const handleAspectToggle = (mode: AspectMode) => {
     setAspectMode(mode);
+    resetCrop();
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -261,9 +275,7 @@ export default function CreatePostScreen() {
         }
       }
 
-      const mediaAspectRatio = mediaDims
-        ? mediaDims.width / mediaDims.height
-        : undefined;
+      const isCropped = effectiveAspectMode === "cropped";
 
       await createPost({
         type: postType,
@@ -271,8 +283,10 @@ export default function CreatePostScreen() {
         mediaStorageId: storageId as never,
         thumbnailStorageId: thumbStorageId as never,
         aspectMode: effectiveAspectMode,
-        cropOffsetY: effectiveAspectMode === "cropped" ? cropOffsetY : undefined,
-        mediaAspectRatio,
+        cropOffsetX: isCropped ? cropState.x : undefined,
+        cropOffsetY: isCropped ? cropState.y : undefined,
+        cropZoom: isCropped ? cropState.zoom : undefined,
+        mediaAspectRatio: mediaDims ? mediaDims.width / mediaDims.height : undefined,
       });
 
       if (Platform.OS !== "web") {
@@ -304,6 +318,9 @@ export default function CreatePostScreen() {
   }
 
   const isCropped = effectiveAspectMode === "cropped";
+  const needsCrop = mediaDims
+    ? baseMediaHeight > containerHeight || baseMediaWidth > previewWidth
+    : false;
 
   const renderCropPreview = () => {
     if (!mediaPreview || !mediaDims) return null;
@@ -322,7 +339,7 @@ export default function CreatePostScreen() {
               >
                 <Icon name="crop" size={14} tintColor={isCropped ? colors.white : colors.gray600} />
                 <Text style={[styles.aspectBtnText, isCropped && styles.aspectBtnTextActive]}>
-                  3:4 anpassen
+                  4:3 anpassen
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -344,100 +361,85 @@ export default function CreatePostScreen() {
         )}
 
         {isCropped ? (
-          /* ── Cropped preview with gesture-based crop ── */
           <View>
+            {/* Fixed 4:3 crop container */}
             <GestureDetector gesture={composedGesture}>
               <Animated.View
                 style={[
                   styles.cropContainer,
-                  { width: previewWidth, height: cropContainerHeight },
-                  animatedContainerStyle,
+                  {
+                    width: previewWidth,
+                    height: containerHeight,
+                  },
                 ]}
               >
-                {postType === "video" ? (
-                  <Animated.View style={animatedMediaStyle}>
-                    <VideoPlayer
-                      uri={mediaPreview}
-                      height={scaledMediaHeight}
-                      width={previewWidth}
-                      autoPlay={false}
-                      muted
-                      hideControls
-                    />
-                  </Animated.View>
-                ) : (
-                  <Animated.View style={animatedMediaStyle}>
+                <Animated.View
+                  style={[
+                    {
+                      width: baseMediaWidth,
+                      height: baseMediaHeight,
+                      // Center media initially
+                      position: "absolute",
+                      left: (previewWidth - baseMediaWidth) / 2,
+                      top: (containerHeight - baseMediaHeight) / 2,
+                    },
+                    animatedMediaStyle,
+                  ]}
+                >
+                  {postType === "video" ? (
                     <Image
                       source={{ uri: mediaPreview }}
-                      style={[
-                        styles.cropImage,
-                        {
-                          width: previewWidth,
-                          height: scaledMediaHeight,
-                        },
-                      ]}
+                      style={{ width: baseMediaWidth, height: baseMediaHeight }}
                       contentFit="cover"
                     />
-                  </Animated.View>
-                )}
+                  ) : (
+                    <Image
+                      source={{ uri: mediaPreview }}
+                      style={{ width: baseMediaWidth, height: baseMediaHeight }}
+                      contentFit="cover"
+                    />
+                  )}
+                </Animated.View>
 
-                {/* Drag indicators */}
-                {canCrop && (
+                {/* Drag hint overlay */}
+                {needsCrop && (
                   <View style={styles.dragOverlay} pointerEvents="none">
-                    <View style={styles.dragHandle}>
-                      <Icon name="chevron.up" size={14} tintColor="rgba(255,255,255,0.9)" />
-                    </View>
-                    <View style={{ flex: 1 }} />
-                    <View style={styles.dragHandle}>
-                      <Icon name="chevron.down" size={14} tintColor="rgba(255,255,255,0.9)" />
+                    <View style={styles.dragHandleTop}>
+                      <Icon name="hand.draw" size={16} tintColor="rgba(255,255,255,0.9)" />
+                      <Text style={styles.dragHintText}>Verschieben & Zoomen</Text>
                     </View>
                   </View>
                 )}
+
+                {/* 4:3 label badge */}
+                <View style={styles.aspectBadge} pointerEvents="none">
+                  <Text style={styles.aspectBadgeText}>4:3</Text>
+                </View>
               </Animated.View>
             </GestureDetector>
 
-            {canCrop && (
-              <Text style={styles.cropHint}>
-                2 Sek. gedr\u00fcckt halten, dann verschieben oder zoomen
-              </Text>
-            )}
+            <Text style={styles.cropHint}>
+              {needsCrop
+                ? "Verschiebe das Bild mit 1 Finger, zoome mit 2 Fingern"
+                : "Dein Medium passt perfekt ins 4:3 Format"}
+            </Text>
           </View>
         ) : (
           /* ── Original preview ── */
           <View style={[styles.originalContainer, { width: previewWidth }]}>
-            {postType === "video" ? (
-              <VideoPlayer
-                uri={mediaPreview}
-                height={Math.min(scaledMediaHeight, cropContainerHeight)}
-                width={previewWidth}
-                autoPlay={false}
-                muted
-                contentFit="contain"
-                borderRadius={16}
-              />
-            ) : (
-              <Image
-                source={{ uri: mediaPreview }}
-                style={[
-                  styles.originalImage,
-                  {
-                    width: previewWidth,
-                    height: Math.min(scaledMediaHeight, cropContainerHeight),
-                  },
-                ]}
-                contentFit="contain"
-              />
-            )}
+            <Image
+              source={{ uri: mediaPreview }}
+              style={[
+                styles.originalImage,
+                {
+                  width: previewWidth,
+                  height: Math.min(baseMediaHeight, containerHeight),
+                },
+              ]}
+              contentFit="contain"
+            />
           </View>
         )}
-
-        <Text style={styles.aspectHint}>
-          {isCropped
-            ? postType === "video"
-              ? "2 Sek. gedr\u00fcckt halten \u2192 1 Finger verschieben, 2 Finger zoomen."
-              : "Das Medium wird auf 3:4 zugeschnitten und f\u00fcllt den Feed."
-            : "Das Medium wird im Originalformat mit R\u00e4ndern angezeigt."}
-        </Text>
 
         {/* Thumbnail picker for videos */}
         {postType === "video" && mediaPreview && (
@@ -627,29 +629,46 @@ const styles = StyleSheet.create({
   aspectBtnText: { fontSize: 13, fontWeight: "600", color: colors.gray600 },
   aspectBtnTextActive: { color: colors.white },
 
-  // Crop preview
+  // Crop container - fixed 4:3
   cropContainer: {
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#000",
     borderCurve: "continuous",
   },
-  cropImage: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-  },
   dragOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
+    justifyContent: "center",
+    pointerEvents: "none",
   },
-  dragHandle: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    borderRadius: 12,
+  dragHandleTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingVertical: 6,
+  },
+  dragHintText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
+  },
+  aspectBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  aspectBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.85)",
   },
   cropHint: {
     fontSize: 12,
@@ -669,13 +688,6 @@ const styles = StyleSheet.create({
   },
   originalImage: {
     borderRadius: 16,
-  },
-
-  aspectHint: {
-    fontSize: 12,
-    color: colors.gray400,
-    textAlign: "center",
-    marginTop: 8,
   },
 
   // Change button

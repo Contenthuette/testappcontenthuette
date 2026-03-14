@@ -10,11 +10,10 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import Icon from "@/components/Icon";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing } from "@/lib/theme";
 import { pickImage } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 
-// expo-video-thumbnails types
 interface ThumbnailResult {
   uri: string;
   width: number;
@@ -38,11 +37,11 @@ try {
 }
 
 const THUMB_COUNT = 8;
-const THUMB_SIZE = 56;
+const THUMB_SIZE = 60;
 
 interface ThumbnailPickerProps {
   videoUri: string;
-  videoDuration?: number; // seconds
+  videoDuration?: number;
   onThumbnailSelected: (uri: string, isCustom: boolean) => void;
   selectedThumbnailUri?: string | null;
 }
@@ -59,36 +58,54 @@ export function ThumbnailPicker({
   const [isCustomPhoto, setIsCustomPhoto] = useState(false);
   const [customPhotoUri, setCustomPhotoUri] = useState<string | null>(null);
   const extractedRef = useRef(false);
+  const currentVideoUri = useRef(videoUri);
 
-  // Extract frames at evenly spaced intervals
+  // Reset when video changes
+  useEffect(() => {
+    if (currentVideoUri.current !== videoUri) {
+      currentVideoUri.current = videoUri;
+      extractedRef.current = false;
+      setFrames([]);
+      setSelectedIndex(0);
+      setIsCustomPhoto(false);
+      setCustomPhotoUri(null);
+      setLoading(true);
+    }
+  }, [videoUri]);
+
   const extractFrames = useCallback(async () => {
     if (extractedRef.current) return;
+    if (!VideoThumbnails) {
+      setLoading(false);
+      return;
+    }
     extractedRef.current = true;
     setLoading(true);
 
-    const dur = videoDuration ?? 10; // default guess 10s
+    const dur = videoDuration ?? 10;
     const interval = (dur * 1000) / (THUMB_COUNT + 1);
     const extracted: string[] = [];
 
+    // Extract frames sequentially with error resilience
     for (let i = 1; i <= THUMB_COUNT; i++) {
       const timeMs = Math.round(interval * i);
       try {
-        const result = await VideoThumbnails?.getThumbnailAsync(videoUri, {
+        const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
           time: timeMs,
-          quality: 0.5,
+          quality: 0.4,
         });
         if (result?.uri) extracted.push(result.uri);
       } catch {
-        // Some frames may fail, skip
+        // Frame extraction can fail for certain timestamps, skip
       }
     }
 
-    // Fallback: at least get frame at 0
+    // Fallback: try very beginning
     if (extracted.length === 0) {
       try {
-        const result = await VideoThumbnails?.getThumbnailAsync(videoUri, {
+        const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
           time: 100,
-          quality: 0.5,
+          quality: 0.4,
         });
         if (result?.uri) extracted.push(result.uri);
       } catch {
@@ -99,7 +116,7 @@ export function ThumbnailPicker({
     setFrames(extracted);
     setLoading(false);
 
-    // Auto-select first frame
+    // Auto-select first frame as thumbnail
     if (extracted.length > 0 && !selectedThumbnailUri) {
       onThumbnailSelected(extracted[0], false);
     }
@@ -109,28 +126,35 @@ export function ThumbnailPicker({
     extractFrames();
   }, [extractFrames]);
 
-  const handleSelectFrame = (index: number) => {
-    setSelectedIndex(index);
-    setIsCustomPhoto(false);
-    setCustomPhotoUri(null);
-    onThumbnailSelected(frames[index], false);
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  };
-
-  const handlePickCustomPhoto = async () => {
-    const result = await pickImage({ quality: 0.8, allowsEditing: true });
-    if (result) {
-      setIsCustomPhoto(true);
-      setCustomPhotoUri(result.uri);
-      setSelectedIndex(-1);
-      onThumbnailSelected(result.uri, true);
+  const handleSelectFrame = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= frames.length) return;
+      setSelectedIndex(index);
+      setIsCustomPhoto(false);
+      onThumbnailSelected(frames[index], false);
       if (Platform.OS !== "web") {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
+    },
+    [frames, onThumbnailSelected],
+  );
+
+  const handlePickCustomPhoto = useCallback(async () => {
+    try {
+      const result = await pickImage({ quality: 0.8, allowsEditing: true });
+      if (result) {
+        setIsCustomPhoto(true);
+        setCustomPhotoUri(result.uri);
+        setSelectedIndex(-1);
+        onThumbnailSelected(result.uri, true);
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      }
+    } catch (e) {
+      console.warn("Custom thumbnail pick failed:", e);
     }
-  };
+  }, [onThumbnailSelected]);
 
   if (loading) {
     return (
@@ -141,10 +165,21 @@ export function ThumbnailPicker({
     );
   }
 
-  if (frames.length === 0) {
+  if (frames.length === 0 && !VideoThumbnails) {
     return (
-      <View style={styles.loadingWrap}>
-        <Text style={styles.loadingText}>Keine Vorschau verfügbar</Text>
+      <View style={styles.container}>
+        <View style={styles.labelRow}>
+          <Icon name="photo.on.rectangle" size={14} tintColor={colors.gray500} />
+          <Text style={styles.label}>Thumbnail</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.uploadBtnLarge]}
+          onPress={handlePickCustomPhoto}
+          activeOpacity={0.7}
+        >
+          <Icon name="photo.badge.plus" size={20} tintColor={colors.gray500} />
+          <Text style={styles.uploadTextLarge}>Eigenes Foto als Thumbnail hochladen</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -153,8 +188,26 @@ export function ThumbnailPicker({
     <View style={styles.container}>
       <View style={styles.labelRow}>
         <Icon name="photo.on.rectangle" size={14} tintColor={colors.gray500} />
-        <Text style={styles.label}>Thumbnail wählen</Text>
+        <Text style={styles.label}>Thumbnail waehlen</Text>
       </View>
+
+      {/* Active thumbnail preview */}
+      {(selectedThumbnailUri || (frames.length > 0 && !isCustomPhoto)) && (
+        <View style={styles.activePreview}>
+          <Image
+            source={{ uri: selectedThumbnailUri ?? frames[selectedIndex] ?? frames[0] }}
+            style={styles.activeImage}
+            contentFit="cover"
+            transition={200}
+          />
+          <View style={styles.activeLabel}>
+            <Icon name="checkmark.circle.fill" size={14} tintColor={colors.black} />
+            <Text style={styles.activeLabelText}>
+              {isCustomPhoto ? "Eigenes Foto" : `Frame ${selectedIndex + 1}`}
+            </Text>
+          </View>
+        </View>
+      )}
 
       <ScrollView
         horizontal
@@ -183,9 +236,11 @@ export function ThumbnailPicker({
               <Text style={styles.uploadText}>Foto</Text>
             </View>
           )}
-          {isCustomPhoto && <View style={styles.checkBadge}>
-            <Icon name="checkmark" size={10} tintColor={colors.white} />
-          </View>}
+          {isCustomPhoto && (
+            <View style={styles.checkBadge}>
+              <Icon name="checkmark" size={10} tintColor={colors.white} />
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Frame thumbnails */}
@@ -231,7 +286,7 @@ function formatFrameTime(index: number, total: number, duration: number): string
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 12,
+    marginTop: 16,
   },
   labelRow: {
     flexDirection: "row",
@@ -257,6 +312,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.gray400,
   },
+
+  // Active thumbnail preview
+  activePreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+    backgroundColor: colors.gray100,
+    borderRadius: 12,
+    padding: 8,
+    borderCurve: "continuous",
+  },
+  activeImage: {
+    width: 48,
+    height: 36,
+    borderRadius: 8,
+    borderCurve: "continuous",
+  },
+  activeLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  activeLabelText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.black,
+  },
+
   scrollContent: {
     gap: 8,
     paddingRight: 4,
@@ -288,6 +372,21 @@ const styles = StyleSheet.create({
   },
   uploadText: {
     fontSize: 9,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
+  uploadBtnLarge: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    backgroundColor: colors.gray100,
+    borderRadius: 12,
+    borderCurve: "continuous",
+  },
+  uploadTextLarge: {
+    fontSize: 14,
     fontWeight: "600",
     color: colors.gray500,
   },

@@ -19,7 +19,7 @@ import { ShareSheet } from "@/components/ShareSheet";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const HEADER_HEIGHT = 56;
-const FEED_ASPECT = 3 / 4; // 3:4 portrait
+const FEED_ASPECT_RATIO = 4 / 3; // 4:3 landscape (width:height)
 
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();
@@ -30,8 +30,8 @@ export default function FeedScreen() {
   const isFocused = useIsFocused();
   const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
 
-  // 3:4 feed media height
-  const feedMediaHeight = screenWidth / FEED_ASPECT;
+  // 4:3 feed media height
+  const feedMediaHeight = screenWidth / FEED_ASPECT_RATIO;
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 60,
@@ -53,18 +53,27 @@ export default function FeedScreen() {
     return screenWidth / ar;
   };
 
-  /** Calculate translateY for cropped videos */
-  const getCropTranslateY = (item: NonNullable<typeof feed>[number]) => {
-    const nativeHeight = getVideoNativeHeight(item);
-    const overflow = Math.max(0, nativeHeight - feedMediaHeight);
-    const offset = item.cropOffsetY ?? 0.5;
-    return -offset * overflow;
+  /** Calculate crop transform for feed display */
+  const getCropTransform = (item: NonNullable<typeof feed>[number]) => {
+    const zoom = item.cropZoom ?? 1;
+    const mediaAR = item.mediaAspectRatio ?? 9 / 16;
+
+    const scaledW = screenWidth * zoom;
+    const scaledH = (screenWidth / mediaAR) * zoom;
+    const overflowX = Math.max(0, scaledW - screenWidth);
+    const overflowY = Math.max(0, scaledH - feedMediaHeight);
+
+    const tX = (0.5 - (item.cropOffsetX ?? 0.5)) * overflowX;
+    const tY = (0.5 - (item.cropOffsetY ?? 0.5)) * overflowY;
+
+    return { translateX: tX, translateY: tY, scale: zoom };
   };
 
-  /** Get content position for cropped images */
+  /** Get content position for cropped images (no zoom) */
   const getImagePosition = (item: NonNullable<typeof feed>[number]) => {
-    const offset = item.cropOffsetY ?? 0.5;
-    return { top: `${offset * 100}%` as const };
+    const yOffset = item.cropOffsetY ?? 0.5;
+    const xOffset = item.cropOffsetX ?? 0.5;
+    return { top: `${yOffset * 100}%` as const, left: `${xOffset * 100}%` as const };
   };
 
   const renderAnnouncement = (item: NonNullable<typeof feed>[number]) => (
@@ -92,6 +101,9 @@ export default function FeedScreen() {
 
     if (isVideo) {
       const thumbUri = item.thumbnailUrl;
+      const crop = getCropTransform(item);
+      const mediaAR = item.mediaAspectRatio ?? 9 / 16;
+      const nativeHeight = screenWidth / mediaAR;
 
       if (isOriginal) {
         return (
@@ -129,13 +141,20 @@ export default function FeedScreen() {
           </View>
         );
       }
-      const nativeHeight = getVideoNativeHeight(item);
-      const translateY = getCropTranslateY(item);
-      const cropPercent = ((item.cropOffsetY ?? 0.5) * 100).toString() + "%";
+
+      // Cropped video: apply full crop transform
       return (
         <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
           {isThisVideoVisible ? (
-            <View style={{ transform: [{ translateY }] }}>
+            <View
+              style={{
+                transform: [
+                  { translateX: crop.translateX },
+                  { translateY: crop.translateY },
+                  { scale: crop.scale },
+                ],
+              }}
+            >
               <VideoPlayer
                 uri={item.mediaUrl}
                 height={nativeHeight}
@@ -153,10 +172,17 @@ export default function FeedScreen() {
                   source={{ uri: thumbUri }}
                   style={{ width: screenWidth, height: feedMediaHeight }}
                   contentFit="cover"
+                  contentPosition={getImagePosition(item)}
                   transition={100}
                 />
               ) : (
-                <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
+                <View
+                  style={{
+                    width: screenWidth,
+                    height: feedMediaHeight,
+                    backgroundColor: "#111",
+                  }}
+                />
               )}
               <View style={styles.videoPlayOverlay}>
                 <View style={styles.videoPlayCircle}>
@@ -182,7 +208,38 @@ export default function FeedScreen() {
         </View>
       );
     }
-    // Cropped photo: use contentPosition for precise placement
+
+    // Cropped photo with zoom support
+    const hasZoom = (item.cropZoom ?? 1) > 1.05;
+    if (hasZoom) {
+      const crop = getCropTransform(item);
+      const mediaAR = item.mediaAspectRatio ?? 3 / 4;
+      const photoH = screenWidth / mediaAR;
+      return (
+        <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
+          <View
+            style={{
+              width: screenWidth,
+              height: photoH,
+              transform: [
+                { translateX: crop.translateX },
+                { translateY: crop.translateY },
+                { scale: crop.scale },
+              ],
+            }}
+          >
+            <Image
+              source={{ uri: item.mediaUrl }}
+              style={{ width: screenWidth, height: photoH }}
+              contentFit="cover"
+              transition={200}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    // Cropped photo without zoom: use contentPosition
     return (
       <Image
         source={{ uri: item.mediaUrl }}
