@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
-import type { Id } from "./_generated/dataModel";
+import type { Id, Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
 export const generateUploadUrl = authMutation({
   args: {},
@@ -17,7 +18,45 @@ async function getMyUserId(ctx: any): Promise<Id<"users"> | null> {
   return user?._id ?? null;
 }
 
-// Feed - get posts with pagination
+// ── Shared helpers ──────────────────────────────────────────────
+type AuthorCache = Map<Id<"users">, Doc<"users"> | null>;
+type UrlCache = Map<Id<"_storage">, string | null>;
+
+async function batchGetAuthors(
+  ctx: { db: QueryCtx["db"] },
+  ids: Array<Id<"users">>,
+): Promise<AuthorCache> {
+  const unique = [...new Set(ids)];
+  const cache: AuthorCache = new Map();
+  await Promise.all(
+    unique.map(async (id) => {
+      cache.set(id, await ctx.db.get(id));
+    }),
+  );
+  return cache;
+}
+
+async function batchGetUrls(
+  ctx: { storage: QueryCtx["storage"] },
+  ids: Array<Id<"_storage"> | undefined>,
+): Promise<UrlCache> {
+  const unique = [...new Set(ids.filter((id): id is Id<"_storage"> => !!id))];
+  const cache: UrlCache = new Map();
+  await Promise.all(
+    unique.map(async (id) => {
+      cache.set(id, await ctx.storage.getUrl(id));
+    }),
+  );
+  return cache;
+}
+
+function getAuthorAvatarUrl(author: Doc<"users"> | null | undefined, urlCache: UrlCache): string | undefined {
+  if (!author) return undefined;
+  if (author.avatarStorageId) return urlCache.get(author.avatarStorageId) ?? undefined;
+  return author.avatarUrl;
+}
+
+// Feed - get posts with pagination (optimized with parallel fetches)
 export const feed = authQuery({
   args: { limit: v.optional(v.number()) },
   returns: v.array(v.object({
@@ -46,46 +85,84 @@ export const feed = authQuery({
     const myUserId = await getMyUserId(ctx);
     const limit = args.limit ?? 30;
     
-    // Get pinned/announcements first
-    const pinned = await ctx.db.query("posts")
-      .withIndex("by_isPinned", q => q.eq("isPinned", true))
-      .order("desc")
-      .take(5);
+    // Fetch pinned + regular in parallel
+    const [pinned, regular] = await Promise.all([
+      ctx.db.query("posts")
+        .withIndex("by_isPinned", q => q.eq("isPinned", true))
+        .order("desc")
+        .take(5),
+      ctx.db.query("posts")
+        .withIndex("by_createdAt")
+        .order("desc")
+        .take(limit),
+    ]);
     
-    // Get regular posts
-    const regular = await ctx.db.query("posts")
-      .withIndex("by_createdAt")
-      .order("desc")
-      .take(limit);
-    
-    // Combine, pinned first, avoid duplicates
     const pinnedIds = new Set(pinned.map(p => p._id));
     const allPosts = [...pinned, ...regular.filter(p => !pinnedIds.has(p._id))];
     
-    const results = [];
-    for (const post of allPosts) {
-      const author = await ctx.db.get(post.authorId);
-      let isLiked = false;
-      let isSaved = false;
-      if (myUserId) {
-        const like = await ctx.db.query("likes")
-          .withIndex("by_postId_and_userId", q => q.eq("postId", post._id).eq("userId", myUserId))
-          .unique();
-        isLiked = !!like;
-        const saved = await ctx.db.query("savedPosts")
-          .withIndex("by_postId_and_userId", q => q.eq("postId", post._id).eq("userId", myUserId))
-          .unique();
-        isSaved = !!saved;
-      }
-      results.push({
+    // Batch-fetch all authors + storage URLs in parallel
+    const authorIds = allPosts.map(p => p.authorId);
+    const storageIds = allPosts.flatMap(p => [
+      p.mediaStorageId,
+      p.thumbnailStorageId,
+    ]);
+    const avatarStorageIds = [...new Set(authorIds)];
+    
+    const [authorCache, urlCache] = await Promise.all([
+      batchGetAuthors(ctx, authorIds),
+      (async () => {
+        // We need author avatarStorageIds too, so first get authors
+        const authors = await batchGetAuthors(ctx, authorIds);
+        const allStorageIds = [
+          ...storageIds,
+          ...[...authors.values()]
+            .filter((a): a is Doc<"users"> => !!a?.avatarStorageId)
+            .map(a => a.avatarStorageId!),
+        ];
+        return batchGetUrls(ctx, allStorageIds);
+      })(),
+    ]);
+    
+    // Actually use the second result's author data too
+    // Re-fetch author cache from the parallel call that already ran
+    const authors = authorCache;
+    
+    // Batch-fetch all like/save checks in parallel
+    const likeChecks = myUserId
+      ? await Promise.all(
+          allPosts.map(p =>
+            ctx.db.query("likes")
+              .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
+              .unique()
+          ),
+        )
+      : allPosts.map(() => null);
+    
+    const saveChecks = myUserId
+      ? await Promise.all(
+          allPosts.map(p =>
+            ctx.db.query("savedPosts")
+              .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
+              .unique()
+          ),
+        )
+      : allPosts.map(() => null);
+    
+    return allPosts.map((post, i) => {
+      const author = authors.get(post.authorId);
+      return {
         _id: post._id,
         authorId: post.authorId,
         authorName: author?.name ?? "Unknown",
-        authorAvatarUrl: author?.avatarStorageId ? await ctx.storage.getUrl(author.avatarStorageId) ?? undefined : author?.avatarUrl,
+        authorAvatarUrl: getAuthorAvatarUrl(author, urlCache),
         type: post.type,
         caption: post.caption,
-        mediaUrl: post.mediaStorageId ? await ctx.storage.getUrl(post.mediaStorageId) ?? undefined : post.mediaUrl,
-        thumbnailUrl: post.thumbnailStorageId ? await ctx.storage.getUrl(post.thumbnailStorageId) ?? undefined : post.thumbnailUrl,
+        mediaUrl: post.mediaStorageId
+          ? (urlCache.get(post.mediaStorageId) ?? undefined)
+          : post.mediaUrl,
+        thumbnailUrl: post.thumbnailStorageId
+          ? (urlCache.get(post.thumbnailStorageId) ?? undefined)
+          : post.thumbnailUrl,
         aspectMode: post.aspectMode,
         cropOffsetY: post.cropOffsetY,
         cropOffsetX: post.cropOffsetX,
@@ -93,14 +170,13 @@ export const feed = authQuery({
         mediaAspectRatio: post.mediaAspectRatio,
         likeCount: post.likeCount,
         commentCount: post.commentCount,
-        isLiked,
-        isSaved,
+        isLiked: !!likeChecks[i],
+        isSaved: !!saveChecks[i],
         isPinned: post.isPinned,
         isAnnouncement: post.isAnnouncement,
         createdAt: post.createdAt,
-      });
-    }
-    return results;
+      };
+    });
   },
 });
 
@@ -137,42 +213,37 @@ export const getById = authQuery({
     if (!post) return null;
 
     const myUserId = await getMyUserId(ctx);
-    const author = await ctx.db.get(post.authorId);
-
-    let isLiked = false;
-    let isSaved = false;
-    if (myUserId) {
-      const like = await ctx.db
-        .query("likes")
-        .withIndex("by_postId_and_userId", (q) =>
-          q.eq("postId", post._id).eq("userId", myUserId),
-        )
-        .unique();
-      isLiked = !!like;
-      const saved = await ctx.db
-        .query("savedPosts")
-        .withIndex("by_postId_and_userId", (q) =>
-          q.eq("postId", post._id).eq("userId", myUserId),
-        )
-        .unique();
-      isSaved = !!saved;
-    }
+    
+    // Parallel: author + like + save + URLs
+    const [author, like, saved, mediaUrl, thumbnailUrl] = await Promise.all([
+      ctx.db.get(post.authorId),
+      myUserId
+        ? ctx.db.query("likes")
+            .withIndex("by_postId_and_userId", q => q.eq("postId", post._id).eq("userId", myUserId))
+            .unique()
+        : null,
+      myUserId
+        ? ctx.db.query("savedPosts")
+            .withIndex("by_postId_and_userId", q => q.eq("postId", post._id).eq("userId", myUserId))
+            .unique()
+        : null,
+      post.mediaStorageId ? ctx.storage.getUrl(post.mediaStorageId) : null,
+      post.thumbnailStorageId ? ctx.storage.getUrl(post.thumbnailStorageId) : null,
+    ]);
+    
+    const avatarUrl = author?.avatarStorageId
+      ? await ctx.storage.getUrl(author.avatarStorageId)
+      : null;
 
     return {
       _id: post._id,
       authorId: post.authorId,
       authorName: author?.name ?? "Unknown",
-      authorAvatarUrl: author?.avatarStorageId
-        ? ((await ctx.storage.getUrl(author.avatarStorageId)) ?? undefined)
-        : author?.avatarUrl,
+      authorAvatarUrl: avatarUrl ?? author?.avatarUrl,
       type: post.type,
       caption: post.caption,
-      mediaUrl: post.mediaStorageId
-        ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
-        : post.mediaUrl,
-      thumbnailUrl: post.thumbnailStorageId
-        ? ((await ctx.storage.getUrl(post.thumbnailStorageId)) ?? undefined)
-        : post.thumbnailUrl,
+      mediaUrl: mediaUrl ?? post.mediaUrl,
+      thumbnailUrl: thumbnailUrl ?? post.thumbnailUrl,
       aspectMode: post.aspectMode,
       cropOffsetY: post.cropOffsetY,
       cropOffsetX: post.cropOffsetX,
@@ -180,8 +251,8 @@ export const getById = authQuery({
       mediaAspectRatio: post.mediaAspectRatio,
       likeCount: post.likeCount,
       commentCount: post.commentCount,
-      isLiked,
-      isSaved,
+      isLiked: !!like,
+      isSaved: !!saved,
       isPinned: post.isPinned,
       isAnnouncement: post.isAnnouncement,
       createdAt: post.createdAt,
@@ -272,7 +343,7 @@ export const toggleSave = authMutation({
   },
 });
 
-// Comments
+// Comments (optimized)
 export const getComments = query({
   args: { postId: v.id("posts"), currentUserId: v.optional(v.id("users")) },
   returns: v.array(v.object({
@@ -290,28 +361,44 @@ export const getComments = query({
       .withIndex("by_postId", q => q.eq("postId", args.postId))
       .order("desc")
       .take(100);
-    const results = [];
-    for (const c of comments) {
-      const author = await ctx.db.get(c.authorId);
-      let isLiked = false;
-      if (args.currentUserId) {
-        const existing = await ctx.db.query("commentLikes")
-          .withIndex("by_commentId_and_userId", q => q.eq("commentId", c._id).eq("userId", args.currentUserId!))
-          .first();
-        isLiked = !!existing;
-      }
-      results.push({
+    
+    if (comments.length === 0) return [];
+    
+    // Batch-fetch all authors in parallel
+    const authorIds = comments.map(c => c.authorId);
+    const authorCache = await batchGetAuthors(ctx, authorIds);
+    
+    // Batch avatar URLs
+    const avatarStorageIds = [...authorCache.values()]
+      .filter((a): a is Doc<"users"> => !!a?.avatarStorageId)
+      .map(a => a.avatarStorageId!);
+    const urlCache = await batchGetUrls(ctx, avatarStorageIds);
+    
+    // Batch-fetch like checks in parallel
+    const currentUserId = args.currentUserId;
+    const likeChecks = currentUserId
+      ? await Promise.all(
+          comments.map(c =>
+            ctx.db.query("commentLikes")
+              .withIndex("by_commentId_and_userId", q => q.eq("commentId", c._id).eq("userId", currentUserId))
+              .first()
+          ),
+        )
+      : comments.map(() => null);
+    
+    return comments.map((c, i) => {
+      const author = authorCache.get(c.authorId);
+      return {
         _id: c._id,
         authorId: c.authorId,
         authorName: author?.name ?? "Unknown",
-        authorAvatarUrl: author?.avatarStorageId ? await ctx.storage.getUrl(author.avatarStorageId) ?? undefined : author?.avatarUrl,
+        authorAvatarUrl: getAuthorAvatarUrl(author, urlCache),
         text: c.text,
         likeCount: c.likeCount ?? 0,
-        isLiked,
+        isLiked: !!likeChecks[i],
         createdAt: c.createdAt,
-      });
-    }
-    return results;
+      };
+    });
   },
 });
 
@@ -446,7 +533,7 @@ export const getSavedPosts = authQuery({
   },
 });
 
-// Get user posts
+// Get user posts (optimized)
 export const getUserPosts = query({
   args: { userId: v.id("users") },
   returns: v.array(v.object({
@@ -468,23 +555,26 @@ export const getUserPosts = query({
       .withIndex("by_authorId", q => q.eq("authorId", args.userId))
       .order("desc")
       .take(50);
-    const results = [];
-    for (const p of posts) {
-      results.push({
-        _id: p._id,
-        type: p.type,
-        mediaUrl: p.mediaStorageId ? await ctx.storage.getUrl(p.mediaStorageId) ?? undefined : p.mediaUrl,
-        thumbnailUrl: p.thumbnailStorageId ? await ctx.storage.getUrl(p.thumbnailStorageId) ?? undefined : p.thumbnailUrl,
-        aspectMode: p.aspectMode,
-        cropOffsetY: p.cropOffsetY,
-        cropOffsetX: p.cropOffsetX,
-        cropZoom: p.cropZoom,
-        mediaAspectRatio: p.mediaAspectRatio,
-        likeCount: p.likeCount,
-        commentCount: p.commentCount,
-        createdAt: p.createdAt,
-      });
-    }
-    return results;
+    
+    if (posts.length === 0) return [];
+    
+    // Batch-fetch all storage URLs in parallel
+    const allStorageIds = posts.flatMap(p => [p.mediaStorageId, p.thumbnailStorageId]);
+    const urlCache = await batchGetUrls(ctx, allStorageIds);
+    
+    return posts.map(p => ({
+      _id: p._id,
+      type: p.type,
+      mediaUrl: p.mediaStorageId ? (urlCache.get(p.mediaStorageId) ?? undefined) : p.mediaUrl,
+      thumbnailUrl: p.thumbnailStorageId ? (urlCache.get(p.thumbnailStorageId) ?? undefined) : p.thumbnailUrl,
+      aspectMode: p.aspectMode,
+      cropOffsetY: p.cropOffsetY,
+      cropOffsetX: p.cropOffsetX,
+      cropZoom: p.cropZoom,
+      mediaAspectRatio: p.mediaAspectRatio,
+      likeCount: p.likeCount,
+      commentCount: p.commentCount,
+      createdAt: p.createdAt,
+    }));
   },
 });

@@ -24,8 +24,34 @@ const FEED_ASPECT_RATIO = 3 / 4; // 3:4 portrait (width:height)
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const feed = useQuery(api.posts.feed, {});
-  const toggleLike = useMutation(api.posts.toggleLike);
-  const toggleSave = useMutation(api.posts.toggleSave);
+  const toggleLike = useMutation(api.posts.toggleLike).withOptimisticUpdate(
+    (store, { postId }) => {
+      const currentFeed = store.getQuery(api.posts.feed, {});
+      if (!currentFeed) return;
+      store.setQuery(
+        api.posts.feed,
+        {},
+        currentFeed.map(p =>
+          p._id === postId
+            ? { ...p, isLiked: !p.isLiked, likeCount: p.isLiked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
+            : p,
+        ),
+      );
+    },
+  );
+  const toggleSave = useMutation(api.posts.toggleSave).withOptimisticUpdate(
+    (store, { postId }) => {
+      const currentFeed = store.getQuery(api.posts.feed, {});
+      if (!currentFeed) return;
+      store.setQuery(
+        api.posts.feed,
+        {},
+        currentFeed.map(p =>
+          p._id === postId ? { ...p, isSaved: !p.isSaved } : p,
+        ),
+      );
+    },
+  );
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const isFocused = useIsFocused();
   const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
@@ -37,14 +63,30 @@ export default function FeedScreen() {
     itemVisiblePercentThreshold: 60,
   }).current;
 
+  // Prefetch upcoming images for faster scrolling
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const visibleVideo = viewableItems.find(
         (v) => v.isViewable && v.item?.type === "video" && v.item?.mediaUrl,
       );
       setVisibleVideoId(visibleVideo ? visibleVideo.item._id : null);
+      
+      // Prefetch next 3 items' images
+      if (feed && viewableItems.length > 0) {
+        const lastVisibleIndex = Math.max(
+          ...viewableItems.map(v => v.index ?? 0),
+        );
+        for (let i = lastVisibleIndex + 1; i <= lastVisibleIndex + 3 && i < feed.length; i++) {
+          const nextItem = feed[i];
+          if (!nextItem) continue;
+          const uri = nextItem.thumbnailUrl ?? nextItem.mediaUrl;
+          if (uri) {
+            Image.prefetch(uri);
+          }
+        }
+      }
     },
-    [],
+    [feed],
   );
 
   /** Calculate video height from stored aspect ratio */
