@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
@@ -35,10 +36,17 @@ class VoiceRecorderErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <View style={ebStyles.errorCard}>
-          <SymbolView name="exclamationmark.triangle" size={20} tintColor="#9CA3AF" />
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={18}
+            tintColor="#9CA3AF"
+          />
           <Text style={ebStyles.errorText}>Aufnahme nicht verfügbar</Text>
-          <TouchableOpacity onPress={this.props.onError} style={ebStyles.closeBtn}>
-            <SymbolView name="xmark" size={14} tintColor="#9CA3AF" />
+          <TouchableOpacity
+            onPress={this.props.onError}
+            style={ebStyles.closeBtn}
+          >
+            <SymbolView name="xmark" size={13} tintColor="#9CA3AF" />
           </TouchableOpacity>
         </View>
       );
@@ -52,14 +60,14 @@ const ebStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 22,
+    backgroundColor: "#F2F2F7",
+    borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    height: 48,
   },
   errorText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     color: "#6B7280",
   },
   closeBtn: {
@@ -114,67 +122,66 @@ export function ChatInputBar({
     setShowVoiceRecorder(false);
   };
 
-  if (showVoiceRecorder) {
-    return (
-      <View style={styles.wrapper}>
+  const hasText = text.trim().length > 0;
+
+  return (
+    <Animated.View layout={LinearTransition.duration(200)} style={styles.wrapper}>
+      {showVoiceRecorder ? (
         <VoiceRecorderErrorBoundary onError={handleVoiceCancel}>
           <VoiceRecorder
             onSend={handleVoiceSend}
             onCancel={handleVoiceCancel}
           />
         </VoiceRecorderErrorBoundary>
-      </View>
-    );
-  }
-
-  const hasText = text.trim().length > 0;
-
-  return (
-    <View style={styles.wrapper}>
-      <View style={styles.bar}>
-        {/* Plus button */}
-        <TouchableOpacity
-          onPress={onPlusPress}
-          style={styles.plusBtn}
-          activeOpacity={0.7}
+      ) : (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          style={styles.bar}
         >
-          <SymbolView name="plus" size={20} tintColor="#8E8E93" />
-        </TouchableOpacity>
-
-        {/* Text input with inner background */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder={placeholder}
-            placeholderTextColor="#C7C7CC"
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={2000}
-            returnKeyType="default"
-          />
-        </View>
-
-        {/* Mic or Send button */}
-        {hasText ? (
+          {/* Plus button */}
           <TouchableOpacity
-            onPress={handleSend}
-            style={styles.sendBtn}
+            onPress={onPlusPress}
+            style={styles.plusBtn}
             activeOpacity={0.7}
           >
-            <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
+            <SymbolView name="plus" size={20} tintColor="#8E8E93" />
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={handleMicPress}
-            style={styles.micBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+
+          {/* Text input */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder={placeholder}
+              placeholderTextColor="#C7C7CC"
+              value={text}
+              onChangeText={setText}
+              multiline
+              maxLength={2000}
+              returnKeyType="default"
+            />
+          </View>
+
+          {/* Mic or Send */}
+          {hasText ? (
+            <TouchableOpacity
+              onPress={handleSend}
+              style={styles.sendBtn}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={handleMicPress}
+              style={styles.micBtn}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -193,7 +200,7 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
     paddingRight: 4,
     paddingVertical: 4,
-    height: 44,
+    height: 48,
     gap: 6,
     boxShadow: "0px 1px 8px rgba(0,0,0,0.08)",
   },

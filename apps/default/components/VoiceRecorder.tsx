@@ -1,6 +1,28 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
-import { useAudioRecorder, requestRecordingPermissionsAsync, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "@/lib/audio-safe";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  FadeIn,
+  FadeOut,
+  Easing,
+} from "react-native-reanimated";
+import {
+  useAudioRecorder,
+  requestRecordingPermissionsAsync,
+  RecordingPresets,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+} from "@/lib/audio-safe";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
 
@@ -15,7 +37,9 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-type RecorderPhase = "idle" | "recording" | "paused" | "preview";
+type RecorderPhase = "idle" | "recording" | "preview";
+
+const BAR_COUNT = 32;
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
@@ -28,6 +52,27 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const previewPlayer = useAudioPlayer(recordedUri ?? undefined);
   const previewStatus = useAudioPlayerStatus(previewPlayer);
   const isPreviewPlaying = previewStatus.playing;
+
+  // Pulsing red dot
+  const dotScale = useSharedValue(1);
+  useEffect(() => {
+    if (phase === "recording") {
+      dotScale.value = withRepeat(
+        withSequence(
+          withTiming(1.3, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else {
+      dotScale.value = withTiming(1, { duration: 200 });
+    }
+  }, [phase, dotScale]);
+
+  const dotAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: dotScale.value }],
+  }));
 
   // Timer
   useEffect(() => {
@@ -45,6 +90,19 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [phase]);
+
+  // Waveform bars (pseudo-random but deterministic per bar index + time)
+  const waveformHeights = useMemo(() => {
+    return Array.from({ length: BAR_COUNT }, (_, i) => {
+      const seed = Math.sin(i * 0.9 + elapsed * 1.2) * 0.5 + 0.5;
+      const wave = Math.sin(i * 0.4 + elapsed * 0.6) * 0.3;
+      const h = 4 + (seed + wave) * 16;
+      return Math.max(3, Math.min(22, h));
+    });
+  }, [elapsed]);
+
+  // Static waveform for preview (frozen at record time)
+  const frozenWaveform = useRef<number[]>([]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -65,38 +123,37 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     }
   }, [audioRecorder, onCancel]);
 
-  const pauseRecording = useCallback(async () => {
+  const stopRecording = useCallback(async () => {
     try {
+      // Freeze waveform before stopping
+      frozenWaveform.current = waveformHeights;
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
       if (uri) {
         setRecordedUri(uri);
         setRecordedDuration(elapsed);
         setPhase("preview");
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       } else {
         onCancel();
       }
     } catch (err) {
-      console.error("Pause recording error:", err);
+      console.error("Stop recording error:", err);
       onCancel();
     }
-  }, [audioRecorder, elapsed, onCancel]);
-
-  const togglePreview = useCallback(() => {
-    if (!previewPlayer) return;
-    if (isPreviewPlaying) {
-      previewPlayer.pause();
-    } else {
-      previewPlayer.play();
-    }
-  }, [previewPlayer, isPreviewPlaying]);
+  }, [audioRecorder, elapsed, onCancel, waveformHeights]);
 
   const handleSend = useCallback(() => {
     if (recordedUri) {
       if (previewPlayer && isPreviewPlaying) {
         previewPlayer.pause();
       }
-      onSend(recordedUri, recordedDuration);
+      onSend(recordedUri, recordedDuration * 1000);
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     }
   }, [recordedUri, recordedDuration, onSend, previewPlayer, isPreviewPlaying]);
 
@@ -108,299 +165,300 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     setElapsed(0);
     setPhase("idle");
     onCancel();
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   }, [onCancel, previewPlayer, isPreviewPlaying]);
+
+  const togglePreview = useCallback(() => {
+    if (!previewPlayer) return;
+    if (isPreviewPlaying) {
+      previewPlayer.pause();
+    } else {
+      if (
+        previewStatus.currentTime >= previewStatus.duration &&
+        previewStatus.duration > 0
+      ) {
+        previewPlayer.seekTo(0);
+      }
+      previewPlayer.play();
+    }
+  }, [previewPlayer, isPreviewPlaying, previewStatus]);
 
   // Auto-start on mount
   useEffect(() => {
     if (phase === "idle") {
       startRecording();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Waveform dots (animated-ish based on elapsed)
-  const waveformDots = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => {
-      const base = 4 + Math.sin(i * 0.6 + elapsed * 0.8) * 3;
-      const h = Math.max(3, Math.min(14, base + Math.random() * 2));
-      return h;
-    });
-  }, [elapsed]);
-
-  // Circular progress (max 120s recording)
-  const maxDuration = 120;
-  const progress = Math.min(elapsed / maxDuration, 1);
-  const circumference = 2 * Math.PI * 15;
-  const strokeDashoffset = circumference * (1 - progress);
 
   // === RECORDING STATE ===
   if (phase === "recording") {
     return (
-      <View style={styles.card}>
-        {/* Top row: timer + waveform + circular progress */}
-        <View style={styles.topRow}>
-          <Text style={styles.timer}>{formatTime(elapsed)}</Text>
+      <Animated.View
+        entering={FadeIn.duration(200)}
+        style={styles.bar}
+      >
+        {/* Delete */}
+        <TouchableOpacity
+          onPress={handleDelete}
+          style={styles.iconBtn}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
+        </TouchableOpacity>
 
+        {/* Waveform area */}
+        <View style={styles.center}>
+          <Animated.View style={[styles.redDot, dotAnimStyle]} />
           <View style={styles.waveform}>
-            {waveformDots.map((h, i) => (
+            {waveformHeights.map((h, i) => (
               <View
-                key={`dot-${i}`}
+                key={`w-${i}`}
                 style={[
-                  styles.dot,
+                  styles.waveBar,
                   {
                     height: h,
                     backgroundColor:
-                      i < waveformDots.length * 0.7 ? "#000" : "#D1D5DB",
+                      i < BAR_COUNT * 0.8 ? "#000" : "#D1D5DB",
                   },
                 ]}
               />
             ))}
           </View>
-
-          {/* Circular timer */}
-          <View style={styles.circularTimer}>
-            <View style={styles.circleTrack}>
-              <Text style={styles.circleTime}>{formatTime(elapsed)}</Text>
-            </View>
-          </View>
+          <Text style={styles.timer}>{formatTime(elapsed)}</Text>
         </View>
 
-        {/* Bottom row: delete, pause/stop, send */}
-        <View style={styles.bottomRow}>
-          <TouchableOpacity
-            onPress={handleDelete}
-            style={styles.deleteBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="trash" size={18} tintColor="#9CA3AF" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={pauseRecording}
-            style={styles.pauseBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="pause.fill" size={18} tintColor="#FFF" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={async () => {
-              await pauseRecording();
-              // Send will be handled via preview state
-            }}
-            style={styles.sendBtnBlack}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+        {/* Stop → goes to preview */}
+        <TouchableOpacity
+          onPress={stopRecording}
+          style={styles.stopBtn}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <View style={styles.stopSquare} />
+        </TouchableOpacity>
+      </Animated.View>
     );
   }
 
-  // === PREVIEW STATE (after stop) ===
+  // === PREVIEW STATE ===
   if (phase === "preview") {
-    const previewProgress =
+    const previewBars =
+      frozenWaveform.current.length > 0
+        ? frozenWaveform.current
+        : Array.from({ length: BAR_COUNT }, (_, i) => 4 + Math.sin(i * 0.6) * 8);
+
+    const progress =
       previewStatus.duration > 0
         ? Math.min(previewStatus.currentTime / previewStatus.duration, 1)
         : 0;
 
-    return (
-      <View style={styles.card}>
-        {/* Top row: play/pause + waveform + time */}
-        <View style={styles.topRow}>
-          <TouchableOpacity
-            onPress={togglePreview}
-            style={styles.previewPlayBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView
-              name={isPreviewPlaying ? "pause.fill" : "play.fill"}
-              size={16}
-              tintColor="#000"
-            />
-          </TouchableOpacity>
+    const displayTime = isPreviewPlaying
+      ? formatTime(previewStatus.currentTime)
+      : formatTime(recordedDuration);
 
+    return (
+      <Animated.View
+        entering={FadeIn.duration(200)}
+        style={styles.bar}
+      >
+        {/* Delete */}
+        <TouchableOpacity
+          onPress={handleDelete}
+          style={styles.iconBtn}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
+        </TouchableOpacity>
+
+        {/* Play/Pause */}
+        <TouchableOpacity
+          onPress={togglePreview}
+          style={styles.playBtn}
+          activeOpacity={0.7}
+          hitSlop={6}
+        >
+          <SymbolView
+            name={isPreviewPlaying ? "pause.fill" : "play.fill"}
+            size={14}
+            tintColor="#000"
+          />
+        </TouchableOpacity>
+
+        {/* Waveform + time */}
+        <View style={styles.center}>
           <View style={styles.waveform}>
-            {waveformDots.map((h, i) => (
+            {previewBars.map((h, i) => (
               <View
-                key={`pdot-${i}`}
+                key={`p-${i}`}
                 style={[
-                  styles.dot,
+                  styles.waveBar,
                   {
                     height: h,
                     backgroundColor:
-                      i / waveformDots.length <= previewProgress
-                        ? "#000"
-                        : "#D1D5DB",
+                      i / BAR_COUNT <= progress ? "#000" : "#D1D5DB",
                   },
                 ]}
               />
             ))}
           </View>
-
-          <Text style={styles.previewTime}>
-            {formatTime(
-              isPreviewPlaying
-                ? previewStatus.currentTime
-                : recordedDuration
-            )}
-          </Text>
+          <Text style={styles.previewTime}>{displayTime}</Text>
         </View>
 
-        {/* Bottom row: delete + send */}
-        <View style={styles.bottomRow}>
-          <TouchableOpacity
-            onPress={handleDelete}
-            style={styles.deleteBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="trash" size={18} tintColor="#9CA3AF" />
-          </TouchableOpacity>
-
-          <View style={{ flex: 1 }} />
-
-          <TouchableOpacity
-            onPress={handleSend}
-            style={styles.sendBtnBlack}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+        {/* Send */}
+        <TouchableOpacity
+          onPress={handleSend}
+          style={styles.sendBtn}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <SymbolView name="arrow.up" size={15} tintColor="#FFF" />
+        </TouchableOpacity>
+      </Animated.View>
     );
   }
 
-  // idle – show preparing state (never return null to avoid black screen)
+  // === IDLE (preparing) ===
   return (
-    <View style={styles.card}>
-      <View style={styles.topRow}>
-        <View style={styles.recordingDot} />
-        <Text style={styles.timer}>Vorbereiten…</Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity
-          onPress={handleDelete}
-          style={styles.deleteBtn}
-          activeOpacity={0.7}
-        >
-          <SymbolView name="xmark" size={16} tintColor="#9CA3AF" />
-        </TouchableOpacity>
+    <Animated.View entering={FadeIn.duration(150)} style={styles.bar}>
+      <TouchableOpacity
+        onPress={handleDelete}
+        style={styles.iconBtn}
+        activeOpacity={0.7}
+        hitSlop={8}
+      >
+        <SymbolView name="xmark" size={15} tintColor="#9CA3AF" />
+      </TouchableOpacity>
+      <View style={styles.center}>
+        <View style={styles.preparingDot} />
+        <Text style={styles.preparingText}>Aufnahme wird vorbereitet…</Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 12,
-    gap: 14,
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F2F2F7",
+    borderRadius: 24,
+    height: 48,
+    paddingHorizontal: 6,
+    gap: 4,
   },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+
+  // Shared icon button
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Center area (fills remaining space)
+  center: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+
+  // Red pulsing dot
+  redDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: "#EF4444",
   },
 
-  /* ---- Top row ---- */
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  timer: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#000",
-    fontVariant: ["tabular-nums"],
-    minWidth: 34,
-  },
+  // Waveform
   waveform: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    height: 18,
+    gap: 1.5,
+    height: 24,
     overflow: "hidden",
   },
-  dot: {
-    width: 3,
+  waveBar: {
+    width: 2.5,
     borderRadius: 1.5,
   },
-  circularTimer: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  circleTrack: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2.5,
-    borderColor: "#E5E7EB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  circleTime: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: "#6B7280",
+
+  // Timer during recording
+  timer: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#000",
     fontVariant: ["tabular-nums"],
+    minWidth: 32,
+    textAlign: "right",
   },
 
-  /* ---- Bottom row ---- */
-  bottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  deleteBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "rgba(0,0,0,0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pauseBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  // Stop button (square icon)
+  stopBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "#EF4444",
     alignItems: "center",
     justifyContent: "center",
   },
-  sendBtnBlack: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#000",
-    alignItems: "center",
-    justifyContent: "center",
+  stopSquare: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    backgroundColor: "#FFF",
   },
 
-  /* ---- Preview row ---- */
-  previewPlayBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  // Play button in preview
+  playBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "rgba(0,0,0,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
+
+  // Preview time
   previewTime: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#6B7280",
     fontVariant: ["tabular-nums"],
     minWidth: 30,
     textAlign: "right",
+  },
+
+  // Send button
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Preparing state
+  preparingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#D1D5DB",
+  },
+  preparingText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    fontWeight: "500",
   },
 });
