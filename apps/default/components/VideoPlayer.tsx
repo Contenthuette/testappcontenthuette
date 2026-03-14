@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import { View, StyleSheet, Pressable, LayoutChangeEvent } from "react-native";
+import { View, StyleSheet, Pressable, LayoutChangeEvent, AppState, AppStateStatus } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { SymbolView } from "expo-symbols";
+import { useIsFocused } from "@react-navigation/native";
 
 interface VideoPlayerProps {
   uri: string;
@@ -28,6 +29,10 @@ export function VideoPlayer({
   borderRadius = 0,
   contentFit = "cover",
 }: VideoPlayerProps) {
+  const isFocused = useIsFocused();
+  const appStateRef = useRef(AppState.currentState);
+  const [appActive, setAppActive] = useState(true);
+
   const player = useVideoPlayer(uri, (p) => {
     p.loop = loop;
     p.muted = muted;
@@ -35,35 +40,42 @@ export function VideoPlayer({
 
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [isPlaying, setIsPlaying] = useState(false);
   const barWidthRef = useRef(0);
   const isSeeking = useRef(false);
-  const didSeekInit = useRef(false);
 
-  // Seek to 0.1s on mount when not auto-playing to show a preview frame
+  // Track app state (background/foreground)
   useEffect(() => {
-    if (!autoPlay && !didSeekInit.current) {
-      didSeekInit.current = true;
-      const timer = setTimeout(() => {
-        try {
-          player.currentTime = 0.1;
-        } catch {
-          // player may not be ready
-        }
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [player, autoPlay]);
+    const sub = AppState.addEventListener("change", (next: AppStateStatus) => {
+      appStateRef.current = next;
+      setAppActive(next === "active");
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Master visibility: screen focused + prop visible + app active
+  const shouldPlay = isFocused && isVisible && appActive;
 
   useEffect(() => {
-    if (isVisible && autoPlay) {
+    if (shouldPlay && autoPlay) {
       player.play();
       setIsPlaying(true);
-    } else if (!isVisible) {
+    } else {
       player.pause();
       setIsPlaying(false);
     }
-  }, [isVisible, autoPlay, player]);
+  }, [shouldPlay, autoPlay, player]);
+
+  // Cleanup: pause on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        player.pause();
+      } catch {
+        // player may already be released
+      }
+    };
+  }, [player]);
 
   const handleTapToPlay = useCallback(() => {
     if (isPlaying) {
@@ -101,10 +113,10 @@ export function VideoPlayer({
   }, [player, hideControls]);
 
   const handlePressOut = useCallback(() => {
-    if (hideControls && isVisible) {
+    if (hideControls && shouldPlay) {
       player.play();
     }
-  }, [player, hideControls, isVisible]);
+  }, [player, hideControls, shouldPlay]);
 
   const handleBarLayout = useCallback((e: LayoutChangeEvent) => {
     barWidthRef.current = e.nativeEvent.layout.width;

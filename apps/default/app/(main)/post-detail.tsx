@@ -92,7 +92,6 @@ export default function PostDetailScreen() {
               autoPlay
               loop
               hideControls
-              isVisible
               contentFit="contain"
             />
           </View>
@@ -110,7 +109,6 @@ export default function PostDetailScreen() {
               autoPlay
               loop
               hideControls
-              isVisible
             />
           </View>
         </View>

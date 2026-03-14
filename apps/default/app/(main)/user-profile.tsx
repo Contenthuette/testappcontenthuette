@@ -25,7 +25,6 @@ import {
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
-import { VideoThumbnail } from "@/components/VideoThumbnail";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -288,11 +287,13 @@ export default function UserProfileScreen() {
                         recyclingKey={post._id + "-ugrid"}
                       />
                     ) : isVideo && post.mediaUrl ? (
-                      <VideoThumbnail
-                        uri={post.mediaUrl}
-                        style={styles.postImage}
-                        playIconSize={22}
-                      />
+                      <View style={styles.postImage}>
+                        <View
+                          style={[StyleSheet.absoluteFill, styles.postVideoFallback]}
+                        >
+                          <Play size={28} color="#fff" fill="#fff" />
+                        </View>
+                      </View>
                     ) : (
                       <View
                         style={[styles.postImage, styles.postVideoFallback]}

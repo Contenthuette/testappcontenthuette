@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SymbolView } from "@/components/Icon";
-import { VideoThumbnail } from "@/components/VideoThumbnail";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface SharedPostBubbleProps {
@@ -50,10 +49,21 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
     >
       <View style={styles.mediaWrap}>
         {isVideo && hasMedia ? (
-          <VideoThumbnail
-            uri={preview.mediaUrl!}
-            playIconSize={24}
-          />
+          <View style={styles.imageWrap}>
+            <Image
+              source={{ uri: preview.thumbnailUrl ?? preview.mediaUrl }}
+              style={styles.media}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+              recyclingKey={`shared-vid-${postId}`}
+            />
+            <View style={styles.videoPlayOverlay}>
+              <View style={styles.videoPlayCircle}>
+                <View style={styles.videoPlayTriangle} />
+              </View>
+            </View>
+          </View>
         ) : hasThumb ? (
           <View style={styles.imageWrap}>
             <Image
