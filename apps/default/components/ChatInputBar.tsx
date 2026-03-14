@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, Component, type ReactNode } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,79 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
-import { VoiceRecorder } from "@/components/VoiceRecorder";
+
+// Lazy import to avoid crash if expo-audio native module has issues
+const LazyVoiceRecorder = React.lazy(
+  () => import("@/components/VoiceRecorder").then((m) => ({ default: m.VoiceRecorder }))
+);
+
+// Error boundary to catch native module crashes
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class VoiceRecorderErrorBoundary extends Component<
+  { children: ReactNode; onReset: () => void },
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("VoiceRecorder crashed:", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={ebStyles.errorBar}>
+          <TouchableOpacity
+            onPress={() => {
+              this.setState({ hasError: false });
+              this.props.onReset();
+            }}
+            style={ebStyles.closeBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="xmark" size={14} tintColor="#9CA3AF" />
+          </TouchableOpacity>
+          <Text style={ebStyles.errorText}>
+            Sprachaufnahme nicht verfügbar
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const ebStyles = StyleSheet.create({
+  errorBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F2F2F7",
+    borderRadius: 24,
+    height: 48,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    fontWeight: "500",
+  },
+});
 
 interface ChatInputBarProps {
   onSend: (text: string) => void;
@@ -58,13 +130,22 @@ export function ChatInputBar({
   return (
     <View style={styles.wrapper}>
       {showVoiceRecorder ? (
-        <VoiceRecorder
-          onSend={handleVoiceSend}
-          onCancel={handleVoiceCancel}
-        />
+        <VoiceRecorderErrorBoundary onReset={handleVoiceCancel}>
+          <React.Suspense
+            fallback={
+              <View style={styles.loadingBar}>
+                <Text style={styles.loadingText}>Laden…</Text>
+              </View>
+            }
+          >
+            <LazyVoiceRecorder
+              onSend={handleVoiceSend}
+              onCancel={handleVoiceCancel}
+            />
+          </React.Suspense>
+        </VoiceRecorderErrorBoundary>
       ) : (
         <View style={styles.bar}>
-          {/* Plus button */}
           {onPlusPress && (
             <TouchableOpacity
               onPress={onPlusPress}
@@ -75,7 +156,6 @@ export function ChatInputBar({
             </TouchableOpacity>
           )}
 
-          {/* Text input */}
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -89,7 +169,6 @@ export function ChatInputBar({
             />
           </View>
 
-          {/* Mic or Send */}
           {hasText ? (
             <TouchableOpacity
               onPress={handleSend}
@@ -99,13 +178,15 @@ export function ChatInputBar({
               <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              onPress={handleMicPress}
-              style={styles.micBtn}
-              activeOpacity={0.7}
-            >
-              <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
-            </TouchableOpacity>
+            onSendVoice && (
+              <TouchableOpacity
+                onPress={handleMicPress}
+                style={styles.micBtn}
+                activeOpacity={0.7}
+              >
+                <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
+              </TouchableOpacity>
+            )
           )}
         </View>
       )}
@@ -169,5 +250,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
+  },
+  loadingBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F2F2F7",
+    borderRadius: 24,
+    height: 48,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    fontWeight: "500",
   },
 });

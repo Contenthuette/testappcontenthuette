@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Alert,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -20,9 +21,7 @@ import {
   RecordingPresets,
   AudioModule,
   setAudioModeAsync,
-  useAudioPlayer,
-  useAudioPlayerStatus,
-} from "@/lib/audio-safe";
+} from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
 
@@ -37,9 +36,9 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-type RecorderPhase = "idle" | "recording" | "preview" | "error";
+type RecorderPhase = "idle" | "recording" | "stopped" | "error";
 
-const BAR_COUNT = 32;
+const BAR_COUNT = 28;
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
@@ -49,14 +48,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasStartedRef = useRef(false);
 
-  // expo-audio hooks (must be at top level)
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-
-  // For preview playback we use the recorded URI
-  const recordedUri = audioRecorder.uri;
-  const previewPlayer = useAudioPlayer(phase === "preview" && recordedUri ? recordedUri : undefined);
-  const previewStatus = useAudioPlayerStatus(previewPlayer);
-  const isPreviewPlaying = previewStatus.playing;
 
   // Pulsing red dot
   const dotScale = useSharedValue(1);
@@ -110,7 +102,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      // Request permissions via AudioModule
       const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) {
         setPhase("error");
@@ -118,13 +109,11 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         return;
       }
 
-      // Set audio mode for recording on iOS
       await setAudioModeAsync({
         playsInSilentMode: true,
         allowsRecording: true,
       });
 
-      // Prepare + record (this is the correct expo-audio flow)
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
 
@@ -143,18 +132,12 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const stopRecording = useCallback(async () => {
     try {
       frozenWaveform.current = [...waveformHeights];
+      const dur = elapsed;
       await audioRecorder.stop();
-
-      // audioRecorder.uri is updated after stop
-      if (audioRecorder.uri) {
-        setRecordedDuration(elapsed);
-        setPhase("preview");
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-      } else {
-        setPhase("error");
-        setErrorMsg("Aufnahme fehlgeschlagen");
+      setRecordedDuration(dur);
+      setPhase("stopped");
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (err) {
       console.error("Stop recording error:", err);
@@ -163,45 +146,27 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     }
   }, [audioRecorder, elapsed, waveformHeights]);
 
-  const togglePreview = useCallback(() => {
-    if (!previewPlayer) return;
-    if (isPreviewPlaying) {
-      previewPlayer.pause();
-    } else {
-      if (
-        previewStatus.duration > 0 &&
-        previewStatus.currentTime >= previewStatus.duration
-      ) {
-        previewPlayer.seekTo(0);
-      }
-      previewPlayer.play();
-    }
-  }, [previewPlayer, isPreviewPlaying, previewStatus]);
-
   const handleSend = useCallback(() => {
     const uri = audioRecorder.uri;
     if (uri) {
-      if (previewPlayer && isPreviewPlaying) {
-        previewPlayer.pause();
-      }
       onSend(uri, recordedDuration * 1000);
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+    } else {
+      setPhase("error");
+      setErrorMsg("Keine Aufnahme vorhanden");
     }
-  }, [audioRecorder.uri, recordedDuration, onSend, previewPlayer, isPreviewPlaying]);
+  }, [audioRecorder.uri, recordedDuration, onSend]);
 
   const handleDelete = useCallback(() => {
-    if (previewPlayer && isPreviewPlaying) {
-      previewPlayer.pause();
-    }
     setElapsed(0);
     setPhase("idle");
     onCancel();
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [onCancel, previewPlayer, isPreviewPlaying]);
+  }, [onCancel]);
 
   // Auto-start on mount (once)
   useEffect(() => {
@@ -281,21 +246,12 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     );
   }
 
-  // === PREVIEW STATE ===
-  if (phase === "preview") {
+  // === STOPPED / REVIEW STATE ===
+  if (phase === "stopped") {
     const previewBars =
       frozenWaveform.current.length > 0
         ? frozenWaveform.current
         : Array.from({ length: BAR_COUNT }, (_, i) => 4 + Math.sin(i * 0.6) * 8);
-
-    const progress =
-      previewStatus.duration > 0
-        ? Math.min(previewStatus.currentTime / previewStatus.duration, 1)
-        : 0;
-
-    const displayTime = isPreviewPlaying
-      ? formatTime(previewStatus.currentTime)
-      : formatTime(recordedDuration);
 
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
@@ -308,36 +264,22 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={togglePreview}
-          style={styles.playBtn}
-          activeOpacity={0.7}
-          hitSlop={6}
-        >
-          <SymbolView
-            name={isPreviewPlaying ? "pause.fill" : "play.fill"}
-            size={14}
-            tintColor="#000"
-          />
-        </TouchableOpacity>
-
         <View style={styles.center}>
+          <SymbolView name="waveform" size={16} tintColor="#000" />
           <View style={styles.waveform}>
             {previewBars.map((h, i) => (
               <View
                 key={`p-${i}`}
                 style={[
                   styles.waveBar,
-                  {
-                    height: h,
-                    backgroundColor:
-                      i / BAR_COUNT <= progress ? "#000" : "#D1D5DB",
-                  },
+                  { height: h, backgroundColor: "#000" },
                 ]}
               />
             ))}
           </View>
-          <Text style={styles.previewTime}>{displayTime}</Text>
+          <Text style={styles.previewTime}>
+            {formatTime(recordedDuration)}
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -435,14 +377,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 2,
     backgroundColor: "#FFF",
-  },
-  playBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
   },
   previewTime: {
     fontSize: 12,

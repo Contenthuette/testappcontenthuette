@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useAudioPlayer, useAudioPlayerStatus } from "@/lib/audio-safe";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import SymbolView from "@/components/Icon";
 
 interface VoiceMessageBubbleProps {
