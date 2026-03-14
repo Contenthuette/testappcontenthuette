@@ -100,56 +100,47 @@ export const feed = authQuery({
     const pinnedIds = new Set(pinned.map(p => p._id));
     const allPosts = [...pinned, ...regular.filter(p => !pinnedIds.has(p._id))];
     
-    // Batch-fetch all authors + storage URLs in parallel
+    // 1. Single author fetch (was previously fetched TWICE)
     const authorIds = allPosts.map(p => p.authorId);
-    const storageIds = allPosts.flatMap(p => [
-      p.mediaStorageId,
-      p.thumbnailStorageId,
+    const authorCache = await batchGetAuthors(ctx, authorIds);
+    
+    // 2. Single batch: ALL storage IDs (media + thumbnails + avatars)
+    const allStorageIds: Array<Id<"_storage"> | undefined> = [];
+    for (const post of allPosts) {
+      allStorageIds.push(post.mediaStorageId);
+      allStorageIds.push(post.thumbnailStorageId);
+    }
+    for (const author of authorCache.values()) {
+      if (author?.avatarStorageId) {
+        allStorageIds.push(author.avatarStorageId);
+      }
+    }
+    const urlCache = await batchGetUrls(ctx, allStorageIds);
+    
+    // 3. Parallel like + save checks
+    const [likeChecks, saveChecks] = await Promise.all([
+      myUserId
+        ? Promise.all(
+            allPosts.map(p =>
+              ctx.db.query("likes")
+                .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
+                .unique()
+            ),
+          )
+        : Promise.resolve(allPosts.map(() => null)),
+      myUserId
+        ? Promise.all(
+            allPosts.map(p =>
+              ctx.db.query("savedPosts")
+                .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
+                .unique()
+            ),
+          )
+        : Promise.resolve(allPosts.map(() => null)),
     ]);
-    const avatarStorageIds = [...new Set(authorIds)];
-    
-    const [authorCache, urlCache] = await Promise.all([
-      batchGetAuthors(ctx, authorIds),
-      (async () => {
-        // We need author avatarStorageIds too, so first get authors
-        const authors = await batchGetAuthors(ctx, authorIds);
-        const allStorageIds = [
-          ...storageIds,
-          ...[...authors.values()]
-            .filter((a): a is Doc<"users"> => !!a?.avatarStorageId)
-            .map(a => a.avatarStorageId!),
-        ];
-        return batchGetUrls(ctx, allStorageIds);
-      })(),
-    ]);
-    
-    // Actually use the second result's author data too
-    // Re-fetch author cache from the parallel call that already ran
-    const authors = authorCache;
-    
-    // Batch-fetch all like/save checks in parallel
-    const likeChecks = myUserId
-      ? await Promise.all(
-          allPosts.map(p =>
-            ctx.db.query("likes")
-              .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
-              .unique()
-          ),
-        )
-      : allPosts.map(() => null);
-    
-    const saveChecks = myUserId
-      ? await Promise.all(
-          allPosts.map(p =>
-            ctx.db.query("savedPosts")
-              .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
-              .unique()
-          ),
-        )
-      : allPosts.map(() => null);
     
     return allPosts.map((post, i) => {
-      const author = authors.get(post.authorId);
+      const author = authorCache.get(post.authorId);
       return {
         _id: post._id,
         authorId: post.authorId,
@@ -505,6 +496,7 @@ export const getSavedPosts = authQuery({
     type: v.union(v.literal("photo"), v.literal("video")),
     caption: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
     authorName: v.string(),
     createdAt: v.number(),
   })),
@@ -515,21 +507,39 @@ export const getSavedPosts = authQuery({
       .withIndex("by_userId", q => q.eq("userId", myUserId))
       .order("desc")
       .take(50);
-    const results = [];
-    for (const s of saved) {
-      const post = await ctx.db.get(s.postId);
-      if (!post) continue;
-      const author = await ctx.db.get(post.authorId);
-      results.push({
+    
+    if (saved.length === 0) return [];
+    
+    // Batch fetch all posts in parallel (not sequential!)
+    const posts = await Promise.all(saved.map(s => ctx.db.get(s.postId)));
+    
+    // Collect valid posts with their indices
+    const validEntries: Array<{ saved: typeof saved[number]; post: NonNullable<typeof posts[number]> }> = [];
+    for (let i = 0; i < saved.length; i++) {
+      const post = posts[i];
+      if (post) validEntries.push({ saved: saved[i], post });
+    }
+    
+    // Batch fetch authors + storage URLs
+    const authorIds = validEntries.map(e => e.post.authorId);
+    const storageIds = validEntries.flatMap(e => [e.post.mediaStorageId, e.post.thumbnailStorageId]);
+    const [authorCache, urlCache] = await Promise.all([
+      batchGetAuthors(ctx, authorIds),
+      batchGetUrls(ctx, storageIds),
+    ]);
+    
+    return validEntries.map(({ post }) => {
+      const author = authorCache.get(post.authorId);
+      return {
         _id: post._id,
         type: post.type,
         caption: post.caption,
-        mediaUrl: post.mediaStorageId ? await ctx.storage.getUrl(post.mediaStorageId) ?? undefined : post.mediaUrl,
+        mediaUrl: post.mediaStorageId ? (urlCache.get(post.mediaStorageId) ?? undefined) : post.mediaUrl,
+        thumbnailUrl: post.thumbnailStorageId ? (urlCache.get(post.thumbnailStorageId) ?? undefined) : post.thumbnailUrl,
         authorName: author?.name ?? "Unknown",
         createdAt: post.createdAt,
-      });
-    }
-    return results;
+      };
+    });
   },
 });
 
@@ -576,5 +586,22 @@ export const getUserPosts = query({
       commentCount: p.commentCount,
       createdAt: p.createdAt,
     }));
+  },
+});
+
+// Repair: patch a thumbnail onto a video post that's missing one
+export const patchThumbnail = authMutation({
+  args: {
+    postId: v.id("posts"),
+    thumbnailStorageId: v.id("_storage"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!post) return null;
+    // Only patch if no thumbnail exists yet
+    if (post.thumbnailStorageId) return null;
+    await ctx.db.patch(args.postId, { thumbnailStorageId: args.thumbnailStorageId });
+    return null;
   },
 });

@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import React from "react";
+import { View, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import * as VideoThumbnails from "expo-video-thumbnails";
+import { SymbolView } from "@/components/Icon";
 
 interface VideoGridThumbnailProps {
   thumbnailUrl?: string;
@@ -10,79 +10,53 @@ interface VideoGridThumbnailProps {
   recyclingKey?: string;
 }
 
-// Cache extracted thumbnails across renders
-const thumbnailCache = new Map<string, string>();
-
+/**
+ * Instant video grid thumbnail.
+ * Shows stored thumbnail immediately, or a styled placeholder.
+ * NEVER downloads the video file for extraction — that was killing performance.
+ */
 export function VideoGridThumbnail({
   thumbnailUrl,
-  videoUrl,
   style,
   recyclingKey,
 }: VideoGridThumbnailProps) {
-  const [extractedUri, setExtractedUri] = useState<string | null>(
-    videoUrl ? thumbnailCache.get(videoUrl) ?? null : null,
-  );
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    // If we already have a real thumbnail, skip extraction
-    if (thumbnailUrl) return;
-    // If we already have a cached extraction, skip
-    if (videoUrl && thumbnailCache.has(videoUrl)) {
-      setExtractedUri(thumbnailCache.get(videoUrl)!);
-      return;
-    }
-    if (!videoUrl) return;
-    if (Platform.OS === "web") return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const { uri } = await VideoThumbnails.getThumbnailAsync(videoUrl, {
-          time: 500, // 0.5s into the video
-          quality: 0.5,
-        });
-        if (!cancelled && mounted.current) {
-          thumbnailCache.set(videoUrl, uri);
-          setExtractedUri(uri);
-        }
-      } catch {
-        // Silently fail - show dark placeholder
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [thumbnailUrl, videoUrl]);
-
-  const displayUri = thumbnailUrl || extractedUri;
-
-  if (!displayUri) {
-    return <View style={[style, styles.placeholder]} />;
+  // Instant render: stored thumbnail
+  if (thumbnailUrl) {
+    return (
+      <Image
+        source={{ uri: thumbnailUrl }}
+        style={style}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        priority="high"
+        transition={0}
+        recyclingKey={recyclingKey}
+      />
+    );
   }
 
+  // No thumbnail stored: instant dark placeholder with play icon
   return (
-    <Image
-      source={{ uri: displayUri }}
-      style={style}
-      contentFit="cover"
-      cachePolicy="memory-disk"
-      priority="high"
-      transition={0}
-      recyclingKey={recyclingKey}
-    />
+    <View style={[style, styles.placeholder]}>
+      <View style={styles.playCircle}>
+        <SymbolView name="play.fill" size={16} tintColor="#fff" />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   placeholder: {
     backgroundColor: "#1a1a1a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

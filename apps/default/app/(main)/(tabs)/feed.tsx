@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useMemo, memo } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   useWindowDimensions, ActivityIndicator, ViewToken,
@@ -16,163 +16,100 @@ import { Image } from "expo-image";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { useIsFocused } from "@react-navigation/native";
 import { ShareSheet } from "@/components/ShareSheet";
+import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 import type { Id } from "@/convex/_generated/dataModel";
 
-const HEADER_HEIGHT = 56;
-const FEED_ASPECT_RATIO = 3 / 4; // 3:4 portrait (width:height)
+const FEED_ASPECT_RATIO = 3 / 4;
 
-export default function FeedScreen() {
-  const { width: screenWidth } = useWindowDimensions();
-  const feed = useQuery(api.posts.feed, {});
-  const toggleLike = useMutation(api.posts.toggleLike).withOptimisticUpdate(
-    (store, { postId }) => {
-      const currentFeed = store.getQuery(api.posts.feed, {});
-      if (!currentFeed) return;
-      store.setQuery(
-        api.posts.feed,
-        {},
-        currentFeed.map(p =>
-          p._id === postId
-            ? { ...p, isLiked: !p.isLiked, likeCount: p.isLiked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
-            : p,
-        ),
-      );
-    },
-  );
-  const toggleSave = useMutation(api.posts.toggleSave).withOptimisticUpdate(
-    (store, { postId }) => {
-      const currentFeed = store.getQuery(api.posts.feed, {});
-      if (!currentFeed) return;
-      store.setQuery(
-        api.posts.feed,
-        {},
-        currentFeed.map(p =>
-          p._id === postId ? { ...p, isSaved: !p.isSaved } : p,
-        ),
-      );
-    },
-  );
-  const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
-  const isFocused = useIsFocused();
-  const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
+// ── Types ─────────────────────────────────────────
+type FeedItem = NonNullable<ReturnType<typeof useQuery<typeof api.posts.feed>>>[number];
 
-  // 4:3 feed media height
-  const feedMediaHeight = screenWidth / FEED_ASPECT_RATIO;
+// ── Helpers (module-level, zero cost) ─────────────
+function formatTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "Gerade eben";
+  if (min < 60) return `vor ${min} Min.`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `vor ${hrs} Std.`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `vor ${days} T.`;
+  return new Date(ts).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+}
 
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 60,
-  }).current;
+function getCropTransform(item: FeedItem, screenWidth: number, mediaHeight: number) {
+  const zoom = item.cropZoom ?? 1;
+  const mediaAR = item.mediaAspectRatio ?? 9 / 16;
+  const scaledW = screenWidth * zoom;
+  const scaledH = (screenWidth / mediaAR) * zoom;
+  const overflowX = Math.max(0, scaledW - screenWidth);
+  const overflowY = Math.max(0, scaledH - mediaHeight);
+  const tX = (0.5 - (item.cropOffsetX ?? 0.5)) * overflowX;
+  const tY = (0.5 - (item.cropOffsetY ?? 0.5)) * overflowY;
+  return { translateX: tX, translateY: tY, scale: zoom };
+}
 
-  // Prefetch upcoming images for faster scrolling
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const visibleVideo = viewableItems.find(
-        (v) => v.isViewable && v.item?.type === "video" && v.item?.mediaUrl,
-      );
-      setVisibleVideoId(visibleVideo ? visibleVideo.item._id : null);
-      
-      // Prefetch next 3 items' images
-      if (feed && viewableItems.length > 0) {
-        const lastVisibleIndex = Math.max(
-          ...viewableItems.map(v => v.index ?? 0),
-        );
-        for (let i = lastVisibleIndex + 1; i <= lastVisibleIndex + 3 && i < feed.length; i++) {
-          const nextItem = feed[i];
-          if (!nextItem) continue;
-          const uri = nextItem.thumbnailUrl ?? nextItem.mediaUrl;
-          if (uri) {
-            Image.prefetch(uri);
-          }
-        }
-      }
-    },
-    [feed],
-  );
+function getImagePosition(item: FeedItem) {
+  const yOffset = item.cropOffsetY ?? 0.5;
+  const xOffset = item.cropOffsetX ?? 0.5;
+  return { top: `${yOffset * 100}%` as const, left: `${xOffset * 100}%` as const };
+}
 
-  /** Calculate video height from stored aspect ratio */
-  const getVideoNativeHeight = (item: NonNullable<typeof feed>[number]) => {
-    const ar = item.mediaAspectRatio ?? 9 / 16; // default 9:16
-    return screenWidth / ar;
-  };
+// ── Memoized Post Component ───────────────────────
+interface FeedPostProps {
+  item: FeedItem;
+  screenWidth: number;
+  feedMediaHeight: number;
+  isVideoPlaying: boolean;
+  onToggleLike: (postId: Id<"posts">) => void;
+  onToggleSave: (postId: Id<"posts">) => void;
+  onShare: (postId: Id<"posts">) => void;
+}
 
-  /** Calculate crop transform for feed display */
-  const getCropTransform = (item: NonNullable<typeof feed>[number]) => {
-    const zoom = item.cropZoom ?? 1;
-    const mediaAR = item.mediaAspectRatio ?? 9 / 16;
-
-    const scaledW = screenWidth * zoom;
-    const scaledH = (screenWidth / mediaAR) * zoom;
-    const overflowX = Math.max(0, scaledW - screenWidth);
-    const overflowY = Math.max(0, scaledH - feedMediaHeight);
-
-    const tX = (0.5 - (item.cropOffsetX ?? 0.5)) * overflowX;
-    const tY = (0.5 - (item.cropOffsetY ?? 0.5)) * overflowY;
-
-    return { translateX: tX, translateY: tY, scale: zoom };
-  };
-
-  /** Get content position for cropped images (no zoom) */
-  const getImagePosition = (item: NonNullable<typeof feed>[number]) => {
-    const yOffset = item.cropOffsetY ?? 0.5;
-    const xOffset = item.cropOffsetX ?? 0.5;
-    return { top: `${yOffset * 100}%` as const, left: `${xOffset * 100}%` as const };
-  };
-
-  const renderAnnouncement = (item: NonNullable<typeof feed>[number]) => (
-    <View style={styles.announcementCard} key={item._id}>
-      <View style={styles.announcementHeader}>
-        <ZLogo size={28} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.announcementTitle}>Z Announcement</Text>
-          <Text style={styles.announcementSub}>Offiziell</Text>
+const FeedPost = memo(function FeedPost({
+  item, screenWidth, feedMediaHeight, isVideoPlaying,
+  onToggleLike, onToggleSave, onShare,
+}: FeedPostProps) {
+  if (item.isAnnouncement) {
+    return (
+      <View style={styles.announcementCard}>
+        <View style={styles.announcementHeader}>
+          <ZLogo size={28} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.announcementTitle}>Z Announcement</Text>
+            <Text style={styles.announcementSub}>Offiziell</Text>
+          </View>
         </View>
+        {item.mediaUrl && (
+          <Image source={{ uri: item.mediaUrl }} style={styles.announcementImage} contentFit="cover" cachePolicy="memory-disk" transition={0} />
+        )}
+        {item.caption && <Text style={styles.announcementText}>{item.caption}</Text>}
       </View>
-      {item.mediaUrl && (
-        <Image source={{ uri: item.mediaUrl }} style={styles.announcementImage} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-      )}
-      {item.caption && <Text style={styles.announcementText}>{item.caption}</Text>}
-    </View>
-  );
+    );
+  }
 
-  const renderMedia = (item: NonNullable<typeof feed>[number]) => {
+  const isVideo = item.type === "video";
+  const isOriginal = item.aspectMode === "original";
+  const thumbUri = item.thumbnailUrl;
+
+  // ── Render media ──
+  const renderMedia = () => {
     if (!item.mediaUrl) return null;
 
-    const isOriginal = item.aspectMode === "original";
-    const isVideo = item.type === "video";
-    const isThisVideoVisible = isFocused && visibleVideoId === item._id;
-
     if (isVideo) {
-      const thumbUri = item.thumbnailUrl;
-      const crop = getCropTransform(item);
+      const crop = getCropTransform(item, screenWidth, feedMediaHeight);
       const mediaAR = item.mediaAspectRatio ?? 9 / 16;
       const nativeHeight = screenWidth / mediaAR;
 
       if (isOriginal) {
         return (
           <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
-            {isThisVideoVisible ? (
-              <VideoPlayer
-                uri={item.mediaUrl}
-                height={feedMediaHeight}
-                width={screenWidth}
-                autoPlay
-                loop
-                hideControls
-                isVisible
-                contentFit="contain"
-              />
+            {isVideoPlaying ? (
+              <VideoPlayer uri={item.mediaUrl} height={feedMediaHeight} width={screenWidth} autoPlay loop hideControls isVisible contentFit="contain" />
             ) : (
               <View style={{ width: screenWidth, height: feedMediaHeight, justifyContent: "center", alignItems: "center" }}>
                 {thumbUri ? (
-                  <Image
-                    source={{ uri: thumbUri }}
-                    style={{ width: screenWidth, height: feedMediaHeight }}
-                    contentFit="contain"
-                    cachePolicy="memory-disk"
-                    priority="high"
-                    transition={0}
-                    recyclingKey={item._id + "-orig-thumb"}
-                  />
+                  <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: feedMediaHeight }} contentFit="contain" cachePolicy="memory-disk" priority="high" transition={0} recyclingKey={item._id + "-ot"} />
                 ) : (
                   <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
                 )}
@@ -187,50 +124,18 @@ export default function FeedScreen() {
         );
       }
 
-      // Cropped video: apply full crop transform
       return (
         <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
-          {isThisVideoVisible ? (
-            <View
-              style={{
-                transform: [
-                  { translateX: crop.translateX },
-                  { translateY: crop.translateY },
-                  { scale: crop.scale },
-                ],
-              }}
-            >
-              <VideoPlayer
-                uri={item.mediaUrl}
-                height={nativeHeight}
-                width={screenWidth}
-                autoPlay
-                loop
-                hideControls
-                isVisible
-              />
+          {isVideoPlaying ? (
+            <View style={{ transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
+              <VideoPlayer uri={item.mediaUrl} height={nativeHeight} width={screenWidth} autoPlay loop hideControls isVisible />
             </View>
           ) : (
             <View>
               {thumbUri ? (
-                <Image
-                  source={{ uri: thumbUri }}
-                  style={{ width: screenWidth, height: feedMediaHeight }}
-                  contentFit="cover"
-                  contentPosition={getImagePosition(item)}
-                  cachePolicy="memory-disk"
-                  priority="high"
-                  transition={0}
-                  recyclingKey={item._id + "-crop-thumb"}
-                />
+                <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: feedMediaHeight }} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" priority="high" transition={0} recyclingKey={item._id + "-ct"} />
               ) : (
-                <View
-                  style={{
-                    width: screenWidth,
-                    height: feedMediaHeight,
-                    backgroundColor: "#111",
-                  }}
-                />
+                <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
               )}
               <View style={styles.videoPlayOverlay}>
                 <View style={styles.videoPlayCircle}>
@@ -247,147 +152,181 @@ export default function FeedScreen() {
     if (isOriginal) {
       return (
         <View style={[styles.mediaContainerOriginal, { width: screenWidth, height: feedMediaHeight }]}>
-        <Image
-            source={{ uri: item.mediaUrl }}
-            style={{ width: screenWidth, height: feedMediaHeight }}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            priority="high"
-            transition={0}
-            recyclingKey={item._id + "-orig"}
-          />
+          <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: feedMediaHeight }} contentFit="contain" cachePolicy="memory-disk" priority="high" transition={0} recyclingKey={item._id + "-o"} />
         </View>
       );
     }
 
-    // Cropped photo with zoom support
     const hasZoom = (item.cropZoom ?? 1) > 1.05;
     if (hasZoom) {
-      const crop = getCropTransform(item);
+      const crop = getCropTransform(item, screenWidth, feedMediaHeight);
       const mediaAR = item.mediaAspectRatio ?? 3 / 4;
       const photoH = screenWidth / mediaAR;
       return (
         <View style={[styles.mediaContainerCropped, { width: screenWidth, height: feedMediaHeight }]}>
-          <View
-            style={{
-              width: screenWidth,
-              height: photoH,
-              transform: [
-                { translateX: crop.translateX },
-                { translateY: crop.translateY },
-                { scale: crop.scale },
-              ],
-            }}
-          >
-            <Image
-              source={{ uri: item.mediaUrl }}
-              style={{ width: screenWidth, height: photoH }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              priority="high"
-              transition={0}
-              recyclingKey={item._id + "-zoom"}
-            />
+          <View style={{ width: screenWidth, height: photoH, transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
+            <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: photoH }} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={0} recyclingKey={item._id + "-z"} />
           </View>
         </View>
       );
     }
 
-    // Cropped photo without zoom: use contentPosition
     return (
-      <Image
-        source={{ uri: item.mediaUrl }}
-        style={[styles.postImage, { width: screenWidth, height: feedMediaHeight }]}
-        contentFit="cover"
-        contentPosition={getImagePosition(item)}
-        cachePolicy="memory-disk"
-        priority="high"
-        transition={0}
-        recyclingKey={item._id + "-crop"}
-      />
+      <Image source={{ uri: item.mediaUrl }} style={[styles.postImage, { width: screenWidth, height: feedMediaHeight }]} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" priority="high" transition={0} recyclingKey={item._id + "-c"} />
     );
   };
 
-  const renderPost = ({ item }: { item: NonNullable<typeof feed>[number] }) => {
-    if (item.isAnnouncement) return renderAnnouncement(item);
-    return (
-      <View style={styles.postCard}>
-        {/* Author */}
-        <TouchableOpacity
-          style={styles.postHeader}
-          onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
-          activeOpacity={0.7}
-        >
-          <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={38} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.postAuthor}>{item.authorName}</Text>
-            <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
-          </View>
-          <TouchableOpacity hitSlop={12}>
-            <SymbolView name="ellipsis" size={18} tintColor={colors.gray400} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-
-        {/* Media */}
-        {renderMedia(item)}
-
-        {/* Actions */}
-        <View style={styles.postActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike({ postId: item._id })} hitSlop={8}>
-            <SymbolView
-              name={item.isLiked ? "heart.fill" : "heart"}
-              size={24}
-              tintColor={item.isLiked ? colors.danger : colors.black}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}
-            hitSlop={8}
-          >
-            <SymbolView name="bubble.right" size={24} tintColor={colors.black} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => setSharePostId(item._id)}>
-            <SymbolView name="paperplane.fill" size={24} tintColor={colors.black} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={() => toggleSave({ postId: item._id })} hitSlop={8}>
-            <SymbolView
-              name={item.isSaved ? "bookmark.fill" : "bookmark"}
-              size={24}
-              tintColor={colors.black}
-            />
-          </TouchableOpacity>
+  return (
+    <View style={styles.postCard}>
+      <TouchableOpacity
+        style={styles.postHeader}
+        onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
+        activeOpacity={0.7}
+      >
+        <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={38} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.postAuthor}>{item.authorName}</Text>
+          <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
         </View>
+        <TouchableOpacity hitSlop={12}>
+          <SymbolView name="ellipsis" size={18} tintColor={colors.gray400} />
+        </TouchableOpacity>
+      </TouchableOpacity>
 
-        {/* Counts */}
-        {item.likeCount > 0 && (
-          <Text style={styles.likeCount}>
-            {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
-          </Text>
-        )}
+      {renderMedia()}
 
-        {/* Caption */}
-        {item.caption ? (
-          <Text style={styles.captionRow}>
-            <Text style={styles.captionAuthor}>{item.authorName} </Text>
-            <Text style={styles.captionText}>{item.caption}</Text>
-          </Text>
-        ) : null}
-
-        {/* View comments */}
-        {item.commentCount > 0 && (
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}
-          >
-            <Text style={styles.viewComments}>
-              Alle {item.commentCount} Kommentare ansehen
-            </Text>
-          </TouchableOpacity>
-        )}
+      <View style={styles.postActions}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => onToggleLike(item._id)} hitSlop={8}>
+          <SymbolView name={item.isLiked ? "heart.fill" : "heart"} size={24} tintColor={item.isLiked ? colors.danger : colors.black} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })} hitSlop={8}>
+          <SymbolView name="bubble.right" size={24} tintColor={colors.black} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => onShare(item._id)}>
+          <SymbolView name="paperplane.fill" size={24} tintColor={colors.black} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => onToggleSave(item._id)} hitSlop={8}>
+          <SymbolView name={item.isSaved ? "bookmark.fill" : "bookmark"} size={24} tintColor={colors.black} />
+        </TouchableOpacity>
       </View>
-    );
-  };
+
+      {item.likeCount > 0 && (
+        <Text style={styles.likeCount}>{item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}</Text>
+      )}
+      {item.caption ? (
+        <Text style={styles.captionRow}>
+          <Text style={styles.captionAuthor}>{item.authorName} </Text>
+          <Text style={styles.captionText}>{item.caption}</Text>
+        </Text>
+      ) : null}
+      {item.commentCount > 0 && (
+        <TouchableOpacity onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}>
+          <Text style={styles.viewComments}>Alle {item.commentCount} Kommentare ansehen</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
+// ── Main Feed Screen ──────────────────────────────
+export default function FeedScreen() {
+  const { width: screenWidth } = useWindowDimensions();
+  const feed = useQuery(api.posts.feed, {});
+  const isFocused = useIsFocused();
+  const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
+  const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
+
+  // Background thumbnail repair for videos missing thumbnails
+  useThumbnailRepair(feed as Array<{ _id: string; type: "photo" | "video"; mediaUrl?: string; thumbnailUrl?: string }> | undefined);
+
+  const feedMediaHeight = screenWidth / FEED_ASPECT_RATIO;
+
+  // Estimated item height for getItemLayout (header + media + actions + caption)
+  const ESTIMATED_ITEM_HEIGHT = 56 + feedMediaHeight + 48 + 60 + 16;
+
+  const toggleLike = useMutation(api.posts.toggleLike).withOptimisticUpdate(
+    (store, { postId }) => {
+      const currentFeed = store.getQuery(api.posts.feed, {});
+      if (!currentFeed) return;
+      store.setQuery(api.posts.feed, {}, currentFeed.map(p =>
+        p._id === postId ? { ...p, isLiked: !p.isLiked, likeCount: p.isLiked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 } : p,
+      ));
+    },
+  );
+  const toggleSave = useMutation(api.posts.toggleSave).withOptimisticUpdate(
+    (store, { postId }) => {
+      const currentFeed = store.getQuery(api.posts.feed, {});
+      if (!currentFeed) return;
+      store.setQuery(api.posts.feed, {}, currentFeed.map(p =>
+        p._id === postId ? { ...p, isSaved: !p.isSaved } : p,
+      ));
+    },
+  );
+
+  // Stable callbacks that don't depend on feed data
+  const handleToggleLike = useCallback((postId: Id<"posts">) => {
+    toggleLike({ postId });
+  }, [toggleLike]);
+
+  const handleToggleSave = useCallback((postId: Id<"posts">) => {
+    toggleSave({ postId });
+  }, [toggleSave]);
+
+  const handleShare = useCallback((postId: Id<"posts">) => {
+    setSharePostId(postId);
+  }, []);
+
+  // Viewability: only tracks video ID, doesn't depend on feed
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const visibleVideo = viewableItems.find(
+        (v) => v.isViewable && v.item?.type === "video" && v.item?.mediaUrl,
+      );
+      setVisibleVideoId(visibleVideo ? visibleVideo.item._id : null);
+    },
+    [],
+  );
+
+  // Prefetch upcoming images separately (fire-and-forget, no state)
+  const onScrollEndDrag = useCallback(() => {
+    if (!feed) return;
+    // Prefetch next batch of images
+    const start = feed.findIndex(f => f._id === visibleVideoId) + 1;
+    for (let i = start; i < start + 5 && i < feed.length; i++) {
+      const uri = feed[i]?.thumbnailUrl ?? feed[i]?.mediaUrl;
+      if (uri) Image.prefetch(uri);
+    }
+  }, [feed, visibleVideoId]);
+
+  const getItemLayout = useCallback((_data: unknown, index: number) => ({
+    length: ESTIMATED_ITEM_HEIGHT,
+    offset: ESTIMATED_ITEM_HEIGHT * index,
+    index,
+  }), [ESTIMATED_ITEM_HEIGHT]);
+
+  const keyExtractor = useCallback((item: FeedItem) => item._id, []);
+
+  const renderItem = useCallback(({ item }: { item: FeedItem }) => (
+    <FeedPost
+      item={item}
+      screenWidth={screenWidth}
+      feedMediaHeight={feedMediaHeight}
+      isVideoPlaying={isFocused && visibleVideoId === item._id}
+      onToggleLike={handleToggleLike}
+      onToggleSave={handleToggleSave}
+      onShare={handleShare}
+    />
+  ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare]);
+
+  const listEmpty = useMemo(() => {
+    if (feed === undefined) {
+      return <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>;
+    }
+    return <EmptyState icon="photo.on.rectangle" title="Dein Feed ist leer" subtitle="Folge Gruppen und Personen, um hier Beitraege zu sehen." />;
+  }, [feed]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -405,51 +344,25 @@ export default function FeedScreen() {
 
       <FlatList
         data={feed}
-        renderItem={renderPost}
-        keyExtractor={(item) => item._id}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        getItemLayout={getItemLayout}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
+        onScrollEndDrag={onScrollEndDrag}
         removeClippedSubviews
-        maxToRenderPerBatch={3}
+        maxToRenderPerBatch={4}
         windowSize={5}
         initialNumToRender={3}
-        updateCellsBatchingPeriod={50}
-        ListEmptyComponent={
-          feed === undefined ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator color={colors.gray300} />
-            </View>
-          ) : (
-            <EmptyState
-              icon="photo.on.rectangle"
-              title="Dein Feed ist leer"
-              subtitle="Folge Gruppen und Personen, um hier Beitraege zu sehen."
-            />
-          )
-        }
+        updateCellsBatchingPeriod={30}
+        ListEmptyComponent={listEmpty}
       />
 
-      <ShareSheet
-        visible={sharePostId !== null}
-        postId={sharePostId}
-        onClose={() => setSharePostId(null)}
-      />
+      <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
     </SafeAreaView>
   );
-}
-
-function formatTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "Gerade eben";
-  if (min < 60) return `vor ${min} Min.`;
-  const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `vor ${hrs} Std.`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `vor ${days} T.`;
-  return new Date(ts).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
 }
 
 const styles = StyleSheet.create({
@@ -467,7 +380,6 @@ const styles = StyleSheet.create({
   list: { paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
 
-  // Announcement
   announcementCard: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
@@ -496,7 +408,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  // Post
   postCard: { marginBottom: spacing.lg },
   postHeader: {
     flexDirection: "row",
@@ -508,10 +419,7 @@ const styles = StyleSheet.create({
   postAuthor: { fontSize: 15, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
   postTime: { fontSize: 12, color: colors.gray400 },
 
-  // Media containers
-  postImage: {
-    backgroundColor: colors.gray100,
-  },
+  postImage: { backgroundColor: colors.gray100 },
   mediaContainerOriginal: {
     backgroundColor: colors.gray100,
     overflow: "hidden",
@@ -523,7 +431,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  // Actions
   postActions: {
     flexDirection: "row",
     alignItems: "center",

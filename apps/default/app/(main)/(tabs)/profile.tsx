@@ -13,6 +13,7 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
+import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -24,6 +25,9 @@ export default function ProfileScreen() {
   const me = useQuery(api.users.me);
   const myPosts = useQuery(api.posts.getUserPosts, me ? { userId: me._id } : "skip");
   const userGroups = useQuery(api.users.getUserGroups, me ? { userId: me._id } : "skip");
+
+  // Repair missing thumbnails in background
+  useThumbnailRepair(myPosts as Array<{ _id: string; type: "photo" | "video"; mediaUrl?: string; thumbnailUrl?: string }> | undefined);
 
   if (me === undefined) {
     return (
