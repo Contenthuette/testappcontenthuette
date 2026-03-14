@@ -160,11 +160,11 @@ export function ShareSheet({ visible, postId, onClose }: ShareSheetProps) {
           <ActivityIndicator size="small" color={colors.black} />
         ) : isSent ? (
           <View style={styles.sentBadge}>
-            <SymbolView name="checkmark" size={14} tintColor={colors.white} />
+            <SymbolView name="checkmark" size={18} tintColor={colors.white} />
           </View>
         ) : (
           <View style={styles.sendBtn}>
-            <SymbolView name="paperplane.fill" size={14} tintColor={colors.white} />
+            <SymbolView name="paperplane.fill" size={18} tintColor={colors.white} />
           </View>
         )}
       </TouchableOpacity>

@@ -353,3 +353,19 @@ export const sendDirectMessage = authMutation({
     return msgId;
   },
 });
+
+// Delete own message
+export const deleteMessage = authMutation({
+  args: { messageId: v.id("messages") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const authId = ctx.user._id;
+    const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
+    if (!user) throw new Error("User not found");
+    const message = await ctx.db.get(args.messageId);
+    if (!message) throw new Error("Message not found");
+    if (message.senderId !== user._id) throw new Error("Not your message");
+    await ctx.db.delete(args.messageId);
+    return null;
+  },
+});

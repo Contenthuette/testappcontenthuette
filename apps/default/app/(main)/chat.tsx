@@ -12,6 +12,7 @@ import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
 import { SharedPostBubble } from "@/components/SharedPostBubble";
 import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
+import * as Haptics from "expo-haptics";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,6 +37,7 @@ export default function ChatScreen() {
 
   const messages = useQuery(api.messaging.getDirectMessages, conversationId ? { conversationId } : "skip");
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
+  const deleteMessage = useMutation(api.messaging.deleteMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
   const me = useQuery(api.users.me);
   const partner = useQuery(api.calls.getConversationPartner, conversationId ? { conversationId } : "skip");
@@ -59,6 +61,38 @@ export default function ChatScreen() {
     if (!conversationId) return;
     await sendMessage({ conversationId, text: msg, type: "text" });
   };
+
+  const handleDeleteMessage = useCallback(async (messageId: Id<"messages">) => {
+    try {
+      await deleteMessage({ messageId });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) {
+      console.error("Failed to delete message", e);
+    }
+  }, [deleteMessage]);
+
+  const handleLongPressMessage = useCallback((item: NonNullable<typeof messages>[number]) => {
+    if (item.senderId !== me?._id) return;
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    if (Platform.OS === "web") {
+      if (confirm("Nachricht loeschen?")) {
+        handleDeleteMessage(item._id);
+      }
+    } else {
+      Alert.alert(
+        "Nachricht loeschen",
+        "Moechtest du diese Nachricht loeschen?",
+        [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Loeschen", style: "destructive", onPress: () => handleDeleteMessage(item._id) },
+        ]
+      );
+    }
+  }, [me?._id, handleDeleteMessage]);
 
   const handleSendVoice = useCallback(async (uri: string, durationMs: number) => {
     if (!conversationId) return;
@@ -92,39 +126,60 @@ export default function ChatScreen() {
 
     if (item.type === "post_share" && item.sharedPostId) {
       return (
-        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
-          <SharedPostBubble
-            postId={item.sharedPostId}
-            preview={item.sharedPostPreview ?? undefined}
-            isMine={isMine}
-            timestamp={timeStr}
-          />
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onLongPress={() => handleLongPressMessage(item)}
+          delayLongPress={500}
+          disabled={!isMine}
+        >
+          <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+            <SharedPostBubble
+              postId={item.sharedPostId}
+              preview={item.sharedPostPreview ?? undefined}
+              isMine={isMine}
+              timestamp={timeStr}
+            />
+          </View>
+        </TouchableOpacity>
       );
     }
 
     if (item.type === "voice" && item.mediaUrl) {
       return (
-        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
-          <VoiceMessageBubble
-            audioUrl={item.mediaUrl}
-            durationMs={item.mediaDuration}
-            isMine={isMine}
-            timestamp={timeStr}
-          />
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onLongPress={() => handleLongPressMessage(item)}
+          delayLongPress={500}
+          disabled={!isMine}
+        >
+          <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+            <VoiceMessageBubble
+              audioUrl={item.mediaUrl}
+              durationMs={item.mediaDuration}
+              isMine={isMine}
+              timestamp={timeStr}
+            />
+          </View>
+        </TouchableOpacity>
       );
     }
 
     return (
-      <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
-        <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
-          <Text style={[styles.msgText, isMine && styles.msgTextMine]}>{item.text}</Text>
-          <Text style={[styles.timestamp, isMine && styles.timestampMine]}>
-            {timeStr}
-          </Text>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onLongPress={() => handleLongPressMessage(item)}
+        delayLongPress={500}
+        disabled={!isMine}
+      >
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+          <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
+            <Text style={[styles.msgText, isMine && styles.msgTextMine]}>{item.text}</Text>
+            <Text style={[styles.timestamp, isMine && styles.timestampMine]}>
+              {timeStr}
+            </Text>
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

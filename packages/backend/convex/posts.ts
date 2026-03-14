@@ -330,6 +330,26 @@ export const addComment = authMutation({
   },
 });
 
+export const deleteComment = authMutation({
+  args: { commentId: v.id("comments") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const authId = ctx.user._id;
+    const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
+    if (!user) throw new Error("User not found");
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+    if (comment.authorId !== user._id) throw new Error("Not your comment");
+    await ctx.db.delete(args.commentId);
+    // Decrement comment count on the post
+    const post = await ctx.db.get(comment.postId);
+    if (post && (post.commentCount ?? 0) > 0) {
+      await ctx.db.patch(comment.postId, { commentCount: (post.commentCount ?? 1) - 1 });
+    }
+    return null;
+  },
+});
+
 export const toggleCommentLike = authMutation({
   args: { commentId: v.id("comments") },
   returns: v.null(),

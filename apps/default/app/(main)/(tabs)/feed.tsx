@@ -291,7 +291,7 @@ export default function FeedScreen() {
             <SymbolView name="bubble.right" size={24} tintColor={colors.black} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => setSharePostId(item._id)}>
-            <SymbolView name="paperplane" size={24} tintColor={colors.black} />
+            <SymbolView name="paperplane.fill" size={24} tintColor={colors.black} />
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
           <TouchableOpacity onPress={() => toggleSave({ postId: item._id })} hitSlop={8}>

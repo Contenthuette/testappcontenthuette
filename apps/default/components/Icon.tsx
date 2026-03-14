@@ -119,6 +119,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "bubble.right": MessageCircle,
   "bubble.left.and.bubble.right": MessagesSquare,
   paperplane: Send,
+  "paperplane.fill": Send,
   mic: Mic,
   "mic.fill": Mic,
   "mic.slash": MicOff,

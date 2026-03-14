@@ -22,6 +22,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Gesture,
@@ -73,6 +74,9 @@ export default function CreatePostScreen() {
 
   // Crop state (stored as JS values for saving)
   const [cropState, setCropState] = useState({ x: 0, y: 0, zoom: 1 });
+
+  // For videos, we extract a frame to use as the crop preview
+  const [videoFrameUri, setVideoFrameUri] = useState<string | null>(null);
 
   // Videos always cropped to 4:3
   const effectiveAspectMode: AspectMode = postType === "video" ? "cropped" : aspectMode;
@@ -223,6 +227,20 @@ export default function CreatePostScreen() {
         resetCrop();
         setThumbnailUri(null);
         setThumbnailIsCustom(false);
+        setVideoFrameUri(null);
+
+        // Extract a frame for video crop preview
+        if (postType === "video") {
+          try {
+            const { uri: frameUri } = await VideoThumbnails.getThumbnailAsync(result.uri, {
+              time: 0,
+              quality: 0.8,
+            });
+            setVideoFrameUri(frameUri);
+          } catch (e) {
+            console.warn("Failed to extract video frame:", e);
+          }
+        }
 
         if (result.duration !== undefined && result.duration > 0) {
           setVideoDuration(result.duration / 1000);
@@ -388,7 +406,7 @@ export default function CreatePostScreen() {
                 >
                   {postType === "video" ? (
                     <Image
-                      source={{ uri: mediaPreview }}
+                      source={{ uri: videoFrameUri ?? mediaPreview }}
                       style={{ width: baseMediaWidth, height: baseMediaHeight }}
                       contentFit="cover"
                     />

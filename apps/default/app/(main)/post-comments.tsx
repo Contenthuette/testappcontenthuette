@@ -1,13 +1,13 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Platform, ActivityIndicator,
-  Keyboard,
+  Keyboard, Alert,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
@@ -28,21 +28,25 @@ export default function PostCommentsScreen() {
     id ? { postId: id as Id<"posts">, currentUserId: meId ?? undefined } : "skip"
   );
   const addComment = useMutation(api.posts.addComment);
+  const deleteComment = useMutation(api.posts.deleteComment);
   const toggleCommentLike = useMutation(api.posts.toggleCommentLike);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     const msg = text.trim();
     if (!msg || !id) return;
     setText("");
     Keyboard.dismiss();
     try {
       await addComment({ postId: id as Id<"posts">, text: msg });
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
     } catch (e) {
       console.error("Failed to add comment", e);
     }
-  };
+  }, [text, id, addComment]);
 
-  const handleToggleLike = async (commentId: Id<"comments">) => {
+  const handleToggleLike = useCallback(async (commentId: Id<"comments">) => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -51,11 +55,43 @@ export default function PostCommentsScreen() {
     } catch (e) {
       console.error("Failed to toggle like", e);
     }
-  };
+  }, [toggleCommentLike]);
+
+  const handleDeleteComment = useCallback(async (commentId: Id<"comments">) => {
+    try {
+      await deleteComment({ commentId });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) {
+      console.error("Failed to delete comment", e);
+    }
+  }, [deleteComment]);
+
+  const handleLongPress = useCallback((item: { _id: Id<"comments">; authorId: Id<"users"> }) => {
+    if (item.authorId !== meId) return;
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    if (Platform.OS === "web") {
+      if (confirm("Kommentar loeschen?")) {
+        handleDeleteComment(item._id);
+      }
+    } else {
+      Alert.alert(
+        "Kommentar loeschen",
+        "Moechtest du diesen Kommentar loeschen?",
+        [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Loeschen", style: "destructive", onPress: () => handleDeleteComment(item._id) },
+        ]
+      );
+    }
+  }, [meId, handleDeleteComment]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header with close button */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.closeBtn}
@@ -78,32 +114,42 @@ export default function PostCommentsScreen() {
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
-          <View style={styles.commentRow}>
-            <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
-            <View style={styles.commentBody}>
-              <Text style={styles.commentAuthor}>{item.authorName}</Text>
-              <Text style={styles.commentText}>{item.text}</Text>
-              <View style={styles.commentMeta}>
-                <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
-                {item.likeCount > 0 && (
-                  <Text style={styles.commentLikeCount}>
-                    {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
-                  </Text>
-                )}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onLongPress={() => handleLongPress(item)}
+            delayLongPress={500}
+            disabled={item.authorId !== meId}
+          >
+            <View style={styles.commentRow}>
+              <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
+              <View style={styles.commentBody}>
+                <Text style={styles.commentAuthor}>{item.authorName}</Text>
+                <Text style={styles.commentText}>{item.text}</Text>
+                <View style={styles.commentMeta}>
+                  <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
+                  {item.likeCount > 0 && (
+                    <Text style={styles.commentLikeCount}>
+                      {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
+                    </Text>
+                  )}
+                  {item.authorId === meId && (
+                    <Text style={styles.ownBadge}>Dein Kommentar</Text>
+                  )}
+                </View>
               </View>
+              <TouchableOpacity
+                style={styles.likeBtn}
+                onPress={() => handleToggleLike(item._id)}
+                hitSlop={12}
+              >
+                <SymbolView
+                  name={item.isLiked ? "heart.fill" : "heart"}
+                  size={16}
+                  tintColor={item.isLiked ? "#FF3B30" : colors.gray400}
+                />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.likeBtn}
-              onPress={() => handleToggleLike(item._id)}
-              hitSlop={12}
-            >
-              <SymbolView
-                name={item.isLiked ? "heart.fill" : "heart"}
-                size={16}
-                tintColor={item.isLiked ? "#FF3B30" : colors.gray400}
-              />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={
           comments === undefined ? (
@@ -119,7 +165,7 @@ export default function PostCommentsScreen() {
         }
       />
 
-      {/* Input bar */}
+      {/* Input bar - send button matches input height */}
       <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <TextInput
           ref={inputRef}
@@ -131,16 +177,20 @@ export default function PostCommentsScreen() {
           multiline
           maxLength={1000}
           returnKeyType="send"
+          blurOnSubmit
           onSubmitEditing={handleSend}
-          blurOnSubmit={false}
         />
-        {text.trim().length > 0 && (
-          <TouchableOpacity onPress={handleSend} hitSlop={8}>
-            <View style={styles.sendBtn}>
-              <SymbolView name="arrow.up" size={14} tintColor={colors.white} />
-            </View>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={handleSend}
+          disabled={text.trim().length === 0}
+          activeOpacity={0.7}
+          style={[
+            styles.sendBtn,
+            text.trim().length === 0 && styles.sendBtnDisabled,
+          ]}
+        >
+          <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -243,6 +293,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.gray500,
   },
+  ownBadge: {
+    fontSize: 11,
+    color: colors.gray400,
+    fontStyle: "italic",
+  },
   likeBtn: {
     paddingTop: 4,
     paddingLeft: 8,
@@ -262,18 +317,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     borderRadius: 22,
     paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: 15,
     color: colors.black,
     maxHeight: 100,
+    minHeight: 44,
   },
   sendBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+  },
+  sendBtnDisabled: {
+    backgroundColor: colors.gray300,
   },
 });

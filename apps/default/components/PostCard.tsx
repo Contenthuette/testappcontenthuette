@@ -1,11 +1,12 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from "react-native";
 import { Image } from "expo-image";
 import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import type { Id } from "@/convex/_generated/dataModel";
+import * as Haptics from "expo-haptics";
 
 interface PostCardProps {
   post: {
@@ -16,6 +17,10 @@ interface PostCardProps {
     type: "photo" | "video";
     caption?: string;
     mediaUrl?: string;
+    thumbnailUrl?: string;
+    cropOffsetX?: number;
+    cropOffsetY?: number;
+    cropZoom?: number;
     likeCount: number;
     commentCount: number;
     isLiked: boolean;
@@ -35,7 +40,18 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
   const { width } = useWindowDimensions();
   const timeAgo = formatTimeAgo(post.createdAt);
   const isVideo = post.type === "video";
-  const videoHeight = (width - 32) * (16 / 9);
+  const [playVideo, setPlayVideo] = useState(false);
+  const videoHeight = (width - 32) * (4 / 3);
+
+  const handlePlayVideo = useCallback(() => {
+    setPlayVideo(true);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, []);
+
+  // Use thumbnail for videos, media for photos
+  const displayImage = isVideo ? (post.thumbnailUrl ?? post.mediaUrl) : post.mediaUrl;
 
   return (
     <View style={[s.container, post.isAnnouncement && s.announcement]}>
@@ -56,18 +72,46 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
       </View>
 
       {post.mediaUrl ? (
-        isVideo ? (
+        isVideo && playVideo ? (
           <View style={s.videoWrap}>
             <VideoPlayer
               uri={post.mediaUrl}
               height={videoHeight}
-              autoPlay={false}
+              autoPlay
               loop
               muted={false}
             />
           </View>
+        ) : isVideo ? (
+          <TouchableOpacity activeOpacity={0.9} onPress={handlePlayVideo}>
+            <View style={s.videoWrap}>
+              {displayImage ? (
+                <Image
+                  source={{ uri: displayImage }}
+                  style={s.media}
+                  contentFit="cover"
+                  transition={150}
+                  recyclingKey={post._id + "-thumb"}
+                />
+              ) : (
+                <View style={[s.media, s.videoPlaceholder]} />
+              )}
+              <View style={s.playOverlay}>
+                <View style={s.playCircle}>
+                  <SymbolView name="play.fill" size={24} tintColor="#fff" />
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
         ) : (
-          <Image source={{ uri: post.mediaUrl }} style={s.media} contentFit="cover" />
+          <Image
+            source={{ uri: post.mediaUrl }}
+            style={s.media}
+            contentFit="cover"
+            priority="high"
+            transition={150}
+            recyclingKey={post._id}
+          />
         )
       ) : null}
 
@@ -81,7 +125,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
           {post.commentCount > 0 && <Text style={s.actionCount}>{post.commentCount}</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={s.actionBtn} onPress={onShare}>
-          <SymbolView name="paperplane" size={22} tintColor={theme.text} />
+          <SymbolView name="paperplane.fill" size={22} tintColor={theme.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={onSave}>
@@ -119,11 +163,29 @@ const s = StyleSheet.create({
   authorInfo: {},
   authorName: { fontSize: 14, fontWeight: "600", color: theme.text },
   time: { fontSize: 12, color: theme.textSecondary },
-  media: { width: "100%", aspectRatio: 1 },
+  media: { width: "100%", aspectRatio: 3 / 4 },
   videoWrap: {
     width: "100%",
-    borderRadius: 0,
+    aspectRatio: 3 / 4,
     overflow: "hidden",
+    backgroundColor: "#000",
+    position: "relative",
+  },
+  videoPlaceholder: {
+    backgroundColor: "#1a1a1a",
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   actions: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, gap: 16 },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 4 },

@@ -28,9 +28,10 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { VideoThumbnail } from "@/components/VideoThumbnail";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const GRID_GAP = 1.5;
-const NUM_COLUMNS = 3;
-const TILE_SIZE = (SCREEN_WIDTH - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+const GRID_GAP = 2;
+const GRID_COL = 3;
+const CELL_WIDTH = (SCREEN_WIDTH - GRID_GAP * (GRID_COL - 1)) / GRID_COL;
+const CELL_HEIGHT = Math.round(CELL_WIDTH * (4 / 3)); // 3:4 portrait
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -258,7 +259,7 @@ export default function UserProfileScreen() {
                       styles.postTile,
                       {
                         marginRight:
-                          (index + 1) % NUM_COLUMNS === 0 ? 0 : GRID_GAP,
+                          (index + 1) % GRID_COL === 0 ? 0 : GRID_GAP,
                         marginBottom: GRID_GAP,
                       },
                     ]}
@@ -529,8 +530,8 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   postTile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE * 1.2,
+    width: CELL_WIDTH,
+    height: CELL_HEIGHT,
     backgroundColor: "#f0f0f0",
     position: "relative",
     overflow: "hidden",

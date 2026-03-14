@@ -12,12 +12,12 @@ import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
-import { VideoThumbnail } from "@/components/VideoThumbnail";
 
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
 const GRID_COL = 3;
 const GRID_SIZE = (screenWidth - GRID_GAP * (GRID_COL - 1)) / GRID_COL;
+const GRID_HEIGHT = Math.round(GRID_SIZE * (4 / 3)); // 3:4 portrait ratio
 
 export default function ProfileScreen() {
   const me = useQuery(api.users.me);
@@ -127,17 +127,21 @@ export default function ProfileScreen() {
                 onPress={() => router.push({ pathname: "/(main)/post-detail", params: { id: post._id } })}
                 activeOpacity={0.85}
               >
-                {post.type === "video" && post.mediaUrl ? (
-                  <VideoThumbnail
-                    uri={post.mediaUrl}
+                {(post.thumbnailUrl || post.mediaUrl) ? (
+                  <Image
+                    source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                     style={styles.gridImage}
-                    playIconSize={20}
+                    contentFit="cover"
+                    transition={200}
                   />
-                ) : post.mediaUrl ? (
-                  <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} contentFit="cover" transition={200} />
                 ) : (
                   <View style={styles.gridPlaceholder}>
                     <SymbolView name="text.quote" size={18} tintColor={colors.gray300} />
+                  </View>
+                )}
+                {post.type === "video" && (
+                  <View style={styles.videoPlayBadge}>
+                    <SymbolView name="play.fill" size={10} tintColor="#fff" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -256,7 +260,7 @@ const styles = StyleSheet.create({
   },
 
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
-  gridItem: { width: GRID_SIZE, height: GRID_SIZE },
+  gridItem: { width: GRID_SIZE, height: GRID_HEIGHT },
   gridImage: { width: "100%", height: "100%" },
   gridPlaceholder: {
     width: "100%",
