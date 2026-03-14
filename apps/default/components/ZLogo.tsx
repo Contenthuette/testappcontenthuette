@@ -10,49 +10,49 @@ interface ZLogoProps {
 }
 
 /**
- * Bulletproof Z logo – always renders a visible black "Z" text.
- * Attempts to overlay the uploaded image; if it fails or is invisible
- * the text fallback guarantees the logo is always shown.
+ * Z logo — renders the PNG directly (black Z on transparent bg).
+ * Falls back to a styled "Z" text if the image ever fails to load.
+ *
+ * IMPORTANT: Do NOT add tintColor — the image is already black.
+ * Adding tintColor causes intermittent rendering glitches across platforms.
  */
 export function ZLogo({ size = 32 }: ZLogoProps) {
-  const [imgOk, setImgOk] = useState(true);
-  const fontSize = size * 0.58;
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (imgFailed) {
+    return (
+      <View
+        style={[
+          styles.fallbackContainer,
+          { width: size, height: size, borderRadius: size * 0.28 },
+        ]}
+      >
+        <Text
+          style={[styles.fallbackText, { fontSize: size * 0.55, lineHeight: size }]}
+          allowFontScaling={false}
+        >
+          Z
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { width: size, height: size, borderRadius: size * 0.28 }]}>
-      {/* Always-visible text fallback */}
-      <Text
-        style={[
-          styles.fallbackText,
-          { fontSize, lineHeight: size, borderRadius: size * 0.28 },
-        ]}
-        allowFontScaling={false}
-      >
-        Z
-      </Text>
-
-      {/* Image overlay – hidden on error */}
-      {imgOk && (
-        <Image
-          source={Z_LOGO}
-          style={[StyleSheet.absoluteFill, { borderRadius: size * 0.28 }]}
-          contentFit="contain"
-          priority="high"
-          cachePolicy="memory-disk"
-          tintColor={colors.black}
-          transition={0}
-          onError={() => setImgOk(false)}
-        />
-      )}
-    </View>
+    <Image
+      source={Z_LOGO}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+      cachePolicy="memory-disk"
+      transition={0}
+      onError={() => setImgFailed(true)}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  fallbackContainer: {
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
   },
   fallbackText: {
     fontWeight: "900",
