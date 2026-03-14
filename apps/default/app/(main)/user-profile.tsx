@@ -15,6 +15,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
 import {
   ArrowLeft,
   MessageCircle,
@@ -23,7 +24,7 @@ import {
   Clock,
   Play,
 } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
+import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -254,8 +255,6 @@ export default function UserProfileScreen() {
             <View style={styles.postsGrid}>
               {posts.map((post, index) => {
                 const isVideo = post.type === "video";
-                const displayUrl =
-                  post.thumbnailUrl || (!isVideo ? post.mediaUrl : null);
 
                 return (
                   <TouchableOpacity
@@ -276,9 +275,16 @@ export default function UserProfileScreen() {
                       })
                     }
                   >
-                    {displayUrl ? (
+                    {isVideo ? (
+                      <VideoGridThumbnail
+                        thumbnailUrl={post.thumbnailUrl}
+                        videoUrl={post.mediaUrl}
+                        style={styles.postImage}
+                        recyclingKey={post._id + "-ugrid"}
+                      />
+                    ) : (post.thumbnailUrl || post.mediaUrl) ? (
                       <Image
-                        source={{ uri: displayUrl }}
+                        source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                         style={styles.postImage}
                         contentFit="cover"
                         cachePolicy="memory-disk"
@@ -286,14 +292,6 @@ export default function UserProfileScreen() {
                         transition={0}
                         recyclingKey={post._id + "-ugrid"}
                       />
-                    ) : isVideo && post.mediaUrl ? (
-                      <View style={styles.postImage}>
-                        <View
-                          style={[StyleSheet.absoluteFill, styles.postVideoFallback]}
-                        >
-                          <Play size={28} color="#fff" fill="#fff" />
-                        </View>
-                      </View>
                     ) : (
                       <View
                         style={[styles.postImage, styles.postVideoFallback]}

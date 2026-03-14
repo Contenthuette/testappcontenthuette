@@ -12,6 +12,7 @@ import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
+import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -127,7 +128,14 @@ export default function ProfileScreen() {
                 onPress={() => router.push({ pathname: "/(main)/post-detail", params: { id: post._id } })}
                 activeOpacity={0.85}
               >
-                {(post.thumbnailUrl || post.mediaUrl) ? (
+                {post.type === "video" ? (
+                  <VideoGridThumbnail
+                    thumbnailUrl={post.thumbnailUrl}
+                    videoUrl={post.mediaUrl}
+                    style={styles.gridImage}
+                    recyclingKey={post._id + "-grid"}
+                  />
+                ) : (post.thumbnailUrl || post.mediaUrl) ? (
                   <Image
                     source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                     style={styles.gridImage}
