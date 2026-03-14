@@ -1,5 +1,6 @@
 import React from "react";
-import { View, StyleSheet, Image } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 
 const Z_LOGO = require("../../../assets/images/z-lgo-1xaccc.png");
 
@@ -13,7 +14,11 @@ export function ZLogo({ size = 32 }: ZLogoProps) {
       <Image
         source={Z_LOGO}
         style={styles.image}
-        resizeMode="contain"
+        contentFit="contain"
+        priority="high"
+        cachePolicy="memory-disk"
+        placeholder={null}
+        transition={0}
       />
     </View>
   );
