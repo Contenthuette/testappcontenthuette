@@ -261,7 +261,7 @@ export const getMessages = authQuery({
     const messages = await ctx.db.query("messages")
       .withIndex("by_conversationId", q => q.eq("conversationId", args.conversationId))
       .order("asc")
-      .take(100);
+      .take(50);
     return enrichMessagesOptimized(ctx, messages, myUserId);
   },
 });
@@ -308,7 +308,7 @@ export const getGroupMessages = authQuery({
     const messages = await ctx.db.query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", conv._id))
       .order("desc")
-      .take(100);
+      .take(50);
     return enrichMessagesOptimized(ctx, messages, myUserId);
   },
 });
@@ -328,7 +328,7 @@ export const sendGroupMessage = authMutation({
     if (!myUserId) throw new Error("User not found");
     // Find or create group conversation
     let conv = await ctx.db.query("conversations")
-      .withIndex("by_groupId", (q: any) => q.eq("groupId", args.groupId))
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .unique();
     if (!conv) {
       const convId = await ctx.db.insert("conversations", {
@@ -372,7 +372,7 @@ export const getDirectMessages = authQuery({
     const messages = await ctx.db.query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
       .order("desc")
-      .take(100);
+      .take(50);
     return enrichMessagesOptimized(ctx, messages, myUserId);
   },
 });

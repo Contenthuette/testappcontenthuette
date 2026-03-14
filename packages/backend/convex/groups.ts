@@ -2,11 +2,12 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
 // Helper to get userId from authId
-async function getMyUserId(ctx: any): Promise<Id<"users"> | null> {
+async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
   const authId = ctx.user._id;
-  const user = await ctx.db.query("users").withIndex("by_authId", (q: any) => q.eq("authId", authId)).unique();
+  const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
   return user?._id ?? null;
 }
 
@@ -46,14 +47,14 @@ export const list = authQuery({
     } else {
       const county = args.county;
       const city = args.city;
-      if (county || city) {
-        let q2 = ctx.db.query("groups").withIndex("by_county_and_city", (q: any) => {
-          let chain = q;
-          if (county) chain = chain.eq("county", county);
-          if (city && county) chain = chain.eq("city", city);
-          return chain;
-        });
-        groups = await q2.take(50);
+      if (county && city) {
+        groups = await ctx.db.query("groups")
+          .withIndex("by_county_and_city", (q) => q.eq("county", county).eq("city", city))
+          .take(50);
+      } else if (county) {
+        groups = await ctx.db.query("groups")
+          .withIndex("by_county_and_city", (q) => q.eq("county", county))
+          .take(50);
       } else {
         groups = await ctx.db.query("groups").order("desc").take(50);
       }
@@ -419,7 +420,7 @@ export const update = authMutation({
 
     // Verify user is admin of this group
     const membership = await ctx.db.query("groupMembers")
-      .withIndex("by_groupId_and_userId", (q: any) => q.eq("groupId", args.groupId).eq("userId", myUserId))
+      .withIndex("by_groupId_and_userId", (q) => q.eq("groupId", args.groupId).eq("userId", myUserId))
       .unique();
     if (!membership || membership.role !== "admin") {
       throw new Error("Only group admins can edit this group");
