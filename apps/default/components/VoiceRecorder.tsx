@@ -107,12 +107,14 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     setLiveBars(padded);
   }, [phase, recorderState.metering]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — CRITICAL: always restore audio mode for playback
   useEffect(() => {
     return () => {
       if (previewTimerRef.current) clearInterval(previewTimerRef.current);
       try { playerRef.current?.pause(); } catch { /* ignore */ }
       try { playerRef.current?.remove(); } catch { /* ignore */ }
+      // Restore audio session to playback mode so VoiceMessageBubble works
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     };
   }, []);
 
@@ -125,7 +127,9 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         return;
       }
 
+      // Set audio mode for recording
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+
       await recorder.prepareToRecordAsync();
       recorder.record();
 
@@ -137,9 +141,13 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (err) {
-      console.error("Start recording error:", err);
+      console.error("[VoiceRecorder] Start recording error:", err);
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestartet werden");
+      // Restore audio mode on error
+      try {
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      } catch { /* ignore */ }
     }
   }, [recorder]);
 
@@ -149,6 +157,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       const dur = recorderState.durationMillis / 1000;
 
       await recorder.stop();
+
+      // CRITICAL: Restore audio mode for playback BEFORE creating preview player
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
 
       const uri = recorder.uri;
@@ -157,8 +167,11 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       // Create preview player
       if (uri) {
         try {
+          // Use string URI for local files — more reliable on iOS
           playerRef.current = createAudioPlayer(uri);
-        } catch { /* ignore preview player creation failure */ }
+        } catch (e) {
+          console.warn("[VoiceRecorder] Preview player creation failed:", e);
+        }
       }
 
       setPhase("stopped");
@@ -166,19 +179,27 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (err) {
-      console.error("Stop recording error:", err);
+      console.error("[VoiceRecorder] Stop recording error:", err);
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestoppt werden");
+      // Still try to restore audio mode
+      try {
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      } catch { /* ignore */ }
     }
   }, [recorder, recorderState.durationMillis, liveBars]);
 
   const handlePreviewPlay = useCallback(async () => {
+    // Always ensure playback mode before playing preview
     try {
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
     } catch { /* best effort */ }
 
     const pl = playerRef.current;
-    if (!pl) return;
+    if (!pl) {
+      console.warn("[VoiceRecorder] No preview player available");
+      return;
+    }
 
     try {
       pl.play();
@@ -201,7 +222,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         }
       }, 150);
     } catch (e) {
-      console.error("Preview play error:", e);
+      console.error("[VoiceRecorder] Preview play error:", e);
     }
   }, [recordedDuration]);
 
@@ -224,6 +245,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } else {
+      console.warn("[VoiceRecorder] No recording URI available");
       setPhase("error");
       setErrorMsg("Keine Aufnahme vorhanden");
     }
@@ -247,7 +269,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       hasStartedRef.current = true;
       startRecording();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const elapsed = recorderState.durationMillis / 1000;
