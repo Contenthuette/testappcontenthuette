@@ -34,11 +34,17 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const { minimizeCall } = useCallContext();
   const { playSound } = useSound();
 
-  const [phase, setPhase] = useState<"ringing" | "connecting" | "live" | "ended" | "error">("ringing");
+  const [phase, setPhase] = useState<
+    "ringing" | "connecting" | "live" | "ended" | "error"
+  >("ringing");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
   const livekitRef = useRef<LiveKitCallViewHandle>(null);
   const tokenFetchedRef = useRef(false);
   const hangingUpRef = useRef(false);
+
+  const isVideoCall = call?.type === "video";
 
   // Connect to LiveKit when call becomes active
   useEffect(() => {
@@ -81,26 +87,55 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     }
   }, [call?.status]);
 
-  // INSTANT hang up — no async, no waiting
+  // ─── INSTANT native handlers ───
+
   const handleHangUp = useCallback(() => {
-    if (hangingUpRef.current) return; // prevent double-tap
+    if (hangingUpRef.current) return;
     hangingUpRef.current = true;
 
     playSound("hangup");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // 1. Immediately disconnect WebView
     livekitRef.current?.disconnect();
-    // 2. Immediately show ended state
     setPhase("ended");
-    // 3. Fire mutation — don't await
     endCallMutation({ callId }).catch(() => {});
-    // 4. Navigate back FAST
     setTimeout(() => {
       if (router.canGoBack()) router.back();
     }, 400);
-  }, [callId, endCallMutation]);
+  }, [callId, endCallMutation, playSound]);
+
+  const handleToggleMute = useCallback(() => {
+    playSound("tap");
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Optimistic UI update — instant visual feedback
+    setIsMuted((prev) => !prev);
+    livekitRef.current?.toggleMute();
+  }, [playSound]);
+
+  const handleToggleVideo = useCallback(() => {
+    playSound("tap");
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsVideoOff((prev) => !prev);
+    livekitRef.current?.toggleVideo();
+  }, [playSound]);
+
+  const handleFlipCamera = useCallback(() => {
+    playSound("tap");
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    livekitRef.current?.flipCamera();
+  }, [playSound]);
+
+  const handleMinimize = useCallback(() => {
+    playSound("tap");
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    minimizeCall(callId);
+    if (router.canGoBack()) router.back();
+  }, [callId, minimizeCall, playSound]);
 
   const handleLiveKitConnected = useCallback(() => {
     setPhase("live");
@@ -123,15 +158,16 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     setErrorMsg(message);
   }, []);
 
-  const handleMinimize = useCallback(() => {
-    playSound("tap");
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    minimizeCall(callId);
-    if (router.canGoBack()) router.back();
-  }, [callId, minimizeCall]);
+  const handleControlState = useCallback(
+    (state: { isMuted: boolean; isVideoOff: boolean }) => {
+      // Sync native state with WebView truth
+      setIsMuted(state.isMuted);
+      setIsVideoOff(state.isVideoOff);
+    },
+    []
+  );
 
-  // Loading state
+  // Loading
   if (!call) {
     return (
       <View style={styles.container}>
@@ -146,14 +182,14 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const mainOther = otherParticipants[0];
   const displayName = call.groupName ?? call.callerName;
 
-  // Ringing / connecting screen
+  // Ringing / connecting
   if (phase === "ringing" || phase === "connecting") {
     return (
       <View style={styles.container}>
         <SafeAreaView style={styles.ringingContent} edges={["top", "bottom"]}>
           <View style={styles.ringingTop}>
             <Text style={styles.ringingLabel}>
-              {call.type === "video" ? "Videoanruf" : "Anruf"}
+              {isVideoCall ? "Videoanruf" : "Anruf"}
             </Text>
             <Text style={styles.ringingName}>{displayName}</Text>
             <Text style={styles.ringingStatus}>
@@ -192,20 +228,20 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             <Pressable
               style={({ pressed }) => [
                 styles.endCallBtn,
-                pressed && styles.endCallBtnPressed,
+                pressed && styles.btnPressed,
               ]}
               onPress={handleHangUp}
             >
               <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
             </Pressable>
-            <Text style={styles.endCallLabel}>Auflegen</Text>
+            <Text style={styles.controlLabel}>Auflegen</Text>
           </View>
         </SafeAreaView>
       </View>
     );
   }
 
-  // Error state
+  // Error
   if (phase === "error") {
     return (
       <View style={styles.container}>
@@ -216,7 +252,9 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               size={48}
               tintColor="#EF4444"
             />
-            <Text style={styles.errorText}>{errorMsg ?? "Verbindungsfehler"}</Text>
+            <Text style={styles.errorText}>
+              {errorMsg ?? "Verbindungsfehler"}
+            </Text>
           </View>
           <View style={styles.ringingBottom}>
             <Pressable
@@ -234,7 +272,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     );
   }
 
-  // Ended state
+  // Ended
   if (phase === "ended") {
     return (
       <View style={styles.container}>
@@ -250,7 +288,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     );
   }
 
-  // Live call — WebView + NATIVE control overlay
+  // ─── Live call: WebView + NATIVE control overlay ───
   return (
     <View style={styles.container}>
       <LiveKitCallView
@@ -259,15 +297,16 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
         onDisconnected={handleLiveKitDisconnected}
         onHangUp={handleHangUp}
         onError={handleLiveKitError}
+        onControlState={handleControlState}
       />
 
-      {/* Native control overlay — always responsive, bypasses WebView touch issues */}
+      {/* Full native overlay — 100% touch reliable */}
       <SafeAreaView
         style={styles.nativeOverlay}
         edges={["top", "bottom"]}
         pointerEvents="box-none"
       >
-        {/* Top: minimize button */}
+        {/* Top: minimize */}
         <View style={styles.topRow} pointerEvents="box-none">
           <Pressable
             onPress={handleMinimize}
@@ -275,6 +314,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               styles.minimizeBtn,
               pressed && { opacity: 0.6 },
             ]}
+            hitSlop={12}
           >
             <SymbolView
               name="chevron.down"
@@ -284,17 +324,93 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
           </Pressable>
         </View>
 
-        {/* Bottom: native hangup button */}
-        <View style={styles.bottomRow} pointerEvents="box-none">
-          <Pressable
-            style={({ pressed }) => [
-              styles.nativeHangupBtn,
-              pressed && styles.nativeHangupBtnPressed,
-            ]}
-            onPress={handleHangUp}
-          >
-            <SymbolView name="phone.down.fill" size={24} tintColor="#FFF" />
-          </Pressable>
+        {/* Bottom: all controls — fully native */}
+        <View style={styles.bottomControls} pointerEvents="box-none">
+          {/* Mute */}
+          <View style={styles.controlGroup}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.controlBtn,
+                isMuted && styles.controlBtnActive,
+                pressed && styles.btnPressed,
+              ]}
+              onPress={handleToggleMute}
+              hitSlop={8}
+            >
+              <SymbolView
+                name={isMuted ? "mic.slash.fill" : "mic.fill"}
+                size={22}
+                tintColor={isMuted ? "#111" : "#FFF"}
+              />
+            </Pressable>
+            <Text style={styles.controlLabel}>
+              {isMuted ? "Stumm" : "Mikro"}
+            </Text>
+          </View>
+
+          {/* Video toggle — only for video calls */}
+          {isVideoCall && (
+            <View style={styles.controlGroup}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.controlBtn,
+                  isVideoOff && styles.controlBtnActive,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={handleToggleVideo}
+                hitSlop={8}
+              >
+                <SymbolView
+                  name={
+                    isVideoOff
+                      ? "video.slash.fill"
+                      : "video.fill"
+                  }
+                  size={22}
+                  tintColor={isVideoOff ? "#111" : "#FFF"}
+                />
+              </Pressable>
+              <Text style={styles.controlLabel}>
+                {isVideoOff ? "Kamera aus" : "Kamera"}
+              </Text>
+            </View>
+          )}
+
+          {/* Hang up */}
+          <View style={styles.controlGroup}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.hangupBtn,
+                pressed && styles.btnPressed,
+              ]}
+              onPress={handleHangUp}
+              hitSlop={8}
+            >
+              <SymbolView name="phone.down.fill" size={24} tintColor="#FFF" />
+            </Pressable>
+            <Text style={styles.controlLabel}>Auflegen</Text>
+          </View>
+
+          {/* Flip camera — only for video calls */}
+          {isVideoCall && (
+            <View style={styles.controlGroup}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.controlBtn,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={handleFlipCamera}
+                hitSlop={8}
+              >
+                <SymbolView
+                  name="camera.rotate.fill"
+                  size={22}
+                  tintColor="#FFF"
+                />
+              </Pressable>
+              <Text style={styles.controlLabel}>Wechseln</Text>
+            </View>
+          )}
         </View>
       </SafeAreaView>
     </View>
@@ -355,7 +471,7 @@ const styles = StyleSheet.create({
   ringingBottom: {
     alignItems: "center",
     paddingBottom: 40,
-    gap: 10,
+    gap: 8,
   },
   endCallBtn: {
     width: 72,
@@ -364,14 +480,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
-  },
-  endCallBtnPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.93 }],
-  },
-  endCallLabel: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.5)",
   },
 
   // Error
@@ -401,7 +509,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  // Native overlay on live call
+  // ─── Native overlay on live call ───
   nativeOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "space-between",
@@ -420,11 +528,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  bottomRow: {
-    alignItems: "center",
-    paddingBottom: 24,
+
+  // ─── Bottom controls bar ───
+  bottomControls: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
   },
-  nativeHangupBtn: {
+  controlGroup: {
+    alignItems: "center",
+    gap: 6,
+    minWidth: 56,
+  },
+  controlBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  controlBtnActive: {
+    backgroundColor: "#FFF",
+  },
+  hangupBtn: {
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -433,8 +563,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     boxShadow: "0px 4px 20px rgba(239, 68, 68, 0.5)",
   },
-  nativeHangupBtnPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.9 }],
+  controlLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+  },
+  btnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.92 }],
   },
 });

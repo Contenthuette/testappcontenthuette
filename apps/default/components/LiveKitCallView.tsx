@@ -6,6 +6,9 @@ import type { WebViewMessageEvent } from "react-native-webview";
 export interface LiveKitCallViewHandle {
   connect: (wsUrl: string, token: string, isVideoCall: boolean) => void;
   disconnect: () => void;
+  toggleMute: () => void;
+  toggleVideo: () => void;
+  flipCamera: () => void;
 }
 
 interface LiveKitCallViewProps {
@@ -13,6 +16,8 @@ interface LiveKitCallViewProps {
   onDisconnected?: () => void;
   onHangUp?: () => void;
   onError?: (message: string) => void;
+  /** Fired when mute/video/flip state changes inside WebView */
+  onControlState?: (state: { isMuted: boolean; isVideoOff: boolean }) => void;
 }
 
 const LIVEKIT_HTML = `
@@ -22,10 +27,9 @@ const LIVEKIT_HTML = `
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-touch-callout:none;-webkit-user-select:none;touch-action:manipulation}
 html,body{width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#fff}
 
-/* ── Layout ── */
 #app{display:flex;flex-direction:column;height:100%}
 #videoGrid{flex:1;position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;padding:8px;gap:8px}
 .participant{position:relative;border-radius:16px;overflow:hidden;background:#222;display:flex;align-items:center;justify-content:center;min-height:120px}
@@ -35,35 +39,17 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;font-family:-ap
 .participant.is-muted .nameTag .muted{display:inline-block}
 .participant .avatar{width:80px;height:80px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:600;color:rgba(255,255,255,0.6)}
 
-/* Single participant = full width */
 .participant.solo{width:100%;height:100%}
-/* 2 participants = stacked */
 .participant.duo{width:100%;height:calc(50% - 4px)}
-/* 3+ = grid */
 .participant.grid{width:calc(50% - 4px);height:calc(50% - 4px)}
 
-/* Local PIP */
 #localPip{position:absolute;top:60px;right:12px;width:110px;height:150px;border-radius:14px;overflow:hidden;z-index:20;background:#222;display:none;box-shadow:0 4px 20px rgba(0,0,0,0.5)}
 #localPip video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 
-/* ── Controls bar ── */
-#controls{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:16px;padding:16px 20px;padding-bottom:max(env(safe-area-inset-bottom),16px);background:rgba(17,17,17,0.95);backdrop-filter:blur(10px)}
-.ctrl-btn{width:52px;height:52px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.2s;background:rgba(255,255,255,0.12)}
-.ctrl-btn svg{width:22px;height:22px;fill:#fff}
-.ctrl-btn.active{background:#fff}
-.ctrl-btn.active svg{fill:#111}
-.ctrl-btn.hangup{width:64px;height:64px;background:#EF4444}
-.ctrl-btn.hangup svg{width:28px;height:28px;fill:#fff}
-.ctrl-btn:active{opacity:0.7}
-.ctrl-btn:active{opacity:0.7;-webkit-tap-highlight-color:transparent}
-*{-webkit-touch-callout:none;-webkit-user-select:none;touch-action:manipulation}
-
-/* ── Status overlay ── */
 #statusOverlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:50;background:#111}
 #statusOverlay.hidden{display:none}
 #statusText{font-size:17px;color:rgba(255,255,255,0.5)}
 
-/* ── Top bar ── */
 #topBar{position:absolute;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:max(env(safe-area-inset-top),12px) 16px 8px;background:linear-gradient(to bottom,rgba(0,0,0,0.6),transparent)}
 #topBar .info{text-align:center}
 #topBar .room-name{font-size:15px;font-weight:600}
@@ -76,20 +62,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;font-family:-ap
   <div id="topBar"><div class="info"><div class="room-name" id="roomLabel"></div><div class="duration" id="durationLabel">00:00</div></div></div>
   <div id="videoGrid"></div>
   <div id="localPip"></div>
-  <div id="controls">
-    <button class="ctrl-btn" id="btnMute" onclick="toggleMute()">
-      <svg viewBox="0 0 24 24"><path id="micIcon" d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-4 8.93A7.001 7.001 0 0012 20v2h-2v-2a7.001 7.001 0 01-1-.07V22h2v-2.07z"/></svg>
-    </button>
-    <button class="ctrl-btn" id="btnVideo" onclick="toggleVideo()" style="display:none">
-      <svg viewBox="0 0 24 24"><path id="camIcon" d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4V6.5l-4 4z"/></svg>
-    </button>
-    <button class="ctrl-btn hangup" id="btnHangup" onclick="hangUp()">
-      <svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 010-1.36C3.42 8.78 7.52 7 12 7s8.58 1.78 11.71 4.72c.38.37.38.98 0 1.36l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85a.991.991 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
-    </button>
-    <button class="ctrl-btn" id="btnFlip" onclick="flipCamera()" style="display:none">
-      <svg viewBox="0 0 24 24"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm13-2V6.5l-4 4 4 4V11h-3.27A7.99 7.99 0 0012 4a7.99 7.99 0 00-6.73 7H2v1l4 4 4-4H7.27A5.99 5.99 0 0112 6a5.99 5.99 0 015.73 6H21V10z"/></svg>
-    </button>
-  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"><\/script>
@@ -99,6 +71,10 @@ var room=null,isMuted=false,isVideoOff=false,isVideoCall=false,durationTimer=nul
 function msg(t,d){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({type:t},d||{})))}
 function $(id){return document.getElementById(id)}
 function initials(name){return(name||'?').split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase()}
+
+function syncState(){
+  msg('controlState',{isMuted:isMuted,isVideoOff:isVideoOff});
+}
 
 function layoutParticipants(){
   var els=document.querySelectorAll('#videoGrid .participant');
@@ -176,10 +152,6 @@ function startDuration(){
 window.rnConnect=async function(wsUrl,token,videoCall){
   try{
     isVideoCall=videoCall;
-    if(videoCall){
-      $('btnVideo').style.display='flex';
-      $('btnFlip').style.display='flex';
-    }
     var R=LivekitClient;
     room=new R.Room({adaptiveStream:true,dynacast:true,videoCaptureDefaults:{resolution:R.VideoPresets.h720.resolution}});
 
@@ -187,7 +159,6 @@ window.rnConnect=async function(wsUrl,token,videoCall){
       $('statusOverlay').classList.add('hidden');
       startDuration();
       msg('connected');
-      /* Add existing remote participants */
       room.remoteParticipants.forEach(function(p){
         addParticipant(p.identity,p.name||p.identity,false);
         p.trackPublications.forEach(function(pub){
@@ -244,11 +215,9 @@ window.rnConnect=async function(wsUrl,token,videoCall){
 
     await room.connect(wsUrl,token);
 
-    /* Enable local tracks */
     await room.localParticipant.setMicrophoneEnabled(true);
     if(videoCall){
       await room.localParticipant.setCameraEnabled(true);
-      /* Show local PIP */
       var cp=room.localParticipant.getTrackPublication(R.Track.Source.Camera);
       if(cp&&cp.track){
         var ve=cp.track.attach();
@@ -257,6 +226,7 @@ window.rnConnect=async function(wsUrl,token,videoCall){
       }
     }
 
+    syncState();
     msg('mediaReady');
   }catch(e){
     $('statusText').textContent='Fehler: '+e.message;
@@ -268,28 +238,28 @@ window.rnDisconnect=async function(){
   if(room){try{await room.disconnect()}catch(e){}room=null}
 };
 
-/* ── UI button handlers ── */
-async function toggleMute(){
+/* Called from native buttons via injectJavaScript */
+window.rnToggleMute=async function(){
   if(!room)return;
   isMuted=!isMuted;
   await room.localParticipant.setMicrophoneEnabled(!isMuted);
-  $('btnMute').classList.toggle('active',isMuted);
-}
+  syncState();
+};
 
-async function toggleVideo(){
+window.rnToggleVideo=async function(){
   if(!room||!isVideoCall)return;
   var R=LivekitClient;
   isVideoOff=!isVideoOff;
   await room.localParticipant.setCameraEnabled(!isVideoOff);
-  $('btnVideo').classList.toggle('active',isVideoOff);
   var pip=$('localPip');
   if(!isVideoOff){
     var cp=room.localParticipant.getTrackPublication(R.Track.Source.Camera);
     if(cp&&cp.track){pip.innerHTML='';var v=cp.track.attach();pip.appendChild(v);pip.style.display='block'}
   }else{pip.style.display='none';pip.innerHTML=''}
-}
+  syncState();
+};
 
-async function flipCamera(){
+window.rnFlipCamera=async function(){
   if(!room||!isVideoCall)return;
   var R=LivekitClient;
   var cp=room.localParticipant.getTrackPublication(R.Track.Source.Camera);
@@ -298,13 +268,7 @@ async function flipCamera(){
     var nf=s.facingMode==='user'?'environment':'user';
     await cp.track.restartTrack({facingMode:nf});
   }
-}
-
-function hangUp(){
-  msg('hangUp');
-  if(room){room.disconnect().catch(function(){});room=null}
-  clearInterval(durationTimer);
-}
+};
 
 msg('ready');
 <\/script>
@@ -331,6 +295,15 @@ export const LiveKitCallView = forwardRef<LiveKitCallViewHandle, LiveKitCallView
         disconnect() {
           inject("window.rnDisconnect()");
         },
+        toggleMute() {
+          inject("window.rnToggleMute()");
+        },
+        toggleVideo() {
+          inject("window.rnToggleVideo()");
+        },
+        flipCamera() {
+          inject("window.rnFlipCamera()");
+        },
       }),
       [inject]
     );
@@ -341,6 +314,8 @@ export const LiveKitCallView = forwardRef<LiveKitCallViewHandle, LiveKitCallView
           const data = JSON.parse(event.nativeEvent.data) as {
             type: string;
             message?: string;
+            isMuted?: boolean;
+            isVideoOff?: boolean;
           };
           switch (data.type) {
             case "connected":
@@ -354,6 +329,12 @@ export const LiveKitCallView = forwardRef<LiveKitCallViewHandle, LiveKitCallView
               break;
             case "error":
               props.onError?.(data.message ?? "Unknown error");
+              break;
+            case "controlState":
+              props.onControlState?.({
+                isMuted: data.isMuted ?? false,
+                isVideoOff: data.isVideoOff ?? false,
+              });
               break;
           }
         } catch {
