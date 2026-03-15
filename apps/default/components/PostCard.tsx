@@ -7,6 +7,7 @@ import { Avatar } from "@/components/Avatar";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
+import { useSound } from "@/lib/sounds";
 
 interface PostCardProps {
   post: {
@@ -42,9 +43,11 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
   const isVideo = post.type === "video";
   const [playVideo, setPlayVideo] = useState(false);
   const videoHeight = (width - 32) * (4 / 3);
+  const { playSound } = useSound();
 
   const handlePlayVideo = useCallback(() => {
     setPlayVideo(true);
+    playSound("tap");
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -120,19 +123,19 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
       ) : null}
 
       <View style={s.actions}>
-        <TouchableOpacity style={s.actionBtn} onPress={onLike}>
+        <TouchableOpacity style={s.actionBtn} onPress={() => { playSound("tap"); onLike(); }}>
           <SymbolView name={post.isLiked ? "heart.fill" : "heart"} size={22} tintColor={post.isLiked ? "#FF3B30" : theme.text} />
           {post.likeCount > 0 && <Text style={s.actionCount}>{post.likeCount}</Text>}
         </TouchableOpacity>
-        <TouchableOpacity style={s.actionBtn} onPress={onComment}>
+        <TouchableOpacity style={s.actionBtn} onPress={() => { playSound("tap"); onComment(); }}>
           <SymbolView name="bubble.right" size={22} tintColor={theme.text} />
           {post.commentCount > 0 && <Text style={s.actionCount}>{post.commentCount}</Text>}
         </TouchableOpacity>
-        <TouchableOpacity style={s.actionBtn} onPress={onShare}>
+        <TouchableOpacity style={s.actionBtn} onPress={() => { playSound("tap"); onShare?.(); }}>
           <SymbolView name="paperplane.fill" size={22} tintColor={theme.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={onSave}>
+        <TouchableOpacity onPress={() => { playSound("tap"); onSave(); }}>
           <SymbolView name={post.isSaved ? "bookmark.fill" : "bookmark"} size={22} tintColor={theme.text} />
         </TouchableOpacity>
       </View>

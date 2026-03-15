@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
+import { useSound } from "@/lib/sounds";
 
 // Lazy import to avoid crash if expo-audio native module has issues
 const LazyVoiceRecorder = React.lazy(
@@ -98,12 +99,14 @@ export function ChatInputBar({
 }: ChatInputBarProps) {
   const [text, setText] = useState("");
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const { playSound } = useSound();
 
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
     onSend(trimmed);
     setText("");
+    playSound("send");
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -111,6 +114,7 @@ export function ChatInputBar({
 
   const handleMicPress = () => {
     setShowVoiceRecorder(true);
+    playSound("tap");
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }

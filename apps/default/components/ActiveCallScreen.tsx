@@ -16,6 +16,7 @@ import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { router } from "expo-router";
 import { useCallContext } from "@/lib/call-context";
+import { useSound } from "@/lib/sounds";
 import {
   LiveKitCallView,
   type LiveKitCallViewHandle,
@@ -31,6 +32,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const getCallToken = useAction(api.calls.getCallToken);
   const me = useQuery(api.users.me);
   const { minimizeCall } = useCallContext();
+  const { playSound } = useSound();
 
   const [phase, setPhase] = useState<"ringing" | "connecting" | "live" | "ended" | "error">("ringing");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -84,6 +86,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (hangingUpRef.current) return; // prevent double-tap
     hangingUpRef.current = true;
 
+    playSound("hangup");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -121,6 +124,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   }, []);
 
   const handleMinimize = useCallback(() => {
+    playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     minimizeCall(callId);

@@ -3,6 +3,7 @@ import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextS
 import { colors, radius, spacing } from "@/lib/theme";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import { useSound } from "@/lib/sounds";
 
 interface ButtonProps {
   title: string;
@@ -20,8 +21,10 @@ export function Button({
   title, onPress, variant = "primary", size = "md",
   loading = false, disabled = false, fullWidth = false, style, textStyle,
 }: ButtonProps) {
+  const { playSound } = useSound();
   const handlePress = () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    playSound("tap");
     onPress();
   };
   return (

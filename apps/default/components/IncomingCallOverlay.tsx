@@ -20,6 +20,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
 import { Avatar } from "@/components/Avatar";
+import { useSound } from "@/lib/sounds";
 
 interface IncomingCallOverlayProps {
   callerName: string;
@@ -45,8 +46,12 @@ export function IncomingCallOverlay({
   const ringOpacity2 = useSharedValue(0.3);
   const ringOpacity3 = useSharedValue(0.2);
   const hapticInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { playSound, stopSound } = useSound();
 
   useEffect(() => {
+    // Start ringtone
+    playSound("ringtone");
+
     // Pulsing ring animations
     ring1.value = withRepeat(
       withSequence(
@@ -115,8 +120,9 @@ export function IncomingCallOverlay({
 
     return () => {
       if (hapticInterval.current) clearInterval(hapticInterval.current);
+      stopSound("ringtone");
     };
-  }, [ring1, ring2, ring3, ringOpacity1, ringOpacity2, ringOpacity3]);
+  }, [ring1, ring2, ring3, ringOpacity1, ringOpacity2, ringOpacity3, playSound, stopSound]);
 
   const ringStyle1 = useAnimatedStyle(() => ({
     transform: [{ scale: ring1.value }],
@@ -171,14 +177,21 @@ export function IncomingCallOverlay({
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.declineBtn]}
-              onPress={onDecline}
+              onPress={() => {
+                stopSound("ringtone");
+                onDecline();
+              }}
               activeOpacity={0.7}
             >
               <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, styles.acceptBtn]}
-              onPress={onAccept}
+              onPress={() => {
+                stopSound("ringtone");
+                playSound("success");
+                onAccept();
+              }}
               activeOpacity={0.7}
             >
               <SymbolView
