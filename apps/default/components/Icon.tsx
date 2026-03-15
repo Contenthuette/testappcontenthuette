@@ -82,6 +82,7 @@ import {
   Images,
   FileSearch,
   Crown,
+  CircleAlert,
   type LucideProps,
 } from "lucide-react-native";
 
@@ -220,6 +221,9 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "info.circle": Info,
   "exclamationmark.triangle.fill": AlertTriangle,
   "exclamationmark.triangle": AlertTriangle,
+  "exclamationmark.circle.fill": CircleAlert,
+  "exclamationmark.circle": CircleAlert,
+  "exclamationmark": CircleAlert,
   envelope: Mail,
   pencil: Pencil,
   "pencil.circle": PencilLine,
