@@ -1,6 +1,6 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useRef, useEffect, Component } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { AudioPlayer, createAudioPlayer } from "expo-audio";
 import { SymbolView } from "@/components/Icon";
 
 interface VoiceMessageBubbleProps {
@@ -18,7 +18,6 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** Simple deterministic hash from string → stable seed */
 function hashString(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
@@ -29,7 +28,6 @@ function hashString(str: string): number {
 
 const BAR_COUNT = 24;
 
-/** Generate stable waveform heights from a seed so they never jitter */
 function generateStableBars(seed: number): number[] {
   return Array.from({ length: BAR_COUNT }, (_, i) => {
     const a = Math.sin(seed * 0.001 + i * 0.8) * 6;
@@ -39,6 +37,16 @@ function generateStableBars(seed: number): number[] {
   });
 }
 
+/* ─── Error Boundary ─── */
+interface EBProps { fallback: React.ReactNode; children: React.ReactNode }
+interface EBState { hasError: boolean }
+class AudioErrorBoundary extends Component<EBProps, EBState> {
+  state: EBState = { hasError: false };
+  static getDerivedStateFromError(): EBState { return { hasError: true }; }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children; }
+}
+
+/* ─── Inner player (imperative, no hooks that can crash on mount) ─── */
 function VoiceMessageBubbleInner({
   audioUrl,
   duration: durationSec,
@@ -49,44 +57,81 @@ function VoiceMessageBubbleInner({
   const mine = isMine ?? isMe ?? false;
   const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
 
-  const player = useAudioPlayer(audioUrl);
-  const status = useAudioPlayerStatus(player);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [playerDuration, setPlayerDuration] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isPlaying = status.playing;
-  const currentTime = status.currentTime;
-  const effectiveDuration =
-    status.duration > 0 ? status.duration : totalDuration;
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      try { playerRef.current?.remove(); } catch { /* ignore */ }
+      playerRef.current = null;
+    };
+  }, []);
 
-  const togglePlay = useCallback(() => {
-    if (!player) return;
-    if (isPlaying) {
-      player.pause();
-    } else {
-      if (currentTime >= effectiveDuration && effectiveDuration > 0) {
-        player.seekTo(0);
-      }
-      player.play();
+  const stopPolling = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-  }, [player, isPlaying, currentTime, effectiveDuration]);
+  }, []);
 
-  const progress =
-    effectiveDuration > 0 ? Math.min(currentTime / effectiveDuration, 1) : 0;
-  const displayTime = isPlaying
-    ? formatTime(currentTime)
-    : formatTime(effectiveDuration);
+  const startPolling = useCallback(() => {
+    stopPolling();
+    timerRef.current = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      setCurrentTime(p.currentTime);
+      if (p.duration > 0) setPlayerDuration(p.duration);
+      if (!p.playing) {
+        setIsPlaying(false);
+        stopPolling();
+      }
+    }, 150);
+  }, [stopPolling]);
 
-  // Stable waveform – seeded by URL so it never changes between renders
+  const togglePlay = useCallback(async () => {
+    try {
+      // Create player lazily on first tap
+      if (!playerRef.current) {
+        const p = createAudioPlayer({ uri: audioUrl });
+        playerRef.current = p;
+      }
+      const p = playerRef.current;
+      if (isPlaying) {
+        p.pause();
+        setIsPlaying(false);
+        stopPolling();
+      } else {
+        // Reset if at end
+        const dur = p.duration > 0 ? p.duration : totalDuration;
+        if (p.currentTime >= dur && dur > 0) {
+          p.seekTo(0);
+          setCurrentTime(0);
+        }
+        p.play();
+        setIsPlaying(true);
+        startPolling();
+      }
+    } catch (err) {
+      console.warn("VoiceMessageBubble play error:", err);
+      setIsPlaying(false);
+      stopPolling();
+    }
+  }, [audioUrl, isPlaying, totalDuration, startPolling, stopPolling]);
+
+  const effectiveDuration = playerDuration > 0 ? playerDuration : totalDuration;
+  const progress = effectiveDuration > 0 ? Math.min(currentTime / effectiveDuration, 1) : 0;
+  const displayTime = isPlaying ? formatTime(currentTime) : formatTime(effectiveDuration);
+
   const bars = useMemo(() => generateStableBars(hashString(audioUrl)), [audioUrl]);
 
   return (
-    <View
-      style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}
-    >
-      <TouchableOpacity
-        onPress={togglePlay}
-        style={styles.playBtn}
-        activeOpacity={0.7}
-      >
+    <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
+      <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
         <SymbolView
           name={isPlaying ? "pause.fill" : "play.fill"}
           size={16}
@@ -105,12 +150,8 @@ function VoiceMessageBubbleInner({
                   height: h,
                   backgroundColor:
                     i / bars.length <= progress
-                      ? mine
-                        ? "#FFFFFF"
-                        : "#000000"
-                      : mine
-                        ? "rgba(255,255,255,0.3)"
-                        : "#D4D4D8",
+                      ? (mine ? "#FFFFFF" : "#000000")
+                      : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
                 },
               ]}
             />
@@ -118,82 +159,59 @@ function VoiceMessageBubbleInner({
         </View>
       </View>
 
-      <Text
-        style={[
-          styles.time,
-          { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" },
-        ]}
-      >
+      <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
         {displayTime}
       </Text>
     </View>
   );
 }
 
-/** Fallback UI shown when audio URL is missing or player crashes */
+/* ─── Fallback (no audio at all) ─── */
 function VoiceMessageFallback({
   durationMs,
   duration: durationSec,
   isMine,
   isMe,
-}: Omit<VoiceMessageBubbleProps, "audioUrl"> & { audioUrl?: string }) {
+}: Omit<VoiceMessageBubbleProps, "audioUrl">) {
   const mine = isMine ?? isMe ?? false;
   const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
   const bars = useMemo(() => generateStableBars(12345), []);
 
   return (
-    <View
-      style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}
-    >
+    <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <View style={styles.playBtn}>
-        <SymbolView
-          name="waveform"
-          size={16}
-          tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"}
-        />
+        <SymbolView name="waveform" size={16} tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"} />
       </View>
-
       <View style={styles.waveContainer}>
         <View style={styles.bars}>
           {bars.map((h, i) => (
             <View
               key={`bar-${i}`}
-              style={[
-                styles.bar,
-                {
-                  height: h,
-                  backgroundColor: mine
-                    ? "rgba(255,255,255,0.25)"
-                    : "#E4E4E7",
-                },
-              ]}
+              style={[styles.bar, { height: h, backgroundColor: mine ? "rgba(255,255,255,0.25)" : "#E4E4E7" }]}
             />
           ))}
         </View>
       </View>
-
-      <Text
-        style={[
-          styles.time,
-          { color: mine ? "rgba(255,255,255,0.5)" : "#A1A1AA" },
-        ]}
-      >
+      <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.5)" : "#A1A1AA" }]}>
         {totalDuration > 0 ? formatTime(totalDuration) : "…"}
       </Text>
     </View>
   );
 }
 
-/**
- * Safe wrapper: renders the inner player only when audioUrl is a valid string.
- * Falls back gracefully otherwise to prevent chat screen crashes.
- */
+/* ─── Public export with safety layers ─── */
 export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   if (!props.audioUrl || props.audioUrl.length === 0) {
     return <VoiceMessageFallback {...props} />;
   }
 
-  return <VoiceMessageBubbleInner {...props} />;
+  const fallback = <VoiceMessageFallback {...props} />;
+
+  return (
+    <AudioErrorBoundary fallback={fallback}>
+      <VoiceMessageBubbleInner {...props} />
+    </AudioErrorBoundary>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -207,12 +225,8 @@ const styles = StyleSheet.create({
     minWidth: 200,
     maxWidth: 280,
   },
-  meContainer: {
-    backgroundColor: "#000000",
-  },
-  otherContainer: {
-    backgroundColor: "#F4F4F5",
-  },
+  meContainer: { backgroundColor: "#000000" },
+  otherContainer: { backgroundColor: "#F4F4F5" },
   playBtn: {
     width: 32,
     height: 32,
@@ -221,23 +235,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  waveContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  bars: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    height: 24,
-  },
-  bar: {
-    width: 3,
-    borderRadius: 2,
-  },
-  time: {
-    fontSize: 11,
-    fontWeight: "500",
-    fontVariant: ["tabular-nums"],
-  },
+  waveContainer: { flex: 1, justifyContent: "center" },
+  bars: { flexDirection: "row", alignItems: "center", gap: 2, height: 24 },
+  bar: { width: 3, borderRadius: 2 },
+  time: { fontSize: 11, fontWeight: "500", fontVariant: ["tabular-nums"] },
 });
