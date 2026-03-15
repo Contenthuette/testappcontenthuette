@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { SymbolView } from "@/components/Icon";
+import { useChatAudio } from "@/lib/ChatAudioProvider";
 
 interface VoiceMessageBubbleProps {
   audioUrl: string;
@@ -68,62 +68,24 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   const totalDuration = duration ?? (durationMs ? durationMs / 1000 : 0);
   const bars = useMemo(() => generateStableBars(hashString(audioUrl || "x")), [audioUrl]);
 
-  // LAZY LOADING: Always create player with null to avoid crashing
-  // when many VoiceMessageBubbles mount simultaneously in a FlatList
-  const player = useAudioPlayer(null);
-  const status = useAudioPlayerStatus(player);
-  const hasLoadedRef = useRef(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // Use the shared single audio player from context
+  const audio = useChatAudio();
+  const isThisPlaying = audio.currentUrl === audioUrl && audio.isPlaying;
+  const isThisLoading = audio.currentUrl === audioUrl && audio.isLoading;
+  const isThisActive = audio.currentUrl === audioUrl && audio.isLoaded;
 
-  // Reset to start when playback finishes
-  useEffect(() => {
-    if (status.didJustFinish) {
-      try { player.seekTo(0); } catch { /* ignore */ }
-    }
-  }, [status.didJustFinish, player]);
-
-  // Once player is loaded after replace(), auto-play
-  useEffect(() => {
-    if (isLoading && status.isLoaded) {
-      setIsLoading(false);
-      try {
-        player.play();
-      } catch (e) {
-        console.error("VoiceMessageBubble auto-play error:", e);
-      }
-    }
-  }, [isLoading, status.isLoaded, player]);
-
-  const togglePlay = useCallback(async () => {
+  const handleToggle = () => {
     if (!audioUrl) return;
+    audio.toggle(audioUrl);
+  };
 
-    try {
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-    } catch { /* best effort */ }
-
-    try {
-      if (status.playing) {
-        player.pause();
-      } else if (hasLoadedRef.current && status.isLoaded) {
-        // Already loaded – just resume
-        player.play();
-      } else {
-        // First tap – lazy load the audio source
-        hasLoadedRef.current = true;
-        setIsLoading(true);
-        player.replace(audioUrl);
-      }
-    } catch (e) {
-      console.error("VoiceMessageBubble playback error:", e);
-      setIsLoading(false);
-    }
-  }, [audioUrl, player, status.playing, status.isLoaded]);
-
-  // Calculate progress
-  const effectiveDuration = status.duration > 0 ? status.duration : totalDuration;
-  const progress = effectiveDuration > 0 ? Math.min(status.currentTime / effectiveDuration, 1) : 0;
-  const displayTime = status.playing
-    ? formatTime(status.currentTime)
+  // Progress for this specific message
+  const effectiveDuration = isThisActive && audio.duration > 0 ? audio.duration : totalDuration;
+  const progress = isThisActive && effectiveDuration > 0
+    ? Math.min(audio.currentTime / effectiveDuration, 1)
+    : 0;
+  const displayTime = isThisPlaying
+    ? formatTime(audio.currentTime)
     : formatTime(effectiveDuration);
 
   // No URL fallback
@@ -140,22 +102,20 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
     );
   }
 
-  const showSpinner = isLoading && !status.isLoaded;
-
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
-      <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        {showSpinner ? (
+      <TouchableOpacity onPress={handleToggle} style={styles.playBtn} activeOpacity={0.7}>
+        {isThisLoading ? (
           <ActivityIndicator size="small" color={mine ? "#FFFFFF" : "#000000"} />
         ) : (
           <SymbolView
-            name={status.playing ? "pause.fill" : "play.fill"}
+            name={isThisPlaying ? "pause.fill" : "play.fill"}
             size={16}
             tintColor={mine ? "#FFFFFF" : "#000000"}
           />
         )}
       </TouchableOpacity>
-      <WaveformBars bars={bars} progress={status.playing ? progress : 0} mine={mine} />
+      <WaveformBars bars={bars} progress={isThisPlaying ? progress : 0} mine={mine} />
       <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
         {displayTime}
       </Text>
