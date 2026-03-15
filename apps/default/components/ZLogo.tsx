@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { colors } from "@/lib/theme";
 
-const Z_LOGO = require("../../../assets/images/z-lgo-1xaccc.png");
+const Z_LOGO = require("../../../assets/images/chatgpt-image-17.-jan.-2026-21-56-11-0vbgwf.png");
 
 interface ZLogoProps {
   size?: number;
