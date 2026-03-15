@@ -65,6 +65,7 @@ export default function GroupChatScreen() {
         groupId: id as Id<"groups">,
         type: "voice",
         mediaStorageId: storageId,
+        mediaDuration: durationMs,
         text: `\ud83c\udfa4 ${Math.round(durationMs / 1000)}s`,
       });
     } catch (err) {
@@ -98,14 +99,14 @@ export default function GroupChatScreen() {
     }
 
     // Voice message bubble
-    if (item.type === "voice" && item.mediaUrl) {
+    if (item.type === "voice") {
       return (
         <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
           {!isMine && <Avatar uri={item.senderAvatarUrl} name={item.senderName} size={30} />}
           <View>
             {!isMine && <Text style={styles.senderName}>{item.senderName}</Text>}
             <VoiceMessageBubble
-              audioUrl={item.mediaUrl}
+              audioUrl={item.mediaUrl ?? ""}
               durationMs={item.mediaDuration}
               isMine={isMine}
               timestamp={timeStr}

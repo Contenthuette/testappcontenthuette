@@ -110,6 +110,7 @@ export default function ChatScreen() {
         conversationId,
         type: "voice",
         mediaStorageId: storageId,
+        mediaDuration: durationMs,
         text: `🎤 ${Math.round(durationMs / 1000)}s`,
       });
     } catch (err) {
@@ -144,7 +145,7 @@ export default function ChatScreen() {
       );
     }
 
-    if (item.type === "voice" && item.mediaUrl) {
+    if (item.type === "voice") {
       return (
         <TouchableOpacity
           activeOpacity={0.8}
@@ -154,7 +155,7 @@ export default function ChatScreen() {
         >
           <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
             <VoiceMessageBubble
-              audioUrl={item.mediaUrl}
+              audioUrl={item.mediaUrl ?? ""}
               durationMs={item.mediaDuration}
               isMine={isMine}
               timestamp={timeStr}
