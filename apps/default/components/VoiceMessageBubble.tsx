@@ -1,16 +1,74 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { SymbolView } from "@/components/Icon";
-import { useChatAudio } from "@/lib/ChatAudioProvider";
+import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
+import type { AudioPlayer } from "expo-audio";
 
-interface VoiceMessageBubbleProps {
-  audioUrl: string;
-  duration?: number;
-  durationMs?: number;
-  isMine?: boolean;
-  isMe?: boolean;
-  timestamp?: string;
+// ─── Module-level singleton player ────────────────────────────────────
+// Only ONE native AudioPlayer exists for the entire app.
+// Created lazily on first play tap.
+let _sharedPlayer: AudioPlayer | null = null;
+let _currentUrl: string | null = null;
+let _listeners: Set<() => void> = new Set();
+let _pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function getSharedPlayer(): AudioPlayer {
+  if (!_sharedPlayer) {
+    _sharedPlayer = createAudioPlayer();
+  }
+  return _sharedPlayer;
 }
+
+function notifyListeners() {
+  _listeners.forEach((fn) => fn());
+}
+
+function startPolling() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(notifyListeners, 200);
+}
+
+function stopPolling() {
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+  }
+}
+
+async function toggleAudio(url: string) {
+  if (!url) return;
+  try {
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  } catch { /* best effort */ }
+
+  const player = getSharedPlayer();
+
+  if (_currentUrl === url) {
+    // Same URL → toggle
+    if (player.playing) {
+      player.pause();
+      stopPolling();
+    } else {
+      player.play();
+      startPolling();
+    }
+  } else {
+    // Different URL → load new
+    if (player.playing) player.pause();
+    _currentUrl = url;
+    player.replace(url);
+    // Wait a tick for loading, then play
+    setTimeout(() => {
+      try {
+        player.play();
+        startPolling();
+      } catch { /* ignore */ }
+    }, 150);
+  }
+  notifyListeners();
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
 
 function formatTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "0:00";
@@ -38,28 +96,15 @@ function generateStableBars(seed: number): number[] {
   });
 }
 
-function WaveformBars({ bars, progress, mine }: { bars: number[]; progress: number; mine: boolean }) {
-  return (
-    <View style={styles.waveContainer}>
-      <View style={styles.bars}>
-        {bars.map((h, i) => (
-          <View
-            key={`bar-${i}`}
-            style={[
-              styles.bar,
-              {
-                height: h,
-                backgroundColor:
-                  i / bars.length <= progress
-                    ? (mine ? "#FFFFFF" : "#000000")
-                    : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
-              },
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
+// ─── Component ────────────────────────────────────────────────────────
+
+interface VoiceMessageBubbleProps {
+  audioUrl: string;
+  duration?: number;
+  durationMs?: number;
+  isMine?: boolean;
+  isMe?: boolean;
+  timestamp?: string;
 }
 
 export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
@@ -68,24 +113,34 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   const totalDuration = duration ?? (durationMs ? durationMs / 1000 : 0);
   const bars = useMemo(() => generateStableBars(hashString(audioUrl || "x")), [audioUrl]);
 
-  // Use the shared single audio player from context
-  const audio = useChatAudio();
-  const isThisPlaying = audio.currentUrl === audioUrl && audio.isPlaying;
-  const isThisLoading = audio.currentUrl === audioUrl && audio.isLoading;
-  const isThisActive = audio.currentUrl === audioUrl && audio.isLoaded;
+  // Subscribe to shared player state changes
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const listener = () => forceUpdate((n) => n + 1);
+    _listeners.add(listener);
+    return () => {
+      _listeners.delete(listener);
+    };
+  }, []);
 
-  const handleToggle = () => {
+  const player = _sharedPlayer;
+  const isThisActive = _currentUrl === audioUrl && player != null;
+  const isThisPlaying = isThisActive && (player?.playing ?? false);
+
+  const handleToggle = useCallback(() => {
     if (!audioUrl) return;
-    audio.toggle(audioUrl);
-  };
+    toggleAudio(audioUrl);
+  }, [audioUrl]);
 
-  // Progress for this specific message
-  const effectiveDuration = isThisActive && audio.duration > 0 ? audio.duration : totalDuration;
-  const progress = isThisActive && effectiveDuration > 0
-    ? Math.min(audio.currentTime / effectiveDuration, 1)
+  // Progress
+  const currentTime = isThisActive ? (player?.currentTime ?? 0) : 0;
+  const playerDuration = isThisActive ? (player?.duration ?? 0) : 0;
+  const effectiveDuration = playerDuration > 0 ? playerDuration : totalDuration;
+  const progress = isThisPlaying && effectiveDuration > 0
+    ? Math.min(currentTime / effectiveDuration, 1)
     : 0;
   const displayTime = isThisPlaying
-    ? formatTime(audio.currentTime)
+    ? formatTime(currentTime)
     : formatTime(effectiveDuration);
 
   // No URL fallback
@@ -105,17 +160,31 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={handleToggle} style={styles.playBtn} activeOpacity={0.7}>
-        {isThisLoading ? (
-          <ActivityIndicator size="small" color={mine ? "#FFFFFF" : "#000000"} />
-        ) : (
-          <SymbolView
-            name={isThisPlaying ? "pause.fill" : "play.fill"}
-            size={16}
-            tintColor={mine ? "#FFFFFF" : "#000000"}
-          />
-        )}
+        <SymbolView
+          name={isThisPlaying ? "pause.fill" : "play.fill"}
+          size={16}
+          tintColor={mine ? "#FFFFFF" : "#000000"}
+        />
       </TouchableOpacity>
-      <WaveformBars bars={bars} progress={isThisPlaying ? progress : 0} mine={mine} />
+      <View style={styles.waveContainer}>
+        <View style={styles.bars}>
+          {bars.map((h, i) => (
+            <View
+              key={`bar-${i}`}
+              style={[
+                styles.bar,
+                {
+                  height: h,
+                  backgroundColor:
+                    i / bars.length <= progress
+                      ? (mine ? "#FFFFFF" : "#000000")
+                      : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
+                },
+              ]}
+            />
+          ))}
+        </View>
+      </View>
       <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
         {displayTime}
       </Text>
