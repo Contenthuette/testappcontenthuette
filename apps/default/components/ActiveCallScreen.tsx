@@ -82,15 +82,17 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   }, [call?.status]);
 
   // WebView says user pressed hang up
-  const handleHangUp = useCallback(async () => {
+  const handleHangUp = useCallback(() => {
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    // Immediate UI response — don't await mutation
     setPhase("ended");
-    try {
-      await endCallMutation({ callId });
-    } catch (e) {
-      console.error("Failed to end call", e);
-    }
+    livekitRef.current?.disconnect();
+    endCallMutation({ callId }).catch(() => {});
+    // Navigate back quickly
+    setTimeout(() => {
+      if (router.canGoBack()) router.back();
+    }, 600);
   }, [callId, endCallMutation]);
 
   const handleLiveKitConnected = useCallback(() => {
@@ -104,7 +106,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
       endCallMutation({ callId }).catch(() => {});
       setTimeout(() => {
         if (router.canGoBack()) router.back();
-      }, 1500);
+      }, 600);
     }
   }, [phase, callId, endCallMutation]);
 
