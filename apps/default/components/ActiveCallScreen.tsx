@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Platform,
   ActivityIndicator,
 } from "react-native";
@@ -25,8 +25,6 @@ interface ActiveCallScreenProps {
   callId: Id<"calls">;
 }
 
-type Phase = "ringing" | "connecting" | "live" | "ended" | "error";
-
 export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const call = useQuery(api.calls.getCallDetails, { callId });
   const endCallMutation = useMutation(api.calls.endCall);
@@ -34,10 +32,11 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const me = useQuery(api.users.me);
   const { minimizeCall } = useCallContext();
 
-  const [phase, setPhase] = useState<Phase>("ringing");
+  const [phase, setPhase] = useState<"ringing" | "connecting" | "live" | "ended" | "error">("ringing");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const livekitRef = useRef<LiveKitCallViewHandle>(null);
   const tokenFetchedRef = useRef(false);
+  const hangingUpRef = useRef(false);
 
   // Connect to LiveKit when call becomes active
   useEffect(() => {
@@ -51,7 +50,6 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 
       getCallToken({ callId })
         .then(({ token, wsUrl }) => {
-          // Short delay to let WebView initialize
           setTimeout(() => {
             livekitRef.current?.connect(wsUrl, token, call.type === "video");
           }, 800);
@@ -76,23 +74,29 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
       setPhase("ended");
       const timeout = setTimeout(() => {
         if (router.canGoBack()) router.back();
-      }, 1500);
+      }, 500);
       return () => clearTimeout(timeout);
     }
   }, [call?.status]);
 
-  // WebView says user pressed hang up
+  // INSTANT hang up — no async, no waiting
   const handleHangUp = useCallback(() => {
+    if (hangingUpRef.current) return; // prevent double-tap
+    hangingUpRef.current = true;
+
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // Immediate UI response — don't await mutation
-    setPhase("ended");
+
+    // 1. Immediately disconnect WebView
     livekitRef.current?.disconnect();
+    // 2. Immediately show ended state
+    setPhase("ended");
+    // 3. Fire mutation — don't await
     endCallMutation({ callId }).catch(() => {});
-    // Navigate back quickly
+    // 4. Navigate back FAST
     setTimeout(() => {
       if (router.canGoBack()) router.back();
-    }, 600);
+    }, 400);
   }, [callId, endCallMutation]);
 
   const handleLiveKitConnected = useCallback(() => {
@@ -100,13 +104,13 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   }, []);
 
   const handleLiveKitDisconnected = useCallback(() => {
-    // If we didn't initiate the hangup, the remote side ended
-    if (phase === "live") {
+    if (phase === "live" && !hangingUpRef.current) {
+      hangingUpRef.current = true;
       setPhase("ended");
       endCallMutation({ callId }).catch(() => {});
       setTimeout(() => {
         if (router.canGoBack()) router.back();
-      }, 600);
+      }, 500);
     }
   }, [phase, callId, endCallMutation]);
 
@@ -138,7 +142,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const mainOther = otherParticipants[0];
   const displayName = call.groupName ?? call.callerName;
 
-  // Ringing screen (before LiveKit connects)
+  // Ringing / connecting screen
   if (phase === "ringing" || phase === "connecting") {
     return (
       <View style={styles.container}>
@@ -181,13 +185,15 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
           </View>
 
           <View style={styles.ringingBottom}>
-            <TouchableOpacity
-              style={styles.endCallBtn}
+            <Pressable
+              style={({ pressed }) => [
+                styles.endCallBtn,
+                pressed && styles.endCallBtnPressed,
+              ]}
               onPress={handleHangUp}
-              activeOpacity={0.7}
             >
               <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
-            </TouchableOpacity>
+            </Pressable>
             <Text style={styles.endCallLabel}>Auflegen</Text>
           </View>
         </SafeAreaView>
@@ -209,13 +215,15 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             <Text style={styles.errorText}>{errorMsg ?? "Verbindungsfehler"}</Text>
           </View>
           <View style={styles.ringingBottom}>
-            <TouchableOpacity
-              style={styles.backBtn}
+            <Pressable
+              style={({ pressed }) => [
+                styles.backBtn,
+                pressed && { opacity: 0.7 },
+              ]}
               onPress={() => router.canGoBack() && router.back()}
-              activeOpacity={0.7}
             >
               <Text style={styles.backBtnText}>Zurück</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </SafeAreaView>
       </View>
@@ -238,7 +246,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     );
   }
 
-  // Live call — WebView with LiveKit's own controls
+  // Live call — WebView + NATIVE control overlay
   return (
     <View style={styles.container}>
       <LiveKitCallView
@@ -249,23 +257,41 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
         onError={handleLiveKitError}
       />
 
-      {/* Minimal native overlay: just a minimize button */}
+      {/* Native control overlay — always responsive, bypasses WebView touch issues */}
       <SafeAreaView
-        style={styles.minimizeOverlay}
-        edges={["top"]}
+        style={styles.nativeOverlay}
+        edges={["top", "bottom"]}
         pointerEvents="box-none"
       >
-        <TouchableOpacity
-          onPress={handleMinimize}
-          style={styles.minimizeBtn}
-          activeOpacity={0.7}
-        >
-          <SymbolView
-            name="chevron.down"
-            size={18}
-            tintColor="rgba(255,255,255,0.8)"
-          />
-        </TouchableOpacity>
+        {/* Top: minimize button */}
+        <View style={styles.topRow} pointerEvents="box-none">
+          <Pressable
+            onPress={handleMinimize}
+            style={({ pressed }) => [
+              styles.minimizeBtn,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <SymbolView
+              name="chevron.down"
+              size={18}
+              tintColor="rgba(255,255,255,0.9)"
+            />
+          </Pressable>
+        </View>
+
+        {/* Bottom: native hangup button */}
+        <View style={styles.bottomRow} pointerEvents="box-none">
+          <Pressable
+            style={({ pressed }) => [
+              styles.nativeHangupBtn,
+              pressed && styles.nativeHangupBtnPressed,
+            ]}
+            onPress={handleHangUp}
+          >
+            <SymbolView name="phone.down.fill" size={24} tintColor="#FFF" />
+          </Pressable>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -335,6 +361,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  endCallBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.93 }],
+  },
   endCallLabel: {
     fontSize: 13,
     color: "rgba(255,255,255,0.5)",
@@ -367,16 +397,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  // Minimize overlay on live call
-  minimizeOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+  // Native overlay on live call
+  nativeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "space-between",
+    zIndex: 50,
+  },
+  topRow: {
+    flexDirection: "row",
     paddingHorizontal: 16,
     paddingTop: 8,
-    flexDirection: "row",
-    zIndex: 50,
   },
   minimizeBtn: {
     width: 36,
@@ -385,5 +415,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  bottomRow: {
+    alignItems: "center",
+    paddingBottom: 24,
+  },
+  nativeHangupBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#EF4444",
+    justifyContent: "center",
+    alignItems: "center",
+    boxShadow: "0px 4px 20px rgba(239, 68, 68, 0.5)",
+  },
+  nativeHangupBtnPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.9 }],
   },
 });

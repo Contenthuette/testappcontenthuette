@@ -55,6 +55,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#111;font-family:-ap
 .ctrl-btn.hangup{width:64px;height:64px;background:#EF4444}
 .ctrl-btn.hangup svg{width:28px;height:28px;fill:#fff}
 .ctrl-btn:active{opacity:0.7}
+.ctrl-btn:active{opacity:0.7;-webkit-tap-highlight-color:transparent}
+*{-webkit-touch-callout:none;-webkit-user-select:none;touch-action:manipulation}
 
 /* ── Status overlay ── */
 #statusOverlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:50;background:#111}
@@ -299,9 +301,9 @@ async function flipCamera(){
 }
 
 function hangUp(){
-  if(room){try{room.disconnect()}catch(e){}room=null}
-  clearInterval(durationTimer);
   msg('hangUp');
+  if(room){room.disconnect().catch(function(){});room=null}
+  clearInterval(durationTimer);
 }
 
 msg('ready');
