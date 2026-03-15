@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
@@ -18,11 +19,12 @@ import * as Haptics from "expo-haptics";
 type Tab = "groups" | "people";
 
 export default function GroupsScreen() {
+  const { isAuthenticated } = useConvexAuth();
   const [tab, setTab] = useState<Tab>("groups");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const groups = useQuery(api.groups.list, tab === "groups" ? { searchQuery: searchQuery || undefined } : "skip");
-  const people = useQuery(api.users.listAll, tab === "people" ? { searchQuery: searchQuery || undefined } : "skip");
+  const groups = useQuery(api.groups.list, isAuthenticated && tab === "groups" ? { searchQuery: searchQuery || undefined } : "skip");
+  const people = useQuery(api.users.listAll, isAuthenticated && tab === "people" ? { searchQuery: searchQuery || undefined } : "skip");
   const joinGroup = useMutation(api.groups.join);
 
   const handleJoin = async (groupId: Id<"groups">) => {
