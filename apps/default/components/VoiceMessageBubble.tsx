@@ -72,13 +72,13 @@ const IS_WEB = Platform.OS === "web";
 type ExpoPlayer = {
   play(): void;
   pause(): void;
-  seekTo(s: number): Promise<void>;
+  seekTo(s: number): void;
   replace(src: { uri: string }): void;
   remove(): void;
   readonly playing: boolean;
   readonly currentTime: number;
   readonly duration: number;
-  readonly isLoaded: boolean;
+  readonly isBuffering: boolean;
 };
 let _player: ExpoPlayer | null = null;
 
@@ -99,66 +99,35 @@ async function ensurePlaybackMode(): Promise<boolean> {
   }
 }
 
-let _loadPollCount = 0; // Tracks how many poll cycles we've waited for loading
-const MAX_LOAD_POLLS = 75; // ~6 seconds at 80ms interval → give up
-
+// Poll ONLY observes state — never calls play(). play() is called exactly once
+// in playNative/createAndPlayNative to avoid iOS audio session conflicts.
 function startNativePoll() {
   stopPoll();
-  _loadPollCount = 0;
   _poll = setInterval(() => {
     if (!_player) {
       stopPoll();
       return;
     }
     const p = _player;
-
-    // ── Still waiting for buffer/load ──
-    if (_snap.loading) {
-      _loadPollCount++;
-
-      // Check MULTIPLE indicators that the player is ready:
-      // 1. isLoaded (official) — not always reliable on older iOS
-      // 2. duration > 0 — alternative indicator that metadata loaded
-      const ready = p.isLoaded || p.duration > 0;
-
-      if (ready) {
-        try {
-          p.play();
-          set({ playing: true, loading: false, duration: p.duration > 0 ? p.duration : 0 });
-        } catch (e) {
-          console.warn("[Voice] deferred play() failed:", e);
-          set({ loading: false });
-          stopPoll();
-        }
-        return;
-      }
-
-      // Timeout: give up after MAX_LOAD_POLLS
-      if (_loadPollCount >= MAX_LOAD_POLLS) {
-        console.warn("[Voice] Loading timed out after", MAX_LOAD_POLLS * 80, "ms");
-        set({ loading: false });
-        stopPoll();
-        // Dispose the broken player
-        try { _player?.pause(); } catch { /* ignore */ }
-        try { _player?.remove(); } catch { /* ignore */ }
-        _player = null;
-      }
-      return;
-    }
-
-    // ── Playing state tracking ──
     const playing = p.playing;
     const ct = p.currentTime;
     const dur = p.duration;
 
-    // Detect natural end
+    // ── Transition from loading → playing ──
+    if (_snap.loading && (playing || dur > 0)) {
+      set({ playing, loading: false, duration: dur, currentTime: ct });
+      return;
+    }
+
+    // ── Detect natural end of playback ──
     if (_snap.playing && !playing && dur > 0 && ct >= dur - 0.15) {
-      p.seekTo(0).catch(() => {});
+      try { p.seekTo(0); } catch { /* ignore */ }
       set({ playing: false, currentTime: 0 });
       stopPoll();
       return;
     }
 
+    // ── Regular state sync ──
     if (
       _snap.playing !== playing ||
       Math.abs(_snap.currentTime - ct) > 0.04 ||
@@ -169,6 +138,57 @@ function startNativePoll() {
 
     if (!playing && !_snap.loading) stopPoll();
   }, 80);
+}
+
+function destroyPlayer() {
+  if (_player) {
+    try { _player.pause(); } catch { /* ignore */ }
+    try { _player.remove(); } catch { /* ignore */ }
+    _player = null;
+  }
+  stopPoll();
+}
+
+async function createAndPlayNative(url: string): Promise<void> {
+  if (!expoAudio) return;
+
+  set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
+
+  // Create player — try string URI first (most reliable), then object form
+  try {
+    _player = expoAudio.createAudioPlayer(url) as unknown as ExpoPlayer;
+  } catch {
+    try {
+      _player = expoAudio.createAudioPlayer({ uri: url }) as unknown as ExpoPlayer;
+    } catch {
+      set({ loading: false });
+      return;
+    }
+  }
+
+  if (!_player) {
+    set({ loading: false });
+    return;
+  }
+
+  // Call play() exactly ONCE — expo-audio will buffer internally and start
+  // when ready. Calling play() multiple times can cause iOS audio conflicts.
+  try {
+    _player.play();
+  } catch { /* poll will detect state */ }
+
+  // Start state tracking (observe only, no play calls)
+  startNativePoll();
+
+  // Safety timeout: if still loading after 8s, give up
+  const savedUrl = url;
+  setTimeout(() => {
+    if (_snap.url === savedUrl && _snap.loading) {
+      console.warn("[Voice] Loading timed out after 8s");
+      set({ loading: false, playing: false });
+      destroyPlayer();
+    }
+  }, 8000);
 }
 
 async function playNative(url: string): Promise<void> {
@@ -187,77 +207,27 @@ async function playNative(url: string): Promise<void> {
       set({ playing: false });
       stopPoll();
     } else {
-      // Resume
+      // Resume from current position (or restart if at end)
       if (_snap.duration > 0 && _snap.currentTime >= _snap.duration - 0.2) {
-        try { await _player.seekTo(0); } catch { /* ignore */ }
+        try { _player.seekTo(0); } catch { /* ignore */ }
         set({ currentTime: 0 });
       }
       try {
         _player.play();
         set({ playing: true });
         startNativePoll();
-      } catch (e) {
-        console.warn("[Voice] resume play() failed:", e);
+      } catch {
+        // Player might be dead — recreate
+        destroyPlayer();
+        await createAndPlayNative(url);
       }
     }
     return;
   }
 
-  // ── New URL: dispose old player entirely ──
-  if (_player) {
-    try { _player.pause(); } catch { /* ignore */ }
-    try { _player.remove(); } catch { /* ignore */ }
-    _player = null;
-  }
-
-  set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
-
-  // Create a fresh player
-  try {
-    // Try both source formats — some expo-audio versions prefer string, others object
-    _player = expoAudio.createAudioPlayer({ uri: url }) as unknown as ExpoPlayer;
-  } catch (e1) {
-    console.warn("[Voice] createAudioPlayer({uri}) failed, trying string:", e1);
-    try {
-      _player = expoAudio.createAudioPlayer(url) as unknown as ExpoPlayer;
-    } catch (e2) {
-      console.warn("[Voice] createAudioPlayer(string) also failed:", e2);
-      set({ loading: false });
-      return;
-    }
-  }
-
-  if (!_player) {
-    set({ loading: false });
-    return;
-  }
-
-  // Start polling — the loop will auto-detect isLoaded/duration and call play()
-  startNativePoll();
-
-  // Also try eager play after a short delay.
-  // On some iOS versions, play() queues internally and starts when buffered.
-  const playerRef = _player;
-  setTimeout(() => {
-    if (playerRef === _player && _snap.loading && _player) {
-      try {
-        _player.play();
-      } catch {
-        /* poll will handle it */
-      }
-    }
-  }, 250);
-
-  // Second eager attempt slightly later
-  setTimeout(() => {
-    if (playerRef === _player && _snap.loading && _player) {
-      try {
-        _player.play();
-      } catch {
-        /* poll will handle it */
-      }
-    }
-  }, 800);
+  // ── New URL: dispose old player, create fresh ──
+  destroyPlayer();
+  await createAndPlayNative(url);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -394,6 +364,9 @@ function togglePlay(url: string): void {
   if (!url || _busy) return;
   _busy = true;
 
+  // Safety: auto-release _busy after 10s to prevent permanent lockout
+  const busyTimer = setTimeout(() => { _busy = false; }, 10000);
+
   if (IS_WEB) {
     try {
       playWeb(url);
@@ -401,6 +374,7 @@ function togglePlay(url: string): void {
       console.warn("[Voice] web play error:", e);
     } finally {
       _busy = false;
+      clearTimeout(busyTimer);
     }
     return;
   }
@@ -413,6 +387,7 @@ function togglePlay(url: string): void {
     })
     .finally(() => {
       _busy = false;
+      clearTimeout(busyTimer);
     });
 }
 
