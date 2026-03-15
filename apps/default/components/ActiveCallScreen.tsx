@@ -25,68 +25,46 @@ interface ActiveCallScreenProps {
   callId: Id<"calls">;
 }
 
-type ConnectionState = "idle" | "fetching-token" | "connecting" | "connected" | "error";
+type Phase = "ringing" | "connecting" | "live" | "ended" | "error";
 
 export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const call = useQuery(api.calls.getCallDetails, { callId });
   const endCallMutation = useMutation(api.calls.endCall);
-  const toggleMuteMutation = useMutation(api.calls.toggleMute);
-  const toggleVideoMutation = useMutation(api.calls.toggleVideo);
   const getCallToken = useAction(api.calls.getCallToken);
   const me = useQuery(api.users.me);
   const { minimizeCall } = useCallContext();
 
-  const [elapsed, setElapsed] = useState(0);
-  const [isSpeaker, setIsSpeaker] = useState(false);
-  const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
+  const [phase, setPhase] = useState<Phase>("ringing");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const livekitRef = useRef<LiveKitCallViewHandle>(null);
   const tokenFetchedRef = useRef(false);
-
-  // Duration timer
-  useEffect(() => {
-    if (call?.status === "active" && call.answeredAt) {
-      setElapsed(Math.floor((Date.now() - call.answeredAt) / 1000));
-      timerRef.current = setInterval(() => {
-        setElapsed((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [call?.status, call?.answeredAt]);
 
   // Connect to LiveKit when call becomes active
   useEffect(() => {
     if (
       call?.status === "active" &&
-      connectionState === "idle" &&
+      phase === "ringing" &&
       !tokenFetchedRef.current
     ) {
       tokenFetchedRef.current = true;
-      setConnectionState("fetching-token");
+      setPhase("connecting");
 
       getCallToken({ callId })
         .then(({ token, wsUrl }) => {
-          setConnectionState("connecting");
           // Short delay to let WebView initialize
           setTimeout(() => {
             livekitRef.current?.connect(wsUrl, token, call.type === "video");
-          }, 1000);
+          }, 800);
         })
         .catch((err: unknown) => {
           console.error("Failed to get call token:", err);
-          setConnectionState("error");
-          setErrorMsg(
-            err instanceof Error ? err.message : "Token-Fehler"
-          );
+          setPhase("error");
+          setErrorMsg(err instanceof Error ? err.message : "Token-Fehler");
         });
     }
-  }, [call?.status, call?.type, callId, connectionState, getCallToken]);
+  }, [call?.status, call?.type, callId, phase, getCallToken]);
 
-  // Disconnect LiveKit when call ends
+  // Watch for call ending in DB
   useEffect(() => {
     if (
       call &&
@@ -95,6 +73,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
         call.status === "missed")
     ) {
       livekitRef.current?.disconnect();
+      setPhase("ended");
       const timeout = setTimeout(() => {
         if (router.canGoBack()) router.back();
       }, 1500);
@@ -102,18 +81,38 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     }
   }, [call?.status]);
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
+  // WebView says user pressed hang up
+  const handleHangUp = useCallback(async () => {
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setPhase("ended");
+    try {
+      await endCallMutation({ callId });
+    } catch (e) {
+      console.error("Failed to end call", e);
+    }
+  }, [callId, endCallMutation]);
 
-  const myParticipant = call?.participants.find((p) => p.userId === me?._id);
-  const otherParticipants =
-    call?.participants.filter((p) => p.userId !== me?._id) ?? [];
-  const isMuted = myParticipant?.isMuted ?? false;
-  const isVideoOff = myParticipant?.isVideoOff ?? true;
-  const isVideoCall = call?.type === "video";
+  const handleLiveKitConnected = useCallback(() => {
+    setPhase("live");
+  }, []);
+
+  const handleLiveKitDisconnected = useCallback(() => {
+    // If we didn't initiate the hangup, the remote side ended
+    if (phase === "live") {
+      setPhase("ended");
+      endCallMutation({ callId }).catch(() => {});
+      setTimeout(() => {
+        if (router.canGoBack()) router.back();
+      }, 1500);
+    }
+  }, [phase, callId, endCallMutation]);
+
+  const handleLiveKitError = useCallback((message: string) => {
+    console.error("LiveKit error:", message);
+    setPhase("error");
+    setErrorMsg(message);
+  }, []);
 
   const handleMinimize = useCallback(() => {
     if (Platform.OS !== "web")
@@ -122,351 +121,149 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (router.canGoBack()) router.back();
   }, [callId, minimizeCall]);
 
-  const handleEndCall = useCallback(async () => {
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    livekitRef.current?.disconnect();
-    try {
-      await endCallMutation({ callId });
-    } catch (e) {
-      console.error("Failed to end call", e);
-    }
-  }, [callId, endCallMutation]);
-
-  const handleToggleMute = useCallback(async () => {
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    livekitRef.current?.toggleMute();
-    try {
-      await toggleMuteMutation({ callId });
-    } catch (e) {
-      console.error("Failed to toggle mute", e);
-    }
-  }, [callId, toggleMuteMutation]);
-
-  const handleToggleVideo = useCallback(async () => {
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    livekitRef.current?.toggleVideo();
-    try {
-      await toggleVideoMutation({ callId });
-    } catch (e) {
-      console.error("Failed to toggle video", e);
-    }
-  }, [callId, toggleVideoMutation]);
-
-  const handleFlipCamera = useCallback(() => {
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    livekitRef.current?.flipCamera();
-  }, []);
-
-  const handleToggleSpeaker = useCallback(() => {
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsSpeaker((prev) => !prev);
-  }, []);
-
-  const handleLiveKitConnected = useCallback(() => {
-    setConnectionState("connected");
-  }, []);
-
-  const handleLiveKitDisconnected = useCallback(() => {
-    setConnectionState("idle");
-  }, []);
-
-  const handleLiveKitError = useCallback((message: string) => {
-    console.error("LiveKit error:", message);
-    setErrorMsg(message);
-  }, []);
-
+  // Loading state
   if (!call) {
     return (
       <View style={styles.container}>
         <ActivityIndicator color="#FFF" size="large" />
-        <Text style={styles.connectingText}>Verbinde…</Text>
+        <Text style={styles.statusText}>Verbinde…</Text>
       </View>
     );
   }
 
-  const isEnded =
-    call.status === "ended" ||
-    call.status === "declined" ||
-    call.status === "missed";
+  const otherParticipants =
+    call.participants.filter((p) => p.userId !== me?._id) ?? [];
+  const mainOther = otherParticipants[0];
   const displayName = call.groupName ?? call.callerName;
-  const mainAvatar = otherParticipants[0];
-  const connectedCount = otherParticipants.filter(
-    (p) => p.status === "connected"
-  ).length;
 
-  const statusLabel = isEnded
-    ? "Anruf beendet"
-    : connectionState === "connected" && call.status === "active"
-      ? formatTime(elapsed)
-      : call.status === "ringing"
-        ? "Klingelt…"
-        : connectionState === "fetching-token" || connectionState === "connecting"
-          ? "Verbinde LiveKit…"
-          : connectionState === "error"
-            ? errorMsg ?? "Fehler"
-            : "Verbinde…";
+  // Ringing screen (before LiveKit connects)
+  if (phase === "ringing" || phase === "connecting") {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.ringingContent} edges={["top", "bottom"]}>
+          <View style={styles.ringingTop}>
+            <Text style={styles.ringingLabel}>
+              {call.type === "video" ? "Videoanruf" : "Anruf"}
+            </Text>
+            <Text style={styles.ringingName}>{displayName}</Text>
+            <Text style={styles.ringingStatus}>
+              {phase === "connecting" ? "Verbinde…" : "Klingelt…"}
+            </Text>
+          </View>
 
-  const showLiveKitVideo = isVideoCall && call.status === "active";
+          <View style={styles.ringingCenter}>
+            {call.groupId && otherParticipants.length > 1 ? (
+              <View style={styles.avatarRow}>
+                {otherParticipants.slice(0, 4).map((p) => (
+                  <Avatar
+                    key={p._id}
+                    uri={p.userAvatarUrl}
+                    name={p.userName}
+                    size={72}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Avatar
+                uri={mainOther?.userAvatarUrl}
+                name={mainOther?.userName ?? displayName}
+                size={140}
+              />
+            )}
+            {phase === "connecting" && (
+              <ActivityIndicator
+                color="rgba(255,255,255,0.4)"
+                style={{ marginTop: 24 }}
+              />
+            )}
+          </View>
 
+          <View style={styles.ringingBottom}>
+            <TouchableOpacity
+              style={styles.endCallBtn}
+              onPress={handleHangUp}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
+            </TouchableOpacity>
+            <Text style={styles.endCallLabel}>Auflegen</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // Error state
+  if (phase === "error") {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.ringingContent} edges={["top", "bottom"]}>
+          <View style={styles.ringingCenter}>
+            <SymbolView
+              name="exclamationmark.triangle.fill"
+              size={48}
+              tintColor="#EF4444"
+            />
+            <Text style={styles.errorText}>{errorMsg ?? "Verbindungsfehler"}</Text>
+          </View>
+          <View style={styles.ringingBottom}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => router.canGoBack() && router.back()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backBtnText}>Zurück</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // Ended state
+  if (phase === "ended") {
+    return (
+      <View style={styles.container}>
+        <View style={styles.ringingCenter}>
+          <SymbolView
+            name="phone.down.fill"
+            size={48}
+            tintColor="rgba(255,255,255,0.4)"
+          />
+          <Text style={styles.endedText}>Anruf beendet</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Live call — WebView with LiveKit's own controls
   return (
     <View style={styles.container}>
-      {/* LiveKit WebView – invisible for audio, visible for video */}
       <LiveKitCallView
         ref={livekitRef}
-        isVideoCall={isVideoCall ?? false}
         onConnected={handleLiveKitConnected}
         onDisconnected={handleLiveKitDisconnected}
+        onHangUp={handleHangUp}
         onError={handleLiveKitError}
       />
 
+      {/* Minimal native overlay: just a minimize button */}
       <SafeAreaView
-        style={[
-          styles.safeArea,
-          showLiveKitVideo && styles.overlayOnVideo,
-        ]}
-        edges={["top", "bottom"]}
+        style={styles.minimizeOverlay}
+        edges={["top"]}
         pointerEvents="box-none"
       >
-        {/* Top bar */}
-        <View style={styles.topBar} pointerEvents="box-none">
-          <TouchableOpacity
-            onPress={handleMinimize}
-            style={styles.minimizeBtn}
-            activeOpacity={0.7}
-          >
-            <SymbolView
-              name="chevron.down"
-              size={20}
-              tintColor="rgba(255,255,255,0.8)"
-            />
-          </TouchableOpacity>
-          <View style={styles.topInfo}>
-            <Text style={styles.topName} numberOfLines={1}>
-              {displayName}
-            </Text>
-            <Text style={styles.topStatus}>{statusLabel}</Text>
-          </View>
-          <View style={{ width: 40 }} />
-        </View>
-
-        {/* Center: Avatar (audio) or spacer (video) */}
-        {!showLiveKitVideo && (
-          <View style={styles.centerArea}>
-            {call.groupId && otherParticipants.length > 1 ? (
-              <View style={styles.avatarGrid}>
-                {otherParticipants
-                  .filter((p) => p.status === "connected")
-                  .map((p) => (
-                    <View key={p._id} style={styles.gridItem}>
-                      <Avatar
-                        uri={p.userAvatarUrl}
-                        name={p.userName}
-                        size={80}
-                      />
-                      <Text style={styles.gridName} numberOfLines={1}>
-                        {p.userName}
-                      </Text>
-                      {p.isMuted && (
-                        <View style={styles.muteBadge}>
-                          <SymbolView
-                            name="mic.slash.fill"
-                            size={12}
-                            tintColor="#FFF"
-                          />
-                        </View>
-                      )}
-                    </View>
-                  ))}
-              </View>
-            ) : (
-              <View style={styles.singleAvatar}>
-                <Avatar
-                  uri={mainAvatar?.userAvatarUrl}
-                  name={mainAvatar?.userName ?? displayName}
-                  size={140}
-                />
-                {connectionState === "connecting" ||
-                connectionState === "fetching-token" ? (
-                  <ActivityIndicator
-                    color="rgba(255,255,255,0.5)"
-                    style={{ marginTop: 16 }}
-                  />
-                ) : null}
-                {call.groupId && (
-                  <Text style={styles.groupParticipantCount}>
-                    {connectedCount} Teilnehmer
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Spacer for video calls so controls stay at bottom */}
-        {showLiveKitVideo && <View style={{ flex: 1 }} />}
-
-        {/* Bottom controls */}
-        {!isEnded && (
-          <View style={styles.controls}>
-            {isVideoCall ? (
-              <>
-                <View style={styles.controlRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.controlBtn,
-                      isMuted && styles.controlBtnActive,
-                    ]}
-                    onPress={handleToggleMute}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name={isMuted ? "mic.slash.fill" : "mic.fill"}
-                      size={22}
-                      tintColor={isMuted ? "#000" : "#FFF"}
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.controlBtn,
-                      isVideoOff && styles.controlBtnActive,
-                    ]}
-                    onPress={handleToggleVideo}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name={isVideoOff ? "video.slash.fill" : "video.fill"}
-                      size={22}
-                      tintColor={isVideoOff ? "#000" : "#FFF"}
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.endCallBtn}
-                    onPress={handleEndCall}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name="phone.down.fill"
-                      size={26}
-                      tintColor="#FFF"
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.controlBtn}
-                    onPress={handleFlipCamera}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name="camera.rotate.fill"
-                      size={22}
-                      tintColor="#FFF"
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.controlBtn,
-                      isSpeaker && styles.controlBtnActive,
-                    ]}
-                    onPress={handleToggleSpeaker}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name={
-                        isSpeaker
-                          ? "speaker.wave.3.fill"
-                          : "speaker.fill"
-                      }
-                      size={22}
-                      tintColor={isSpeaker ? "#000" : "#FFF"}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.labelRow}>
-                  <Text style={styles.controlLabel}>Stumm</Text>
-                  <Text style={styles.controlLabel}>Video</Text>
-                  <Text style={[styles.controlLabel, { width: 68 }]}>
-                    {" "}
-                  </Text>
-                  <Text style={styles.controlLabel}>Wechseln</Text>
-                  <Text style={styles.controlLabel}>Lautspr.</Text>
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={styles.controlRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.controlBtn,
-                      isMuted && styles.controlBtnActive,
-                    ]}
-                    onPress={handleToggleMute}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name={isMuted ? "mic.slash.fill" : "mic.fill"}
-                      size={22}
-                      tintColor={isMuted ? "#000" : "#FFF"}
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.endCallBtn}
-                    onPress={handleEndCall}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name="phone.down.fill"
-                      size={26}
-                      tintColor="#FFF"
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.controlBtn,
-                      isSpeaker && styles.controlBtnActive,
-                    ]}
-                    onPress={handleToggleSpeaker}
-                    activeOpacity={0.7}
-                  >
-                    <SymbolView
-                      name={
-                        isSpeaker
-                          ? "speaker.wave.3.fill"
-                          : "speaker.fill"
-                      }
-                      size={22}
-                      tintColor={isSpeaker ? "#000" : "#FFF"}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.labelRow}>
-                  <Text style={styles.controlLabel}>Stumm</Text>
-                  <Text style={[styles.controlLabel, { width: 68 }]}>
-                    {" "}
-                  </Text>
-                  <Text style={styles.controlLabel}>Lautspr.</Text>
-                </View>
-              </>
-            )}
-          </View>
-        )}
-
-        {isEnded && (
-          <View style={styles.endedContainer}>
-            <Text style={styles.endedText}>Anruf beendet</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          onPress={handleMinimize}
+          style={styles.minimizeBtn}
+          activeOpacity={0.7}
+        >
+          <SymbolView
+            name="chevron.down"
+            size={18}
+            tintColor="rgba(255,255,255,0.8)"
+          />
+        </TouchableOpacity>
       </SafeAreaView>
     </View>
   );
@@ -475,152 +272,116 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1A1A1A",
+    backgroundColor: "#111",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  safeArea: {
+  statusText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 17,
+    marginTop: 16,
+  },
+
+  // Ringing
+  ringingContent: {
     flex: 1,
     justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
   },
-  overlayOnVideo: {
+  ringingTop: {
+    alignItems: "center",
+    paddingTop: 40,
+  },
+  ringingLabel: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.4)",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  ringingName: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#FFF",
+    marginTop: 8,
+  },
+  ringingStatus: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.5)",
+    marginTop: 6,
+  },
+  ringingCenter: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+  },
+  avatarRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  ringingBottom: {
+    alignItems: "center",
+    paddingBottom: 40,
+    gap: 10,
+  },
+  endCallBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#EF4444",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  endCallLabel: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.5)",
+  },
+
+  // Error
+  errorText: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.6)",
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  backBtn: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 28,
+  },
+  backBtnText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
+  },
+
+  // Ended
+  endedText: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.5)",
+    marginTop: 12,
+  },
+
+  // Minimize overlay on live call
+  minimizeOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    zIndex: 10,
-  },
-  connectingText: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 17,
-    textAlign: "center",
-    marginTop: 16,
-  },
-
-  // Top bar
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
-    gap: 12,
+    flexDirection: "row",
+    zIndex: 50,
   },
   minimizeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  topInfo: {
-    flex: 1,
-    alignItems: "center",
-  },
-  topName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#FFF",
-  },
-  topStatus: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.5)",
-    marginTop: 2,
-  },
-
-  // Center
-  centerArea: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  singleAvatar: {
-    alignItems: "center",
-    gap: 20,
-  },
-  groupParticipantCount: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.5)",
-  },
-  avatarGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 20,
-    paddingHorizontal: 30,
-  },
-  gridItem: {
-    alignItems: "center",
-    gap: 8,
-  },
-  gridName: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.7)",
-    maxWidth: 80,
-    textAlign: "center",
-  },
-  muteBadge: {
-    position: "absolute",
-    bottom: 22,
-    right: -4,
-    backgroundColor: "#EF4444",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Controls
-  controls: {
-    paddingBottom: 20,
-    alignItems: "center",
-  },
-  controlRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 20,
-  },
-  controlBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  controlBtnActive: {
-    backgroundColor: "#FFFFFF",
-  },
-  endCallBtn: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#EF4444",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 20,
-    marginTop: 10,
-  },
-  controlLabel: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.5)",
-    textAlign: "center",
-    width: 52,
-  },
-
-  endedContainer: {
-    paddingBottom: 60,
-    alignItems: "center",
-  },
-  endedText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.6)",
   },
 });
