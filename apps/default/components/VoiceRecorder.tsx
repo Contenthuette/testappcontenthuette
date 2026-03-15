@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -18,6 +19,8 @@ import Animated, {
 import {
   useAudioRecorder,
   useAudioRecorderState,
+  useAudioPlayer,
+  useAudioPlayerStatus,
   RecordingPresets,
   AudioModule,
   setAudioModeAsync,
@@ -36,23 +39,96 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-type RecorderPhase = "idle" | "recording" | "stopped" | "error";
+type RecorderPhase = "idle" | "recording" | "stopped" | "previewing" | "error";
 
 const BAR_COUNT = 28;
 
-/** Recording options with metering enabled */
 const RECORD_OPTIONS = {
   ...RecordingPresets.HIGH_QUALITY,
   isMeteringEnabled: true,
 };
 
-/** Normalise dBFS metering (typically -160…0) to a bar height in px. */
 function meteringToHeight(metering: number | undefined): number {
   if (metering === undefined || metering === null) return 4;
-  // Map -50 dB … 0 dB  →  4 px … 22 px
   const clamped = Math.max(-50, Math.min(0, metering));
-  const normalised = (clamped + 50) / 50; // 0 … 1
+  const normalised = (clamped + 50) / 50;
   return 4 + normalised * 18;
+}
+
+/* ─── Preview player (only mounted in "previewing" phase) ─── */
+function PreviewPlayer({
+  uri,
+  bars,
+  duration,
+  onFinish,
+  onPause,
+}: {
+  uri: string;
+  bars: number[];
+  duration: number;
+  onFinish: () => void;
+  onPause: () => void;
+}) {
+  const player = useAudioPlayer(uri);
+  const status = useAudioPlayerStatus(player);
+  const [autoPlayed, setAutoPlayed] = useState(false);
+
+  useEffect(() => {
+    if (status.isLoaded && !autoPlayed) {
+      setAutoPlayed(true);
+      setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false })
+        .catch(() => {})
+        .then(() => {
+          try { player.play(); } catch { /* ignore */ }
+        });
+    }
+  }, [status.isLoaded, autoPlayed, player]);
+
+  useEffect(() => {
+    if (status.didJustFinish) {
+      onFinish();
+    }
+  }, [status.didJustFinish, onFinish]);
+
+  const effectiveDur = status.duration > 0 ? status.duration : duration;
+  const progress = effectiveDur > 0 ? Math.min(status.currentTime / effectiveDur, 1) : 0;
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => {
+          try { player.pause(); } catch { /* ignore */ }
+          onPause();
+        }}
+        style={styles.previewPlayBtn}
+        activeOpacity={0.7}
+      >
+        {!status.isLoaded ? (
+          <ActivityIndicator size="small" color="#000" />
+        ) : (
+          <SymbolView name="pause.fill" size={14} tintColor="#000" />
+        )}
+      </TouchableOpacity>
+      <View style={styles.waveform}>
+        {bars.map((h, i) => (
+          <View
+            key={`p-${i}`}
+            style={[
+              styles.waveBar,
+              {
+                height: h,
+                backgroundColor:
+                  i / bars.length <= progress ? "#000" : "#D4D4D8",
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={styles.previewTime}>
+        {status.playing ? formatTime(status.currentTime) : formatTime(effectiveDur)}
+      </Text>
+    </>
+  );
 }
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
@@ -61,25 +137,20 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [errorMsg, setErrorMsg] = useState("");
   const hasStartedRef = useRef(false);
 
-  // expo-audio hooks – metering enabled!
   const audioRecorder = useAudioRecorder(RECORD_OPTIONS);
   const recorderState = useAudioRecorderState(audioRecorder, 100);
 
-  // ── Real-time waveform from metering ──
   const levelsRef = useRef<number[]>([]);
   const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(4));
   const frozenBarsRef = useRef<number[]>([]);
 
-  // Collect metering values every ~100 ms while recording
   useEffect(() => {
     if (phase !== "recording") return;
     const h = meteringToHeight(recorderState.metering);
     levelsRef.current.push(h);
-    // Keep buffer bounded
     if (levelsRef.current.length > BAR_COUNT * 10) {
       levelsRef.current = levelsRef.current.slice(-BAR_COUNT * 2);
     }
-    // Take last BAR_COUNT values, pad left if not enough
     const recent = levelsRef.current.slice(-BAR_COUNT);
     const padCount = Math.max(0, BAR_COUNT - recent.length);
     const padded = padCount > 0
@@ -88,7 +159,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     setLiveBars(padded);
   }, [recorderState.durationMillis, recorderState.metering, phase]);
 
-  // Elapsed time from recorder state (more accurate than manual timer)
   const elapsed = Math.floor((recorderState.durationMillis ?? 0) / 1000);
 
   // Pulsing red dot
@@ -98,16 +168,15 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       dotScale.value = withRepeat(
         withSequence(
           withTiming(1.3, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) })
+          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
         ),
         -1,
-        true
+        true,
       );
     } else {
       dotScale.value = withTiming(1, { duration: 200 });
     }
   }, [phase, dotScale]);
-
   const dotAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: dotScale.value }],
   }));
@@ -120,19 +189,11 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         setErrorMsg("Mikrofon-Zugriff verweigert");
         return;
       }
-
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        allowsRecording: true,
-      });
-
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       levelsRef.current = [];
       setLiveBars(Array(BAR_COUNT).fill(4));
-
-      // Pass options with metering to prepareToRecordAsync too
       await audioRecorder.prepareToRecordAsync(RECORD_OPTIONS);
       audioRecorder.record();
-
       setPhase("recording");
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -183,7 +244,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     }
   }, [onCancel]);
 
-  // Auto-start on mount (once)
+  // Auto-start on mount
   useEffect(() => {
     if (!hasStartedRef.current) {
       hasStartedRef.current = true;
@@ -214,7 +275,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
         <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} activeOpacity={0.7} hitSlop={8}>
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
-
         <View style={styles.center}>
           <Animated.View style={[styles.redDot, dotAnimStyle]} />
           <View style={styles.waveform}>
@@ -223,17 +283,13 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
                 key={`w-${i}`}
                 style={[
                   styles.waveBar,
-                  {
-                    height: h,
-                    backgroundColor: i < liveBars.length - 4 ? "#000" : "#9CA3AF",
-                  },
+                  { height: h, backgroundColor: i < liveBars.length - 4 ? "#000" : "#9CA3AF" },
                 ]}
               />
             ))}
           </View>
           <Text style={styles.timer}>{formatTime(elapsed)}</Text>
         </View>
-
         <TouchableOpacity onPress={stopRecording} style={styles.stopBtn} activeOpacity={0.7} hitSlop={8}>
           <View style={styles.stopSquare} />
         </TouchableOpacity>
@@ -241,21 +297,46 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     );
   }
 
-  // === STOPPED / REVIEW STATE ===
-  if (phase === "stopped") {
-    const previewBars =
-      frozenBarsRef.current.length > 0
-        ? frozenBarsRef.current
-        : liveBars;
-
+  // === PREVIEWING STATE (player mounted) ===
+  if (phase === "previewing" && audioRecorder.uri) {
+    const previewBars = frozenBarsRef.current.length > 0 ? frozenBarsRef.current : liveBars;
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
         <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} activeOpacity={0.7} hitSlop={8}>
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
-
         <View style={styles.center}>
-          <SymbolView name="waveform" size={16} tintColor="#000" />
+          <PreviewPlayer
+            uri={audioRecorder.uri}
+            bars={previewBars}
+            duration={recordedDuration}
+            onFinish={() => setPhase("stopped")}
+            onPause={() => setPhase("stopped")}
+          />
+        </View>
+        <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7} hitSlop={8}>
+          <SymbolView name="arrow.up" size={15} tintColor="#FFF" />
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  // === STOPPED / REVIEW STATE ===
+  if (phase === "stopped") {
+    const previewBars = frozenBarsRef.current.length > 0 ? frozenBarsRef.current : liveBars;
+    return (
+      <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
+        <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} activeOpacity={0.7} hitSlop={8}>
+          <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
+        </TouchableOpacity>
+        <View style={styles.center}>
+          <TouchableOpacity
+            onPress={() => setPhase("previewing")}
+            style={styles.previewPlayBtn}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="play.fill" size={14} tintColor="#000" />
+          </TouchableOpacity>
           <View style={styles.waveform}>
             {previewBars.map((h, i) => (
               <View
@@ -266,7 +347,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           </View>
           <Text style={styles.previewTime}>{formatTime(recordedDuration)}</Text>
         </View>
-
         <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7} hitSlop={8}>
           <SymbolView name="arrow.up" size={15} tintColor="#FFF" />
         </TouchableOpacity>
@@ -352,6 +432,14 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 2,
     backgroundColor: "#FFF",
+  },
+  previewPlayBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   previewTime: {
     fontSize: 12,

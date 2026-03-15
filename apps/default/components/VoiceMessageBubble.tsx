@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect, Component } from "react";
+import React, { useMemo, useState, useCallback, useEffect, Component } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { SymbolView } from "@/components/Icon";
@@ -51,33 +51,77 @@ class AudioErrorBoundary extends Component<EBProps, EBState> {
 let _modeReady = false;
 async function ensurePlaybackMode() {
   if (_modeReady) return;
-  await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-  _modeReady = true;
+  try {
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    _modeReady = true;
+  } catch {
+    /* ignore – best effort */
+  }
 }
 
-/* ─── Inner player (hook-based) ─── */
-function VoiceMessageBubbleInner({
+/* ─── Waveform bars sub-component ─── */
+function WaveformBars({ bars, progress, mine }: { bars: number[]; progress: number; mine: boolean }) {
+  return (
+    <View style={styles.waveContainer}>
+      <View style={styles.bars}>
+        {bars.map((h, i) => (
+          <View
+            key={`bar-${i}`}
+            style={[
+              styles.bar,
+              {
+                height: h,
+                backgroundColor:
+                  i / bars.length <= progress
+                    ? (mine ? "#FFFFFF" : "#000000")
+                    : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ─── Active player (only mounted when user taps play) ─── */
+function ActiveVoicePlayer({
   audioUrl,
-  duration: durationSec,
-  durationMs,
-  isMine,
-  isMe,
+  bars,
+  mine,
+  totalDuration,
   timestamp,
-}: VoiceMessageBubbleProps) {
-  const mine = isMine ?? isMe ?? false;
-  const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
-
-  // Hook-based player – auto-cleans up on unmount
-  const player = useAudioPlayer({ uri: audioUrl }, { updateInterval: 200 });
+  onDeactivate,
+}: {
+  audioUrl: string;
+  bars: number[];
+  mine: boolean;
+  totalDuration: number;
+  timestamp?: string;
+  onDeactivate: () => void;
+}) {
+  // Pass URL string directly as AudioSource
+  const player = useAudioPlayer(audioUrl);
   const status = useAudioPlayerStatus(player);
-  const [error, setError] = useState(false);
+  const [autoPlayed, setAutoPlayed] = useState(false);
 
-  // Reset position when playback finishes
+  // Auto-play once loaded
+  useEffect(() => {
+    if (status.isLoaded && !autoPlayed) {
+      setAutoPlayed(true);
+      ensurePlaybackMode().then(() => {
+        try { player.play(); } catch { /* ignore */ }
+      });
+    }
+  }, [status.isLoaded, autoPlayed, player]);
+
+  // On finish → deactivate back to static bubble
   useEffect(() => {
     if (status.didJustFinish) {
       try { player.seekTo(0); } catch { /* ignore */ }
+      onDeactivate();
     }
-  }, [status.didJustFinish, player]);
+  }, [status.didJustFinish, player, onDeactivate]);
 
   const togglePlay = useCallback(async () => {
     try {
@@ -87,37 +131,21 @@ function VoiceMessageBubbleInner({
       } else {
         player.play();
       }
-    } catch (err) {
-      console.warn("VoiceMessageBubble play error:", err);
-      setError(true);
+    } catch {
+      onDeactivate();
     }
-  }, [player, status.playing]);
+  }, [player, status.playing, onDeactivate]);
 
   const effectiveDuration = status.duration > 0 ? status.duration : totalDuration;
   const progress = effectiveDuration > 0 ? Math.min(status.currentTime / effectiveDuration, 1) : 0;
   const displayTime = status.playing
     ? formatTime(status.currentTime)
     : formatTime(effectiveDuration);
-  const bars = useMemo(() => generateStableBars(hashString(audioUrl)), [audioUrl]);
-
-  if (error) {
-    return (
-      <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
-        <View style={styles.playBtn}>
-          <SymbolView name="exclamationmark.triangle" size={14} tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"} />
-        </View>
-        <Text style={[styles.errorLabel, { color: mine ? "rgba(255,255,255,0.6)" : "#A1A1AA" }]}>Audio nicht verfügbar</Text>
-        {timestamp ? <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.5)" : "#A1A1AA" }]}>{timestamp}</Text> : null}
-      </View>
-    );
-  }
-
-  const isLoading = !status.isLoaded && !status.playing;
 
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        {isLoading ? (
+        {!status.isLoaded ? (
           <ActivityIndicator size="small" color={mine ? "#FFFFFF" : "#000000"} />
         ) : (
           <SymbolView
@@ -127,27 +155,7 @@ function VoiceMessageBubbleInner({
           />
         )}
       </TouchableOpacity>
-
-      <View style={styles.waveContainer}>
-        <View style={styles.bars}>
-          {bars.map((h, i) => (
-            <View
-              key={`bar-${i}`}
-              style={[
-                styles.bar,
-                {
-                  height: h,
-                  backgroundColor:
-                    i / bars.length <= progress
-                      ? (mine ? "#FFFFFF" : "#000000")
-                      : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
-                },
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-
+      <WaveformBars bars={bars} progress={progress} mine={mine} />
       <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
         {displayTime}
       </Text>
@@ -155,34 +163,52 @@ function VoiceMessageBubbleInner({
   );
 }
 
-/* ─── Fallback ─── */
-function VoiceMessageFallback({
-  durationMs,
-  duration: durationSec,
-  isMine,
-  isMe,
-}: Omit<VoiceMessageBubbleProps, "audioUrl">) {
-  const mine = isMine ?? isMe ?? false;
-  const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
-  const bars = useMemo(() => generateStableBars(12345), []);
+/* ─── Static bubble (no audio hooks, shown by default) ─── */
+function StaticVoiceBubble({
+  bars,
+  mine,
+  totalDuration,
+  timestamp,
+  onPlay,
+  hasError,
+}: {
+  bars: number[];
+  mine: boolean;
+  totalDuration: number;
+  timestamp?: string;
+  onPlay?: () => void;
+  hasError?: boolean;
+}) {
+  if (hasError) {
+    return (
+      <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
+        <View style={styles.playBtn}>
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={14}
+            tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"}
+          />
+        </View>
+        <Text style={[styles.errorLabel, { color: mine ? "rgba(255,255,255,0.6)" : "#A1A1AA" }]}>
+          Audio nicht verfügbar
+        </Text>
+        {timestamp ? (
+          <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.5)" : "#A1A1AA" }]}>
+            {timestamp}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
-      <View style={styles.playBtn}>
-        <SymbolView name="waveform" size={16} tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"} />
-      </View>
-      <View style={styles.waveContainer}>
-        <View style={styles.bars}>
-          {bars.map((h, i) => (
-            <View
-              key={`bar-${i}`}
-              style={[styles.bar, { height: h, backgroundColor: mine ? "rgba(255,255,255,0.25)" : "#E4E4E7" }]}
-            />
-          ))}
-        </View>
-      </View>
-      <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.5)" : "#A1A1AA" }]}>
-        {totalDuration > 0 ? formatTime(totalDuration) : "…"}
+      <TouchableOpacity onPress={onPlay} style={styles.playBtn} activeOpacity={0.7}>
+        <SymbolView name="play.fill" size={16} tintColor={mine ? "#FFFFFF" : "#000000"} />
+      </TouchableOpacity>
+      <WaveformBars bars={bars} progress={0} mine={mine} />
+      <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
+        {formatTime(totalDuration)}
       </Text>
     </View>
   );
@@ -190,13 +216,64 @@ function VoiceMessageFallback({
 
 /* ─── Public export ─── */
 export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
-  if (!props.audioUrl || props.audioUrl.length === 0) {
-    return <VoiceMessageFallback {...props} />;
+  const { audioUrl, duration, durationMs, isMine, isMe, timestamp } = props;
+  const mine = isMine ?? isMe ?? false;
+  const totalDuration = duration ?? (durationMs ? durationMs / 1000 : 0);
+  const bars = useMemo(() => generateStableBars(hashString(audioUrl || "x")), [audioUrl]);
+  const [active, setActive] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  // No URL → static fallback
+  if (!audioUrl || audioUrl.length === 0) {
+    return (
+      <StaticVoiceBubble
+        bars={bars}
+        mine={mine}
+        totalDuration={totalDuration}
+        timestamp={timestamp}
+      />
+    );
   }
+
+  // Player active → render hook-based player
+  if (active && !hasError) {
+    return (
+      <AudioErrorBoundary
+        fallback={
+          <StaticVoiceBubble
+            bars={bars}
+            mine={mine}
+            totalDuration={totalDuration}
+            timestamp={timestamp}
+            hasError
+          />
+        }
+      >
+        <ActiveVoicePlayer
+          audioUrl={audioUrl}
+          bars={bars}
+          mine={mine}
+          totalDuration={totalDuration}
+          timestamp={timestamp}
+          onDeactivate={() => setActive(false)}
+        />
+      </AudioErrorBoundary>
+    );
+  }
+
+  // Default: static bubble with play button
   return (
-    <AudioErrorBoundary fallback={<VoiceMessageFallback {...props} />}>
-      <VoiceMessageBubbleInner {...props} />
-    </AudioErrorBoundary>
+    <StaticVoiceBubble
+      bars={bars}
+      mine={mine}
+      totalDuration={totalDuration}
+      timestamp={timestamp}
+      onPlay={() => {
+        setHasError(false);
+        setActive(true);
+      }}
+      hasError={hasError}
+    />
   );
 }
 
