@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { SymbolView } from "@/components/Icon";
@@ -68,9 +68,12 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   const totalDuration = duration ?? (durationMs ? durationMs / 1000 : 0);
   const bars = useMemo(() => generateStableBars(hashString(audioUrl || "x")), [audioUrl]);
 
-  // Always create the player – pass the URL directly so it pre-loads
-  const player = useAudioPlayer(audioUrl || null);
+  // LAZY LOADING: Always create player with null to avoid crashing
+  // when many VoiceMessageBubbles mount simultaneously in a FlatList
+  const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
+  const hasLoadedRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Reset to start when playback finishes
   useEffect(() => {
@@ -79,24 +82,42 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
     }
   }, [status.didJustFinish, player]);
 
+  // Once player is loaded after replace(), auto-play
+  useEffect(() => {
+    if (isLoading && status.isLoaded) {
+      setIsLoading(false);
+      try {
+        player.play();
+      } catch (e) {
+        console.error("VoiceMessageBubble auto-play error:", e);
+      }
+    }
+  }, [isLoading, status.isLoaded, player]);
+
   const togglePlay = useCallback(async () => {
     if (!audioUrl) return;
+
     try {
-      // Ensure audio plays even in silent mode
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-    } catch {
-      // best effort
-    }
+    } catch { /* best effort */ }
+
     try {
       if (status.playing) {
         player.pause();
-      } else {
+      } else if (hasLoadedRef.current && status.isLoaded) {
+        // Already loaded – just resume
         player.play();
+      } else {
+        // First tap – lazy load the audio source
+        hasLoadedRef.current = true;
+        setIsLoading(true);
+        player.replace(audioUrl);
       }
     } catch (e) {
       console.error("VoiceMessageBubble playback error:", e);
+      setIsLoading(false);
     }
-  }, [audioUrl, player, status.playing]);
+  }, [audioUrl, player, status.playing, status.isLoaded]);
 
   // Calculate progress
   const effectiveDuration = status.duration > 0 ? status.duration : totalDuration;
@@ -119,10 +140,12 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
     );
   }
 
+  const showSpinner = isLoading && !status.isLoaded;
+
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        {!status.isLoaded ? (
+        {showSpinner ? (
           <ActivityIndicator size="small" color={mine ? "#FFFFFF" : "#000000"} />
         ) : (
           <SymbolView
