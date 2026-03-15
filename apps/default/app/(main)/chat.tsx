@@ -12,6 +12,7 @@ import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
 import { SharedPostBubble } from "@/components/SharedPostBubble";
 import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
+import { ChatAudioProvider } from "@/lib/ChatAudioProvider";
 import * as Haptics from "expo-haptics";
 
 export default function ChatScreen() {
@@ -185,34 +186,36 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => safeBack("chat")} style={styles.backBtn}>
-          <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{partner?.name ?? "Chat"}</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("audio")}>
-            <SymbolView name="phone" size={20} tintColor={colors.black} />
+    <ChatAudioProvider>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => safeBack("chat")} style={styles.backBtn}>
+            <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("video")}>
-            <SymbolView name="video" size={20} tintColor={colors.black} />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{partner?.name ?? "Chat"}</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("audio")}>
+              <SymbolView name="phone" size={20} tintColor={colors.black} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("video")}>
+              <SymbolView name="video" size={20} tintColor={colors.black} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}>
-        <FlatList
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={item => item._id}
-          inverted
-          contentContainerStyle={styles.messageList}
-        />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}>
+          <FlatList
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={item => item._id}
+            inverted
+            contentContainerStyle={styles.messageList}
+          />
 
-        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ChatAudioProvider>
   );
 }
 
