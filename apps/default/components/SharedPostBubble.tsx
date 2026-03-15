@@ -13,6 +13,7 @@ interface SharedPostBubbleProps {
     postType: "photo" | "video";
     authorName: string;
     caption?: string;
+    deleted?: boolean;
   };
   isMine: boolean;
   timestamp?: string;
@@ -20,6 +21,22 @@ interface SharedPostBubbleProps {
 
 export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedPostBubbleProps) {
   const router = useRouter();
+
+  // Deleted post
+  if (preview?.deleted) {
+    return (
+      <View
+        style={[styles.container, isMine ? styles.meContainer : styles.otherContainer]}
+      >
+        <View style={styles.deletedWrap}>
+          <SymbolView name="eye.slash" size={28} tintColor="#bbb" />
+          <Text style={styles.deletedText}>Nicht mehr verfügbar</Text>
+          <Text style={styles.deletedSub}>Dieser Beitrag wurde gelöscht</Text>
+        </View>
+        {timestamp ? <Text style={[styles.time, { paddingHorizontal: 10, paddingBottom: 8 }]}>{timestamp}</Text> : null}
+      </View>
+    );
+  }
 
   if (!preview) {
     return (
@@ -131,6 +148,22 @@ const styles = StyleSheet.create({
   },
   otherContainer: {
     backgroundColor: "#f5f5f5",
+  },
+  deletedWrap: {
+    padding: 24,
+    alignItems: "center",
+    gap: 6,
+  },
+  deletedText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#999",
+    marginTop: 4,
+  },
+  deletedSub: {
+    fontSize: 11,
+    color: "#bbb",
+    textAlign: "center",
   },
   mediaWrap: {
     width: "100%",

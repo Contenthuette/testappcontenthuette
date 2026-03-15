@@ -16,6 +16,7 @@ const sharedPostPreviewValidator = v.optional(v.object({
   postType: v.union(v.literal("photo"), v.literal("video")),
   authorName: v.string(),
   caption: v.optional(v.string()),
+  deleted: v.optional(v.boolean()),
 }));
 
 async function enrichPostPreview(
@@ -24,7 +25,13 @@ async function enrichPostPreview(
 ) {
   if (m.type !== "post_share" || !m.sharedPostId) return undefined;
   const post = await ctx.db.get(m.sharedPostId);
-  if (!post) return undefined;
+  if (!post) {
+    return {
+      deleted: true as const,
+      postType: "photo" as const,
+      authorName: "",
+    };
+  }
   const author = await ctx.db.get(post.authorId);
   const thumbUrl = post.thumbnailStorageId
     ? ((await ctx.storage.getUrl(post.thumbnailStorageId)) ?? undefined)
