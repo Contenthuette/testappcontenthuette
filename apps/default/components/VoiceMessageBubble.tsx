@@ -261,10 +261,32 @@ async function playNative(url: string): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WEB AUDIO ENGINE — used in browser preview
+// WEB AUDIO ENGINE — singleton for WKWebView compatibility
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// CRITICAL: iOS WKWebView only allows audio playback from a user-gesture-activated
+// element. Creating new Audio() elements breaks the gesture chain. We MUST reuse
+// a single element and swap `.src` to change tracks.
 let _webAudio: HTMLAudioElement | null = null;
+
+function getWebAudio(): HTMLAudioElement {
+  if (!_webAudio && typeof Audio !== "undefined") {
+    _webAudio = new Audio();
+    _webAudio.preload = "auto";
+    // Attach persistent end handler
+    _webAudio.addEventListener("ended", () => {
+      if (_webAudio) _webAudio.currentTime = 0;
+      set({ playing: false, currentTime: 0 });
+      stopPoll();
+    });
+    _webAudio.addEventListener("error", () => {
+      console.warn("[Voice] web audio error");
+      set({ loading: false, playing: false });
+      stopPoll();
+    });
+  }
+  return _webAudio!;
+}
 
 function startWebPoll() {
   stopPoll();
@@ -286,6 +308,11 @@ function startWebPoll() {
       return;
     }
 
+    // Update duration once available (WKWebView may report it late)
+    if (_snap.loading && dur > 0) {
+      set({ loading: false, duration: dur });
+    }
+
     if (
       _snap.playing !== playing ||
       Math.abs(_snap.currentTime - ct) > 0.03 ||
@@ -301,21 +328,26 @@ function startWebPoll() {
 function playWeb(url: string): void {
   if (typeof Audio === "undefined") return;
 
-  // Same URL: toggle
-  if (_webAudio && _snap.url === url) {
+  const audio = getWebAudio();
+  if (!audio) return;
+
+  // ── Same URL: toggle play / pause ──
+  if (_snap.url === url) {
     if (_snap.playing) {
-      _webAudio.pause();
+      audio.pause();
       set({ playing: false });
       stopPoll();
     } else {
+      // Resume or replay
       if (
-        _webAudio.ended ||
-        (isFinite(_webAudio.duration) &&
-          _webAudio.currentTime >= _webAudio.duration - 0.2)
+        audio.ended ||
+        (isFinite(audio.duration) &&
+          audio.currentTime >= audio.duration - 0.2)
       ) {
-        _webAudio.currentTime = 0;
+        audio.currentTime = 0;
       }
-      _webAudio
+      // play() must stay in synchronous gesture stack for WKWebView
+      audio
         .play()
         .then(() => {
           set({ playing: true });
@@ -326,48 +358,31 @@ function playWeb(url: string): void {
     return;
   }
 
-  // New URL
-  if (_webAudio) {
-    _webAudio.pause();
-    _webAudio.src = "";
-  }
-
+  // ── New URL: reuse singleton, swap source ──
+  audio.pause();
   set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
 
-  const audio = new Audio(url);
-  audio.preload = "auto";
-  _webAudio = audio;
+  // Swap source on the SAME element (keeps gesture activation in WKWebView)
+  audio.src = url;
+  audio.currentTime = 0;
 
-  audio.oncanplaythrough = () => {
-    set({
-      loading: false,
-      duration: isFinite(audio.duration) ? audio.duration : 0,
-    });
-  };
-  audio.onended = () => {
-    audio.currentTime = 0;
-    set({ playing: false, currentTime: 0 });
-    stopPoll();
-  };
-  audio.onerror = () => {
-    console.warn("[Voice] web audio error");
-    set({ loading: false, playing: false });
-    stopPoll();
-  };
-
+  // MUST call play() synchronously here — in the gesture callback stack.
+  // WKWebView will buffer + start playback once data arrives.
   audio
     .play()
     .then(() => {
-      set({ playing: true, loading: false });
+      const dur = isFinite(audio.duration) ? audio.duration : 0;
+      set({ playing: true, loading: false, duration: dur });
       startWebPoll();
     })
     .catch(() => {
-      // Autoplay blocked — mark as loaded, next tap will resume
+      // Autoplay blocked or not yet loaded — poll will pick up state
+      startWebPoll();
       setTimeout(() => {
         if (_snap.loading && _snap.url === url) {
           set({ loading: false });
         }
-      }, 2000);
+      }, 3000);
     });
 }
 
