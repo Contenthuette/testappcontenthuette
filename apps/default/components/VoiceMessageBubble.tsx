@@ -22,27 +22,31 @@ interface Snap {
 const EMPTY: Snap = { url: null, playing: false, currentTime: 0, duration: 0, loading: false };
 
 // ─── Singleton audio controller ──────────────────────────────────────────────
-// One player at a time. We keep it simple: create per URL, poll for progress.
 
 let _snap: Snap = { ...EMPTY };
 let _subs = new Set<() => void>();
 let _poll: ReturnType<typeof setInterval> | null = null;
+let _busy = false; // guard against rapid taps
 
-// expo-audio player (native or web)
-let _player: {
+// expo-audio player (native) — lazily imported
+type ExpoPlayer = {
   play(): void;
   pause(): void;
   seekTo(s: number): Promise<void>;
-  replace(src: unknown): void;
+  replace(src: { uri: string }): void;
   remove(): void;
   readonly playing: boolean;
   readonly currentTime: number;
   readonly duration: number;
   readonly isLoaded: boolean;
-} | null = null;
+};
+let _player: ExpoPlayer | null = null;
 
-// Web fallback (HTMLAudioElement) when expo-audio doesn't work
+// Web fallback (HTMLAudioElement)
 let _webAudio: HTMLAudioElement | null = null;
+
+// iOS audio mode — must be set before first playback
+let _audioModeReady = false;
 
 function notify() {
   _subs.forEach((fn) => fn());
@@ -60,14 +64,13 @@ function stopPoll() {
 function startPoll() {
   stopPoll();
   _poll = setInterval(() => {
+    // ── Web path ──
     if (Platform.OS === "web" && _webAudio) {
-      // Web fallback path
       const wa = _webAudio;
       const playing = !wa.paused && !wa.ended && wa.currentTime > 0;
       const dur = isFinite(wa.duration) ? wa.duration : 0;
       const ct = wa.currentTime;
 
-      // Detect end
       if (_snap.playing && (wa.ended || (dur > 0 && ct >= dur - 0.1))) {
         wa.currentTime = 0;
         wa.pause();
@@ -82,8 +85,23 @@ function startPoll() {
       return;
     }
 
+    // ── Native path ──
     if (!_player) { stopPoll(); return; }
     const p = _player;
+
+    // Still loading — check isLoaded and auto-play when ready
+    if (_snap.loading && p.isLoaded) {
+      try {
+        p.play();
+        set({ playing: true, loading: false, duration: p.duration });
+      } catch (e) {
+        console.warn("[Voice] deferred play() failed", e);
+        set({ loading: false });
+        stopPoll();
+      }
+      return;
+    }
+
     const playing = p.playing;
     const ct = p.currentTime;
     const dur = p.duration;
@@ -104,11 +122,24 @@ function startPoll() {
   }, 80);
 }
 
-// ─── Web fallback player using HTMLAudioElement directly ─────────────────────
+// ─── Ensure iOS audio session is configured ──────────────────────────────────
+
+async function ensureAudioMode(): Promise<void> {
+  if (_audioModeReady) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-audio") as typeof import("expo-audio");
+    await mod.setAudioModeAsync({ playsInSilentMode: true });
+    _audioModeReady = true;
+  } catch (e) {
+    console.warn("[Voice] setAudioModeAsync failed", e);
+  }
+}
+
+// ─── Web fallback player using HTMLAudioElement ──────────────────────────────
 
 function playWithWebFallback(url: string) {
   if (_webAudio && _snap.url === url) {
-    // Same URL — toggle
     if (_snap.playing) {
       _webAudio.pause();
       set({ playing: false });
@@ -149,7 +180,6 @@ function playWithWebFallback(url: string) {
     stopPoll();
   };
 
-  // Play immediately — must be synchronous from user gesture
   audio.play()
     .then(() => {
       set({ playing: true, loading: false });
@@ -163,22 +193,23 @@ function playWithWebFallback(url: string) {
 
 // ─── Native player using expo-audio ──────────────────────────────────────────
 
-function playWithExpoAudio(url: string) {
+async function playWithExpoAudio(url: string) {
+  // 1. Audio session MUST be configured before any playback on iOS
+  await ensureAudioMode();
+
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require("expo-audio") as typeof import("expo-audio");
 
-  // Ensure silent mode works on iOS
-  mod.setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
-
+  // 2. Same URL — toggle play/pause
   if (_player && _snap.url === url) {
-    // Same URL — toggle
     if (_snap.playing) {
       _player.pause();
       set({ playing: false });
       stopPoll();
     } else {
+      // Resume
       if (_snap.duration > 0 && _snap.currentTime >= _snap.duration - 0.2) {
-        _player.seekTo(0).catch(() => {});
+        await _player.seekTo(0).catch(() => {});
         set({ currentTime: 0 });
       }
       _player.play();
@@ -188,66 +219,64 @@ function playWithExpoAudio(url: string) {
     return;
   }
 
-  // New URL — create or replace
-  set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
-
+  // 3. New URL — dispose old player entirely and create fresh one
   if (_player) {
     _player.pause();
-    try {
-      _player.replace({ uri: url });
-    } catch {
-      // If replace fails, create a new player
-      try { _player.remove(); } catch { /* ignore */ }
-      _player = null;
-    }
+    try { _player.remove(); } catch { /* ignore */ }
+    _player = null;
   }
 
-  if (!_player) {
-    try {
-      _player = mod.createAudioPlayer({ uri: url }) as unknown as typeof _player;
-    } catch (e) {
-      console.warn("[Voice] createAudioPlayer failed", e);
-      set({ loading: false });
-      return;
-    }
+  set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
+
+  try {
+    _player = mod.createAudioPlayer({ uri: url }) as unknown as ExpoPlayer;
+  } catch (e) {
+    console.warn("[Voice] createAudioPlayer failed", e);
+    set({ loading: false });
+    return;
   }
 
-  // Play immediately — don't wait for isLoaded.
-  // The native audio engine buffers internally and starts when ready.
   if (!_player) {
     set({ loading: false });
     return;
   }
-  try {
-    _player.play();
-    set({ playing: true, loading: false });
-    startPoll();
-  } catch (e) {
-    console.warn("[Voice] native play() failed", e);
-    set({ loading: false });
-  }
+
+  // 4. Start polling — the poll loop itself will detect isLoaded and call play()
+  //    This avoids calling play() before the native player is ready on iOS.
+  startPoll();
+
+  // 5. Also try an eager play after a short delay as a fallback.
+  //    Some iOS versions queue the play command and start when buffered.
+  const playerRef = _player;
+  setTimeout(() => {
+    if (playerRef === _player && _snap.loading && _player) {
+      try {
+        _player.play();
+      } catch { /* will be retried by poll */ }
+    }
+  }, 300);
 }
 
 // ─── Main toggle function ────────────────────────────────────────────────────
 
-function togglePlay(url: string) {
-  if (!url) return;
+async function togglePlay(url: string) {
+  if (!url || _busy) return;
+  _busy = true;
 
-  if (Platform.OS === "web") {
-    // Always use web fallback — HTMLAudioElement is more reliable
-    playWithWebFallback(url);
-    return;
-  }
-
-  // Native: try expo-audio
   try {
-    playWithExpoAudio(url);
+    if (Platform.OS === "web") {
+      playWithWebFallback(url);
+    } else {
+      await playWithExpoAudio(url);
+    }
   } catch (e) {
-    console.warn("[Voice] expo-audio unavailable, trying web fallback", e);
-    // Fallback to web audio on native-web (shouldn't happen but safe)
+    console.warn("[Voice] togglePlay error", e);
+    // Last-resort web fallback (shouldn't happen on native)
     if (typeof Audio !== "undefined") {
       playWithWebFallback(url);
     }
+  } finally {
+    _busy = false;
   }
 }
 
