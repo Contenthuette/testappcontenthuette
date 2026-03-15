@@ -1,23 +1,25 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { SymbolView } from "@/components/Icon";
-import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
-import type { AudioPlayer } from "expo-audio";
 
-// ─── Module-level singleton player ────────────────────────────────────
-// Only ONE native AudioPlayer exists for the entire app.
-// Created lazily on first play tap.
-let _sharedPlayer: AudioPlayer | null = null;
+// ─── Audio engine (lazy-loaded, crash-safe) ──────────────────────────
+// expo-audio is imported dynamically the first time the user taps Play.
+// If it fails to load, the UI remains intact – only playback is disabled.
+
+interface AudioEngine {
+  playing: boolean;
+  currentTime: number;
+  duration: number;
+}
+
+let _player: unknown = null;
 let _currentUrl: string | null = null;
 let _listeners: Set<() => void> = new Set();
 let _pollTimer: ReturnType<typeof setInterval> | null = null;
-
-function getSharedPlayer(): AudioPlayer {
-  if (!_sharedPlayer) {
-    _sharedPlayer = createAudioPlayer();
-  }
-  return _sharedPlayer;
-}
+let _audioModuleLoaded = false;
+let _audioModuleFailed = false;
+let _createPlayerFn: ((src?: unknown) => unknown) | null = null;
+let _setModeFn: ((opts: Record<string, boolean>) => Promise<void>) | null = null;
 
 function notifyListeners() {
   _listeners.forEach((fn) => fn());
@@ -35,35 +37,75 @@ function stopPolling() {
   }
 }
 
+function loadAudioModule(): boolean {
+  if (_audioModuleLoaded) return true;
+  if (_audioModuleFailed) return false;
+  try {
+    // Dynamic require – if expo-audio crashes, we catch it
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-audio");
+    _createPlayerFn = mod.createAudioPlayer;
+    _setModeFn = mod.setAudioModeAsync;
+    _audioModuleLoaded = true;
+    return true;
+  } catch (e) {
+    console.warn("VoiceMessageBubble: expo-audio could not be loaded", e);
+    _audioModuleFailed = true;
+    return false;
+  }
+}
+
+function getPlayerState(): AudioEngine {
+  if (!_player) return { playing: false, currentTime: 0, duration: 0 };
+  try {
+    const p = _player as Record<string, unknown>;
+    return {
+      playing: !!p.playing,
+      currentTime: (typeof p.currentTime === "number" ? p.currentTime : 0),
+      duration: (typeof p.duration === "number" ? p.duration : 0),
+    };
+  } catch {
+    return { playing: false, currentTime: 0, duration: 0 };
+  }
+}
+
 async function toggleAudio(url: string) {
   if (!url) return;
+  if (!loadAudioModule()) return;
+
+  try { await _setModeFn?.({ playsInSilentMode: true, allowsRecording: false }); } catch { /* best effort */ }
+
+  if (!_player && _createPlayerFn) {
+    _player = _createPlayerFn();
+  }
+  if (!_player) return;
+
+  const p = _player as Record<string, unknown>;
+
   try {
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-  } catch { /* best effort */ }
-
-  const player = getSharedPlayer();
-
-  if (_currentUrl === url) {
-    // Same URL → toggle
-    if (player.playing) {
-      player.pause();
-      stopPolling();
-    } else {
-      player.play();
-      startPolling();
-    }
-  } else {
-    // Different URL → load new
-    if (player.playing) player.pause();
-    _currentUrl = url;
-    player.replace(url);
-    // Wait a tick for loading, then play
-    setTimeout(() => {
-      try {
-        player.play();
+    if (_currentUrl === url) {
+      // Same URL → toggle
+      if (p.playing) {
+        (p.pause as () => void)();
+        stopPolling();
+      } else {
+        (p.play as () => void)();
         startPolling();
-      } catch { /* ignore */ }
-    }, 150);
+      }
+    } else {
+      // Different URL → load new
+      if (p.playing) (p.pause as () => void)();
+      _currentUrl = url;
+      (p.replace as (src: string) => void)(url);
+      setTimeout(() => {
+        try {
+          (p.play as () => void)();
+          startPolling();
+        } catch { /* ignore */ }
+      }, 150);
+    }
+  } catch (e) {
+    console.warn("VoiceMessageBubble: playback error", e);
   }
   notifyListeners();
 }
@@ -96,7 +138,7 @@ function generateStableBars(seed: number): number[] {
   });
 }
 
-// ─── Component ────────────────────────────────────────────────────────
+// ─── Component ───────────────────────────────────────────────────────
 
 interface VoiceMessageBubbleProps {
   audioUrl: string;
@@ -123,9 +165,8 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
     };
   }, []);
 
-  const player = _sharedPlayer;
-  const isThisActive = _currentUrl === audioUrl && player != null;
-  const isThisPlaying = isThisActive && (player?.playing ?? false);
+  const isThisActive = _currentUrl === audioUrl && _player != null;
+  const state = isThisActive ? getPlayerState() : { playing: false, currentTime: 0, duration: 0 };
 
   const handleToggle = useCallback(() => {
     if (!audioUrl) return;
@@ -133,14 +174,12 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   }, [audioUrl]);
 
   // Progress
-  const currentTime = isThisActive ? (player?.currentTime ?? 0) : 0;
-  const playerDuration = isThisActive ? (player?.duration ?? 0) : 0;
-  const effectiveDuration = playerDuration > 0 ? playerDuration : totalDuration;
-  const progress = isThisPlaying && effectiveDuration > 0
-    ? Math.min(currentTime / effectiveDuration, 1)
+  const effectiveDuration = state.duration > 0 ? state.duration : totalDuration;
+  const progress = state.playing && effectiveDuration > 0
+    ? Math.min(state.currentTime / effectiveDuration, 1)
     : 0;
-  const displayTime = isThisPlaying
-    ? formatTime(currentTime)
+  const displayTime = state.playing
+    ? formatTime(state.currentTime)
     : formatTime(effectiveDuration);
 
   // No URL fallback
@@ -161,7 +200,7 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={handleToggle} style={styles.playBtn} activeOpacity={0.7}>
         <SymbolView
-          name={isThisPlaying ? "pause.fill" : "play.fill"}
+          name={state.playing ? "pause.fill" : "play.fill"}
           size={16}
           tintColor={mine ? "#FFFFFF" : "#000000"}
         />
