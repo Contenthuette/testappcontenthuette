@@ -1,17 +1,9 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect, Component } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { SymbolView } from "@/components/Icon";
 
-/* ─── Types (no runtime import of expo-audio at module level) ─── */
-interface AudioPlayerHandle {
-  play: () => void;
-  pause: () => void;
-  seekTo: (seconds: number) => void;
-  remove: () => void;
-  currentTime: number;
-  duration: number;
-  playing: boolean;
-}
+type Player = ReturnType<typeof createAudioPlayer>;
 
 interface VoiceMessageBubbleProps {
   audioUrl: string;
@@ -47,26 +39,6 @@ function generateStableBars(seed: number): number[] {
   });
 }
 
-/* ─── Lazy audio module loader ─── */
-let _audioLoaded = false;
-let _createPlayer: ((src: { uri: string }) => AudioPlayerHandle) | null = null;
-let _setMode: ((opts: Record<string, unknown>) => Promise<void>) | null = null;
-
-function getAudioModule(): { create: typeof _createPlayer; setMode: typeof _setMode } {
-  if (!_audioLoaded) {
-    _audioLoaded = true;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = require("expo-audio") as Record<string, unknown>;
-      _createPlayer = mod.createAudioPlayer as typeof _createPlayer;
-      _setMode = mod.setAudioModeAsync as typeof _setMode;
-    } catch (e) {
-      console.warn("expo-audio playback not available:", e);
-    }
-  }
-  return { create: _createPlayer, setMode: _setMode };
-}
-
 /* ─── Error Boundary ─── */
 interface EBProps { fallback: React.ReactNode; children: React.ReactNode }
 interface EBState { hasError: boolean }
@@ -88,14 +60,16 @@ function VoiceMessageBubbleInner({
   const mine = isMine ?? isMe ?? false;
   const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
 
-  const playerRef = useRef<AudioPlayerHandle | null>(null);
+  const playerRef = useRef<Player | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playerDuration, setPlayerDuration] = useState(0);
   const [error, setError] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loadingTicksRef = useRef(0);
 
-  // Clean up on unmount
+  // Clean up
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -109,6 +83,7 @@ function VoiceMessageBubbleInner({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    loadingTicksRef.current = 0;
   }, []);
 
   const startPolling = useCallback(() => {
@@ -116,15 +91,44 @@ function VoiceMessageBubbleInner({
     timerRef.current = setInterval(() => {
       const p = playerRef.current;
       if (!p) return;
+
       try {
-        setCurrentTime(p.currentTime);
-        if (p.duration > 0) setPlayerDuration(p.duration);
-        if (!p.playing) {
+        const ct = p.currentTime;
+        const dur = p.duration;
+
+        setCurrentTime(ct);
+        if (dur > 0) {
+          setPlayerDuration(dur);
+          setIsLoading(false);
+          loadingTicksRef.current = 0;
+        }
+
+        if (p.playing) {
+          // Actively playing – keep polling
+          loadingTicksRef.current = 0;
+        } else if (dur > 0 && ct >= dur - 0.3) {
+          // Finished
+          setCurrentTime(dur);
+          setIsPlaying(false);
+          stopPolling();
+        } else if (dur === 0) {
+          // Still loading
+          loadingTicksRef.current++;
+          if (loadingTicksRef.current > 75) {
+            // 15 s timeout
+            setIsPlaying(false);
+            setIsLoading(false);
+            setError(true);
+            stopPolling();
+          }
+        } else {
+          // Paused or stopped mid-track
           setIsPlaying(false);
           stopPolling();
         }
       } catch {
         setIsPlaying(false);
+        setIsLoading(false);
         stopPolling();
       }
     }, 200);
@@ -134,19 +138,16 @@ function VoiceMessageBubbleInner({
     try {
       // Create player lazily on first tap
       if (!playerRef.current) {
-        const audio = getAudioModule();
-        if (!audio.create) {
-          setError(true);
-          return;
-        }
-        // Set audio mode for iOS silent switch
-        if (audio.setMode) {
-          await audio.setMode({ playsInSilentMode: true, allowsRecording: false });
-        }
-        playerRef.current = audio.create({ uri: audioUrl });
+        setIsLoading(true);
+        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+        const p = createAudioPlayer({ uri: audioUrl });
+        playerRef.current = p;
+        // Give native player a moment to initialise
+        await new Promise((r) => setTimeout(r, 250));
       }
 
       const p = playerRef.current;
+
       if (isPlaying) {
         p.pause();
         setIsPlaying(false);
@@ -154,9 +155,10 @@ function VoiceMessageBubbleInner({
       } else {
         // Reset if at end
         const dur = p.duration > 0 ? p.duration : totalDuration;
-        if (dur > 0 && p.currentTime >= dur - 0.1) {
+        if (dur > 0 && p.currentTime >= dur - 0.3) {
           p.seekTo(0);
           setCurrentTime(0);
+          await new Promise((r) => setTimeout(r, 80));
         }
         p.play();
         setIsPlaying(true);
@@ -165,6 +167,7 @@ function VoiceMessageBubbleInner({
     } catch (err) {
       console.warn("VoiceMessageBubble play error:", err);
       setIsPlaying(false);
+      setIsLoading(false);
       setError(true);
       stopPolling();
     }
@@ -190,11 +193,15 @@ function VoiceMessageBubbleInner({
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        <SymbolView
-          name={isPlaying ? "pause.fill" : "play.fill"}
-          size={16}
-          tintColor={mine ? "#FFFFFF" : "#000000"}
-        />
+        {isLoading && !isPlaying ? (
+          <ActivityIndicator size="small" color={mine ? "#FFFFFF" : "#000000"} />
+        ) : (
+          <SymbolView
+            name={isPlaying ? "pause.fill" : "play.fill"}
+            size={16}
+            tintColor={mine ? "#FFFFFF" : "#000000"}
+          />
+        )}
       </TouchableOpacity>
 
       <View style={styles.waveContainer}>
@@ -224,13 +231,12 @@ function VoiceMessageBubbleInner({
   );
 }
 
-/* ─── Fallback (no audio URL) ─── */
+/* ─── Fallback ─── */
 function VoiceMessageFallback({
   durationMs,
   duration: durationSec,
   isMine,
   isMe,
-  timestamp,
 }: Omit<VoiceMessageBubbleProps, "audioUrl">) {
   const mine = isMine ?? isMe ?? false;
   const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
@@ -263,7 +269,6 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   if (!props.audioUrl || props.audioUrl.length === 0) {
     return <VoiceMessageFallback {...props} />;
   }
-
   return (
     <AudioErrorBoundary fallback={<VoiceMessageFallback {...props} />}>
       <VoiceMessageBubbleInner {...props} />
