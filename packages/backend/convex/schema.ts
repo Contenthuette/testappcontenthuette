@@ -322,4 +322,14 @@ export default defineSchema({
     .index("by_callId", ["callId"])
     .index("by_userId_and_status", ["userId", "status"])
     .index("by_callId_and_userId", ["callId", "userId"]),
+
+  // ── Announcements ──────────────────────────────────────────────
+  announcements: defineTable({
+    text: v.string(),
+    isActive: v.boolean(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_isActive", ["isActive"]),
 });

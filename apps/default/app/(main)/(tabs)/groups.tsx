@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Platform,
@@ -15,8 +15,29 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 type Tab = "groups" | "people";
+
+/* ─── Announcement Banner ─── */
+function AnnouncementBanner() {
+  const announcement = useQuery(api.admin.getActiveAnnouncement);
+  if (!announcement) return null;
+  return (
+    <Animated.View
+      entering={FadeIn.duration(300)}
+      exiting={FadeOut.duration(200)}
+      style={styles.announceBanner}
+    >
+      <View style={styles.announceIcon}>
+        <SymbolView name="exclamationmark" size={13} tintColor={colors.white} />
+      </View>
+      <Text style={styles.announceText} numberOfLines={2}>
+        {announcement.text}
+      </Text>
+    </Animated.View>
+  );
+}
 
 export default function GroupsScreen() {
   const { isAuthenticated } = useConvexAuth();
@@ -31,7 +52,7 @@ export default function GroupsScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await joinGroup({ groupId });
-    } catch (_e) { /* already member */ }
+    } catch { /* already member */ }
   };
 
   const switchTab = (t: Tab) => {
@@ -113,8 +134,6 @@ export default function GroupsScreen() {
     </TouchableOpacity>
   );
 
-  const activeData = tab === "groups" ? groups : people;
-
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
@@ -129,6 +148,9 @@ export default function GroupsScreen() {
           <SymbolView name="bell" size={22} tintColor={colors.black} />
         </TouchableOpacity>
       </View>
+
+      {/* Announcement Banner */}
+      <AnnouncementBanner />
 
       {/* Tab Toggle */}
       <View style={styles.tabRow}>
@@ -227,6 +249,36 @@ export default function GroupsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
+
+  /* Announcement Banner */
+  announceBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.black,
+    borderRadius: radius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 10,
+    borderCurve: "continuous",
+  },
+  announceIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  announceText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.white,
+    letterSpacing: -0.1,
+  },
+
   header: {
     flexDirection: "row",
     alignItems: "center",

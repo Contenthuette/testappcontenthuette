@@ -622,3 +622,122 @@ export const listGroups = authQuery({
     }));
   },
 });
+
+/* ─── Announcements ────────────────────────────────────────────── */
+
+import { query } from "./_generated/server";
+
+/** Public: returns the currently active announcement (or null). */
+export const getActiveAnnouncement = query({
+  args: {},
+  returns: v.union(
+    v.object({
+      _id: v.id("announcements"),
+      text: v.string(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx) => {
+    const active = await ctx.db
+      .query("announcements")
+      .withIndex("by_isActive", (q) => q.eq("isActive", true))
+      .order("desc")
+      .first();
+    if (!active) return null;
+    return { _id: active._id, text: active.text };
+  },
+});
+
+/** Admin: list all announcements */
+export const listAnnouncements = authQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("announcements"),
+      text: v.string(),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const all = await ctx.db.query("announcements").order("desc").take(50);
+    return all.map((a) => ({
+      _id: a._id,
+      text: a.text,
+      isActive: a.isActive,
+      createdAt: a.createdAt,
+    }));
+  },
+});
+
+/** Admin: create announcement */
+export const createAnnouncement = authMutation({
+  args: { text: v.string() },
+  returns: v.id("announcements"),
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    // Deactivate any existing active announcements
+    const existing = await ctx.db
+      .query("announcements")
+      .withIndex("by_isActive", (q) => q.eq("isActive", true))
+      .collect();
+    for (const a of existing) {
+      await ctx.db.patch(a._id, { isActive: false });
+    }
+    return await ctx.db.insert("announcements", {
+      text: args.text.trim(),
+      isActive: true,
+      createdBy: admin._id,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/** Admin: update announcement text */
+export const updateAnnouncement = authMutation({
+  args: { id: v.id("announcements"), text: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    await ctx.db.patch(args.id, {
+      text: args.text.trim(),
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+/** Admin: toggle announcement active state */
+export const toggleAnnouncement = authMutation({
+  args: { id: v.id("announcements"), isActive: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    if (args.isActive) {
+      // Deactivate all others first
+      const existing = await ctx.db
+        .query("announcements")
+        .withIndex("by_isActive", (q) => q.eq("isActive", true))
+        .collect();
+      for (const a of existing) {
+        if (a._id !== args.id) {
+          await ctx.db.patch(a._id, { isActive: false });
+        }
+      }
+    }
+    await ctx.db.patch(args.id, { isActive: args.isActive });
+    return null;
+  },
+});
+
+/** Admin: delete announcement */
+export const deleteAnnouncement = authMutation({
+  args: { id: v.id("announcements") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    await ctx.db.delete(args.id);
+    return null;
+  },
+});

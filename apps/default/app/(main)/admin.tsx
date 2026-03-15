@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -197,6 +198,55 @@ export default function AdminDashboard() {
   const deleteEvent = useMutation(api.admin.deleteEvent);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
+  /* ── Announcements ── */
+  const currentAnnouncement = useQuery(api.admin.getActiveAnnouncement);
+  const createAnnouncement = useMutation(api.admin.createAnnouncement);
+  const updateAnnouncement = useMutation(api.admin.updateAnnouncement);
+  const deleteAnnouncement = useMutation(api.admin.deleteAnnouncement);
+  const [announceDraft, setAnnounceDraft] = useState("");
+  const [announceEditing, setAnnounceEditing] = useState(false);
+  const [announceSaving, setAnnounceSaving] = useState(false);
+
+  const handleAnnounceSave = useCallback(async () => {
+    const text = announceDraft.trim();
+    if (!text) return;
+    setAnnounceSaving(true);
+    try {
+      if (currentAnnouncement && announceEditing) {
+        await updateAnnouncement({ id: currentAnnouncement._id, text });
+      } else {
+        await createAnnouncement({ text });
+      }
+      setAnnounceDraft("");
+      setAnnounceEditing(false);
+    } catch {
+      if (Platform.OS !== "web") Alert.alert("Fehler", "Announcement konnte nicht gespeichert werden");
+    } finally {
+      setAnnounceSaving(false);
+    }
+  }, [announceDraft, currentAnnouncement, announceEditing, createAnnouncement, updateAnnouncement]);
+
+  const handleAnnounceDelete = useCallback(() => {
+    if (!currentAnnouncement) return;
+    const doDelete = async () => {
+      try {
+        await deleteAnnouncement({ id: currentAnnouncement._id });
+        setAnnounceDraft("");
+        setAnnounceEditing(false);
+      } catch {
+        if (Platform.OS !== "web") Alert.alert("Fehler", "Konnte nicht gelöscht werden");
+      }
+    };
+    if (Platform.OS !== "web") {
+      Alert.alert("Announcement löschen", "Wirklich löschen? Die Leiste verschwindet sofort.", [
+        { text: "Abbrechen", style: "cancel" },
+        { text: "Löschen", style: "destructive", onPress: doDelete },
+      ]);
+    } else {
+      doDelete();
+    }
+  }, [currentAnnouncement, deleteAnnouncement]);
+
   const handleDelete = useCallback(
     (eventId: Id<"events">, name: string) => {
       const doDelete = async () => {
@@ -254,6 +304,79 @@ export default function AdminDashboard() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* ── Announcement Manager ────────────────── */}
+        <Card title="Announcement" icon="exclamationmark.circle.fill">
+          {currentAnnouncement ? (
+            <View>
+              <View style={styles.annLiveBanner}>
+                <View style={styles.annLiveDot} />
+                <Text style={styles.annLiveLabel}>LIVE</Text>
+              </View>
+              <Text style={styles.annCurrentText}>{currentAnnouncement.text}</Text>
+              <View style={styles.annActions}>
+                <TouchableOpacity
+                  style={styles.annEditBtn}
+                  onPress={() => {
+                    setAnnounceDraft(currentAnnouncement.text);
+                    setAnnounceEditing(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
+                  <Text style={styles.annEditText}>Bearbeiten</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.annEditBtn, styles.annDeleteBtn]}
+                  onPress={handleAnnounceDelete}
+                  activeOpacity={0.7}
+                >
+                  <SymbolView name="trash" size={13} tintColor={colors.danger} />
+                  <Text style={[styles.annEditText, { color: colors.danger }]}>Löschen</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.annEmpty}>
+              <SymbolView name="exclamationmark.circle" size={28} tintColor={colors.gray300} />
+              <Text style={styles.annEmptyText}>Kein aktives Announcement</Text>
+            </View>
+          )}
+
+          {(announceEditing || !currentAnnouncement) && (
+            <View style={styles.annInputWrap}>
+              <TextInput
+                style={styles.annInput}
+                value={announceDraft}
+                onChangeText={setAnnounceDraft}
+                placeholder="z.B. NEUES EVENT STEHT BEVOR!"
+                placeholderTextColor={colors.gray300}
+                multiline
+                maxLength={120}
+              />
+              <View style={styles.annInputActions}>
+                <Text style={styles.annCharCount}>{announceDraft.length}/120</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.annPostBtn,
+                    (!announceDraft.trim() || announceSaving) && { opacity: 0.4 },
+                  ]}
+                  onPress={handleAnnounceSave}
+                  disabled={!announceDraft.trim() || announceSaving}
+                  activeOpacity={0.7}
+                >
+                  {announceSaving ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.annPostBtnText}>
+                      {announceEditing ? "Aktualisieren" : "Posten"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </Card>
+
         {/* ── KPI Row ─────────────────────────────── */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.kpiScroll}>
           <KPI
@@ -753,4 +876,102 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   emptyText: { fontSize: 14, color: colors.gray400 },
+
+  /* announcement manager */
+  annLiveBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  annLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+  },
+  annLiveLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.success,
+    letterSpacing: 0.5,
+  },
+  annCurrentText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+    lineHeight: 22,
+    marginBottom: spacing.md,
+  },
+  annActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  annEditBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.gray50,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  annDeleteBtn: {
+    backgroundColor: "rgba(239,68,68,0.06)",
+  },
+  annEditText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.gray600,
+  },
+  annEmpty: {
+    alignItems: "center",
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  annEmptyText: {
+    fontSize: 14,
+    color: colors.gray400,
+  },
+  annInputWrap: {
+    marginTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray100,
+    paddingTop: spacing.md,
+  },
+  annInput: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 14,
+    color: colors.black,
+    minHeight: 60,
+    textAlignVertical: "top",
+    borderWidth: 1,
+    borderColor: colors.gray100,
+    borderCurve: "continuous",
+  },
+  annInputActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.sm,
+  },
+  annCharCount: {
+    fontSize: 12,
+    color: colors.gray400,
+    fontVariant: ["tabular-nums"],
+  },
+  annPostBtn: {
+    backgroundColor: colors.black,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+  },
+  annPostBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.white,
+  },
 });
