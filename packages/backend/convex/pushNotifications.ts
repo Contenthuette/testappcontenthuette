@@ -53,19 +53,27 @@ export const sendToUser = internalMutation({
     const user = await ctx.db.get(args.userId);
     if (!user?.authId) return null;
 
-    await ctx.runMutation(
-      components.pushNotifications.public.sendPushNotification,
-      {
-        userId: user.authId,
-        notification: {
-          title: args.title,
-          body: args.body,
-          data: args.data ?? {},
-          sound: "default",
-        },
-        logLevel: "WARN",
-      }
-    );
+    try {
+      await ctx.runMutation(
+        components.pushNotifications.public.sendPushNotification,
+        {
+          userId: user.authId,
+          notification: {
+            title: args.title,
+            body: args.body,
+            data: args.data ?? {},
+            sound: "default",
+          },
+          logLevel: "WARN",
+        }
+      );
+    } catch (e: unknown) {
+      // Silently ignore missing push tokens — user hasn't enabled notifications
+      const isNoPushToken =
+        e instanceof Error &&
+        (e.message.includes("NoPushToken") || e.message.includes("No push token"));
+      if (!isNoPushToken) throw e;
+    }
     return null;
   },
 });
