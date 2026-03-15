@@ -19,16 +19,229 @@ interface Snap {
   loading: boolean;
 }
 
-const EMPTY: Snap = { url: null, playing: false, currentTime: 0, duration: 0, loading: false };
+const EMPTY: Snap = {
+  url: null,
+  playing: false,
+  currentTime: 0,
+  duration: 0,
+  loading: false,
+};
 
-// ─── Singleton audio controller ──────────────────────────────────────────────
+// ─── Reactive state store ────────────────────────────────────────────────────
 
 let _snap: Snap = { ...EMPTY };
-let _subs = new Set<() => void>();
+const _subs = new Set<() => void>();
 let _poll: ReturnType<typeof setInterval> | null = null;
-let _busy = false; // guard against rapid taps
 
-// expo-audio player (native) — lazily imported
+function notify() {
+  _subs.forEach((fn) => fn());
+}
+function set(patch: Partial<Snap>) {
+  _snap = { ..._snap, ...patch };
+  notify();
+}
+function stopPoll() {
+  if (_poll) {
+    clearInterval(_poll);
+    _poll = null;
+  }
+}
+
+// ─── Platform detection ─────────────────────────────────────────────────────
+
+const IS_WEB = Platform.OS === "web";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEB AUDIO ENGINE
+// Works in desktop browsers AND iOS WKWebView (Bloom App)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Singleton HTMLAudioElement — reused across all voice messages.
+// iOS WKWebView is very strict: creating new Audio() elements and calling
+// play() immediately fails silently. A singleton that is "unlocked" once
+// on the first user gesture avoids this.
+let _el: HTMLAudioElement | null = null;
+let _unlocked = false;
+
+// Base64-encoded 44-byte silent WAV file.
+// Playing this on the first tap "unlocks" the iOS audio session so that
+// subsequent play() calls on real URLs succeed.
+const SILENCE =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+
+function getEl(): HTMLAudioElement {
+  if (!_el && typeof Audio !== "undefined") {
+    const a = new Audio();
+    a.preload = "auto";
+    // Critical for iOS WebView:
+    a.setAttribute("playsinline", "true");
+    a.setAttribute("webkit-playsinline", "true");
+    _el = a;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  return _el!;
+}
+
+/** Play a tiny silent WAV to unlock the iOS audio session. */
+function unlockAudio(): void {
+  if (_unlocked) return;
+  try {
+    const a = getEl();
+    a.src = SILENCE;
+    a.volume = 0;
+    const p = a.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.volume = 1;
+        _unlocked = true;
+      }).catch(() => {
+        a.volume = 1;
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function startWebPoll() {
+  stopPoll();
+  _poll = setInterval(() => {
+    const a = _el;
+    if (!a) {
+      stopPoll();
+      return;
+    }
+    const dur = isFinite(a.duration) ? a.duration : 0;
+    const ct = a.currentTime;
+    const playing = !a.paused && !a.ended;
+
+    // Detect natural end
+    if (_snap.playing && (a.ended || (dur > 0 && ct >= dur - 0.05))) {
+      a.pause();
+      a.currentTime = 0;
+      set({ playing: false, currentTime: 0 });
+      stopPoll();
+      return;
+    }
+
+    // Update reactive state
+    if (
+      _snap.playing !== playing ||
+      Math.abs(_snap.currentTime - ct) > 0.03 ||
+      Math.abs(_snap.duration - dur) > 0.03
+    ) {
+      set({ playing, currentTime: ct, duration: dur, loading: false });
+    }
+
+    if (!playing && !_snap.loading) stopPoll();
+  }, 80);
+}
+
+function playWeb(url: string): void {
+  if (typeof Audio === "undefined") return;
+  const audio = getEl();
+  if (!audio) return;
+
+  // Always try to unlock on user gesture (no-op if already unlocked)
+  if (!_unlocked) unlockAudio();
+
+  // ── Same URL: toggle play/pause ──
+  if (_snap.url === url) {
+    if (_snap.playing) {
+      audio.pause();
+      set({ playing: false });
+      stopPoll();
+      return;
+    }
+    // Resume or restart
+    if (
+      audio.ended ||
+      (isFinite(audio.duration) && audio.currentTime >= audio.duration - 0.2)
+    ) {
+      audio.currentTime = 0;
+    }
+    const p = audio.play();
+    set({ playing: true });
+    startWebPoll();
+    if (p) {
+      p.catch(() => {
+        set({ playing: false });
+        stopPoll();
+      });
+    }
+    return;
+  }
+
+  // ── New URL ──
+  audio.pause();
+
+  // Remove old event listeners
+  audio.onended = null;
+  audio.onerror = null;
+  audio.onloadedmetadata = null;
+  audio.oncanplaythrough = null;
+
+  set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
+
+  audio.src = url;
+
+  // Attach listeners
+  audio.onended = () => {
+    audio.currentTime = 0;
+    set({ playing: false, currentTime: 0 });
+    stopPoll();
+  };
+  audio.onerror = () => {
+    console.warn("[Voice] web audio error", audio.error?.message);
+    set({ loading: false, playing: false });
+    stopPoll();
+  };
+  audio.onloadedmetadata = () => {
+    const dur = isFinite(audio.duration) ? audio.duration : 0;
+    if (dur > 0) set({ duration: dur });
+  };
+
+  // Force iOS to start buffering
+  audio.load();
+
+  // Attempt to play immediately (we're in user gesture context)
+  const p = audio.play();
+  if (p && typeof p.then === "function") {
+    p.then(() => {
+      set({
+        playing: true,
+        loading: false,
+        duration: isFinite(audio.duration) ? audio.duration : 0,
+      });
+      startWebPoll();
+    }).catch(() => {
+      // iOS blocked play — audio is loading in background.
+      // When ready, mark as loaded. The NEXT tap will use the "same URL"
+      // resume path which calls play() in a fresh gesture context.
+      audio.oncanplaythrough = () => {
+        audio.oncanplaythrough = null;
+        set({
+          loading: false,
+          duration: isFinite(audio.duration) ? audio.duration : 0,
+        });
+      };
+      // Also set a timeout fallback in case oncanplaythrough never fires
+      setTimeout(() => {
+        if (_snap.loading && _snap.url === url) {
+          set({ loading: false });
+        }
+      }, 3000);
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NATIVE AUDIO ENGINE (expo-audio)
+// Used when running as a real native Expo app (not via Bloom WebView)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 type ExpoPlayer = {
   play(): void;
   pause(): void;
@@ -41,61 +254,35 @@ type ExpoPlayer = {
   readonly isLoaded: boolean;
 };
 let _player: ExpoPlayer | null = null;
-
-// Web fallback (HTMLAudioElement)
-let _webAudio: HTMLAudioElement | null = null;
-
-// iOS audio mode — must be set before first playback
 let _audioModeReady = false;
 
-function notify() {
-  _subs.forEach((fn) => fn());
+async function ensureAudioMode(): Promise<void> {
+  if (_audioModeReady) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-audio") as typeof import("expo-audio");
+    await mod.setAudioModeAsync({ playsInSilentMode: true });
+    _audioModeReady = true;
+  } catch (e) {
+    console.warn("[Voice] setAudioModeAsync failed", e);
+  }
 }
 
-function set(patch: Partial<Snap>) {
-  _snap = { ..._snap, ...patch };
-  notify();
-}
-
-function stopPoll() {
-  if (_poll) { clearInterval(_poll); _poll = null; }
-}
-
-function startPoll() {
+function startNativePoll() {
   stopPoll();
   _poll = setInterval(() => {
-    // ── Web path ──
-    if (Platform.OS === "web" && _webAudio) {
-      const wa = _webAudio;
-      const playing = !wa.paused && !wa.ended && wa.currentTime > 0;
-      const dur = isFinite(wa.duration) ? wa.duration : 0;
-      const ct = wa.currentTime;
-
-      if (_snap.playing && (wa.ended || (dur > 0 && ct >= dur - 0.1))) {
-        wa.currentTime = 0;
-        wa.pause();
-        set({ playing: false, currentTime: 0 });
-        stopPoll();
-        return;
-      }
-
-      if (_snap.playing !== playing || Math.abs(_snap.currentTime - ct) > 0.04 || Math.abs(_snap.duration - dur) > 0.04) {
-        set({ playing, currentTime: ct, duration: dur });
-      }
+    if (!_player) {
+      stopPoll();
       return;
     }
-
-    // ── Native path ──
-    if (!_player) { stopPoll(); return; }
     const p = _player;
 
-    // Still loading — check isLoaded and auto-play when ready
+    // Deferred play: wait for isLoaded
     if (_snap.loading && p.isLoaded) {
       try {
         p.play();
         set({ playing: true, loading: false, duration: p.duration });
-      } catch (e) {
-        console.warn("[Voice] deferred play() failed", e);
+      } catch {
         set({ loading: false });
         stopPoll();
       }
@@ -114,7 +301,11 @@ function startPoll() {
       return;
     }
 
-    if (_snap.playing !== playing || Math.abs(_snap.currentTime - ct) > 0.04 || Math.abs(_snap.duration - dur) > 0.04) {
+    if (
+      _snap.playing !== playing ||
+      Math.abs(_snap.currentTime - ct) > 0.04 ||
+      Math.abs(_snap.duration - dur) > 0.04
+    ) {
       set({ playing, currentTime: ct, duration: dur, loading: false });
     }
 
@@ -122,107 +313,40 @@ function startPoll() {
   }, 80);
 }
 
-// ─── Ensure iOS audio session is configured ──────────────────────────────────
-
-async function ensureAudioMode(): Promise<void> {
-  if (_audioModeReady) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("expo-audio") as typeof import("expo-audio");
-    await mod.setAudioModeAsync({ playsInSilentMode: true });
-    _audioModeReady = true;
-  } catch (e) {
-    console.warn("[Voice] setAudioModeAsync failed", e);
-  }
-}
-
-// ─── Web fallback player using HTMLAudioElement ──────────────────────────────
-
-function playWithWebFallback(url: string) {
-  if (_webAudio && _snap.url === url) {
-    if (_snap.playing) {
-      _webAudio.pause();
-      set({ playing: false });
-      stopPoll();
-    } else {
-      if (_webAudio.ended || (_webAudio.duration > 0 && _webAudio.currentTime >= _webAudio.duration - 0.2)) {
-        _webAudio.currentTime = 0;
-      }
-      _webAudio.play().catch((e) => console.warn("[Voice] web play failed", e));
-      set({ playing: true });
-      startPoll();
-    }
-    return;
-  }
-
-  // New URL
-  if (_webAudio) {
-    _webAudio.pause();
-    _webAudio.src = "";
-  }
-  set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
-
-  const audio = new Audio(url);
-  audio.preload = "auto";
-  _webAudio = audio;
-
-  audio.oncanplaythrough = () => {
-    set({ loading: false, duration: isFinite(audio.duration) ? audio.duration : 0 });
-  };
-  audio.onended = () => {
-    audio.currentTime = 0;
-    set({ playing: false, currentTime: 0 });
-    stopPoll();
-  };
-  audio.onerror = (e) => {
-    console.warn("[Voice] web audio error", e);
-    set({ loading: false, playing: false });
-    stopPoll();
-  };
-
-  audio.play()
-    .then(() => {
-      set({ playing: true, loading: false });
-      startPoll();
-    })
-    .catch((e) => {
-      console.warn("[Voice] web autoplay blocked", e);
-      set({ loading: false });
-    });
-}
-
-// ─── Native player using expo-audio ──────────────────────────────────────────
-
-async function playWithExpoAudio(url: string) {
-  // 1. Audio session MUST be configured before any playback on iOS
+async function playNative(url: string): Promise<void> {
   await ensureAudioMode();
-
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require("expo-audio") as typeof import("expo-audio");
 
-  // 2. Same URL — toggle play/pause
+  // Same URL → toggle
   if (_player && _snap.url === url) {
     if (_snap.playing) {
       _player.pause();
       set({ playing: false });
       stopPoll();
     } else {
-      // Resume
-      if (_snap.duration > 0 && _snap.currentTime >= _snap.duration - 0.2) {
+      if (
+        _snap.duration > 0 &&
+        _snap.currentTime >= _snap.duration - 0.2
+      ) {
         await _player.seekTo(0).catch(() => {});
         set({ currentTime: 0 });
       }
       _player.play();
       set({ playing: true });
-      startPoll();
+      startNativePoll();
     }
     return;
   }
 
-  // 3. New URL — dispose old player entirely and create fresh one
+  // New URL — dispose old player
   if (_player) {
     _player.pause();
-    try { _player.remove(); } catch { /* ignore */ }
+    try {
+      _player.remove();
+    } catch {
+      /* ignore */
+    }
     _player = null;
   }
 
@@ -236,48 +360,40 @@ async function playWithExpoAudio(url: string) {
     return;
   }
 
-  if (!_player) {
-    set({ loading: false });
-    return;
-  }
+  // Start polling — poll loop auto-plays when isLoaded becomes true
+  startNativePoll();
 
-  // 4. Start polling — the poll loop itself will detect isLoaded and call play()
-  //    This avoids calling play() before the native player is ready on iOS.
-  startPoll();
-
-  // 5. Also try an eager play after a short delay as a fallback.
-  //    Some iOS versions queue the play command and start when buffered.
-  const playerRef = _player;
+  // Eager play attempt after short delay
+  const ref = _player;
   setTimeout(() => {
-    if (playerRef === _player && _snap.loading && _player) {
+    if (ref === _player && _snap.loading && _player) {
       try {
         _player.play();
-      } catch { /* will be retried by poll */ }
+      } catch {
+        /* poll will retry */
+      }
     }
   }, 300);
 }
 
-// ─── Main toggle function ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENTRY POINT — fully synchronous for web, async for native
+// ═══════════════════════════════════════════════════════════════════════════════
 
-async function togglePlay(url: string) {
-  if (!url || _busy) return;
-  _busy = true;
+function togglePlay(url: string): void {
+  if (!url) return;
 
-  try {
-    if (Platform.OS === "web") {
-      playWithWebFallback(url);
-    } else {
-      await playWithExpoAudio(url);
-    }
-  } catch (e) {
-    console.warn("[Voice] togglePlay error", e);
-    // Last-resort web fallback (shouldn't happen on native)
-    if (typeof Audio !== "undefined") {
-      playWithWebFallback(url);
-    }
-  } finally {
-    _busy = false;
+  if (IS_WEB) {
+    // MUST stay synchronous to preserve iOS user-gesture context
+    playWeb(url);
+    return;
   }
+
+  // Native path — fire-and-forget
+  playNative(url).catch((e) => {
+    console.warn("[Voice] native play error", e);
+    set({ loading: false, playing: false });
+  });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -291,7 +407,8 @@ function fmt(sec: number): string {
 
 function hash(str: string): number {
   let h = 5381;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  for (let i = 0; i < str.length; i++)
+    h = ((h << 5) + h + str.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
@@ -326,7 +443,9 @@ export function VoiceMessageBubble(props: Props) {
   useEffect(() => {
     const cb = () => bump((n) => n + 1);
     _subs.add(cb);
-    return () => { _subs.delete(cb); };
+    return () => {
+      _subs.delete(cb);
+    };
   }, []);
 
   const active = _snap.url === audioUrl;
@@ -346,9 +465,20 @@ export function VoiceMessageBubble(props: Props) {
     return (
       <View style={[s.wrap, mine ? s.wrapMine : s.wrapOther]}>
         <View style={s.btn}>
-          <SymbolView name="exclamationmark.triangle" size={14} tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"} />
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={14}
+            tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"}
+          />
         </View>
-        <Text style={[s.errTxt, { color: mine ? "rgba(255,255,255,0.6)" : "#A1A1AA" }]}>Audio nicht verfügbar</Text>
+        <Text
+          style={[
+            s.errTxt,
+            { color: mine ? "rgba(255,255,255,0.6)" : "#A1A1AA" },
+          ]}
+        >
+          Audio nicht verfügbar
+        </Text>
       </View>
     );
   }
@@ -379,8 +509,12 @@ export function VoiceMessageBubble(props: Props) {
                   {
                     height: h,
                     backgroundColor: filled
-                      ? (mine ? "#FFFFFF" : "#000000")
-                      : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
+                      ? mine
+                        ? "#FFFFFF"
+                        : "#000000"
+                      : mine
+                        ? "rgba(255,255,255,0.3)"
+                        : "#D4D4D8",
                   },
                 ]}
               />
@@ -389,7 +523,12 @@ export function VoiceMessageBubble(props: Props) {
         </View>
       </View>
 
-      <Text style={[s.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
+      <Text
+        style={[
+          s.time,
+          { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" },
+        ]}
+      >
         {timeLabel}
       </Text>
     </View>
