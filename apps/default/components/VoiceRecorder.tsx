@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -18,20 +17,14 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
-
-// Lazy-load expo-audio to prevent chat screen crash
-let _audioModule: Record<string, unknown> | null = null;
-function getAudioModule(): Record<string, unknown> | null {
-  if (_audioModule) return _audioModule;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _audioModule = require("expo-audio");
-    return _audioModule;
-  } catch (e) {
-    console.warn("VoiceRecorder: expo-audio not available", e);
-    return null;
-  }
-}
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  RecordingPresets,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  createAudioPlayer,
+} from "expo-audio";
 
 interface VoiceRecorderProps {
   onSend: (uri: string, duration: number) => void;
@@ -59,19 +52,20 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
-  const [elapsed, setElapsed] = useState(0);
   const hasStartedRef = useRef(false);
 
-  // Imperative refs for recorder and player (no hooks from expo-audio)
-  const recorderRef = useRef<Record<string, unknown> | null>(null);
-  const playerRef = useRef<Record<string, unknown> | null>(null);
-  const recordedUriRef = useRef<string | null>(null);
-  const meteringTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ── Official expo-audio hooks for recording ──
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder, 100);
+
+  // Imperative ref for preview player only
+  const playerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(4));
-  const frozenBarsRef = useRef<number[]>([]);
+  // Live metering bars
   const levelsRef = useRef<number[]>([]);
+  const frozenBarsRef = useRef<number[]>([]);
+  const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(4));
 
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -97,117 +91,47 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     transform: [{ scale: dotScale.value }],
   }));
 
+  // Update live bars from metering
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const h = meteringToHeight(recorderState.metering);
+    levelsRef.current.push(h);
+    if (levelsRef.current.length > BAR_COUNT * 10) {
+      levelsRef.current = levelsRef.current.slice(-BAR_COUNT * 2);
+    }
+    const recent = levelsRef.current.slice(-BAR_COUNT);
+    const padCount = Math.max(0, BAR_COUNT - recent.length);
+    const padded = padCount > 0
+      ? [...Array<number>(padCount).fill(4), ...recent]
+      : recent;
+    setLiveBars(padded);
+  }, [phase, recorderState.metering]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (meteringTimerRef.current) clearInterval(meteringTimerRef.current);
       if (previewTimerRef.current) clearInterval(previewTimerRef.current);
-      try {
-        const rec = recorderRef.current;
-        if (rec && typeof rec.stop === "function") rec.stop();
-      } catch { /* ignore */ }
-      try {
-        const pl = playerRef.current;
-        if (pl && typeof pl.pause === "function") (pl.pause as () => void)();
-      } catch { /* ignore */ }
+      try { playerRef.current?.pause(); } catch { /* ignore */ }
+      try { playerRef.current?.remove(); } catch { /* ignore */ }
     };
   }, []);
 
   const startRecording = useCallback(async () => {
     try {
-      const mod = getAudioModule();
-      if (!mod) {
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
         setPhase("error");
-        setErrorMsg("Audio-Modul nicht verf\u00fcgbar");
+        setErrorMsg("Mikrofon-Zugriff verweigert");
         return;
       }
 
-      // Request permission
-      const AudioModule = mod.AudioModule as Record<string, unknown>;
-      if (AudioModule && typeof AudioModule.requestRecordingPermissionsAsync === "function") {
-        const permStatus = await (AudioModule.requestRecordingPermissionsAsync as () => Promise<{ granted: boolean }>)();
-        if (!permStatus.granted) {
-          setPhase("error");
-          setErrorMsg("Mikrofon-Zugriff verweigert");
-          return;
-        }
-      }
-
-      // Set audio mode
-      const setMode = mod.setAudioModeAsync as ((opts: Record<string, boolean>) => Promise<void>) | undefined;
-      if (setMode) {
-        await setMode({ playsInSilentMode: true, allowsRecording: true });
-      }
-
-      // Create recorder
-      const RecordingPresets = mod.RecordingPresets as Record<string, unknown>;
-      const recordOptions = {
-        ...(RecordingPresets?.HIGH_QUALITY ?? {}),
-        isMeteringEnabled: true,
-      };
-
-      const useRecorder = mod.useAudioRecorder;
-      // Since we can't use hooks imperatively, use createAudioRecorder if available
-      // Otherwise fall back to direct native module call
-      let recorder: Record<string, unknown> | null = null;
-
-      // expo-audio v1.x exposes AudioRecorder class or we use the module directly
-      if (typeof mod.createAudioRecorder === "function") {
-        recorder = (mod.createAudioRecorder as (opts: unknown) => Record<string, unknown>)(recordOptions);
-      } else if (AudioModule && typeof AudioModule.createRecorder === "function") {
-        recorder = (AudioModule.createRecorder as (opts: unknown) => Record<string, unknown>)(recordOptions);
-      }
-
-      if (!recorder) {
-        // Fallback: use useAudioRecorder via a manual instantiation workaround
-        // The recorder API varies by version; try the most common pattern
-        if (typeof AudioModule.AudioRecorder === "function") {
-          recorder = new (AudioModule.AudioRecorder as new (opts: unknown) => Record<string, unknown>)(recordOptions);
-        }
-      }
-
-      if (!recorder) {
-        setPhase("error");
-        setErrorMsg("Recorder konnte nicht erstellt werden");
-        return;
-      }
-
-      recorderRef.current = recorder;
-      levelsRef.current = [];
-      setLiveBars(Array(BAR_COUNT).fill(4));
-
-      // Prepare and record
-      if (typeof recorder.prepareToRecordAsync === "function") {
-        await (recorder.prepareToRecordAsync as (opts: unknown) => Promise<void>)(recordOptions);
-      }
-      if (typeof recorder.record === "function") {
-        (recorder.record as () => void)();
-      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
 
       setPhase("recording");
-      setElapsed(0);
-
-      // Start metering poll
-      const startTime = Date.now();
-      meteringTimerRef.current = setInterval(() => {
-        const secs = Math.floor((Date.now() - startTime) / 1000);
-        setElapsed(secs);
-
-        const rec = recorderRef.current;
-        if (!rec) return;
-        const metering = typeof rec.currentMetering === "number" ? rec.currentMetering : undefined;
-        const h = meteringToHeight(metering);
-        levelsRef.current.push(h);
-        if (levelsRef.current.length > BAR_COUNT * 10) {
-          levelsRef.current = levelsRef.current.slice(-BAR_COUNT * 2);
-        }
-        const recent = levelsRef.current.slice(-BAR_COUNT);
-        const padCount = Math.max(0, BAR_COUNT - recent.length);
-        const padded = padCount > 0
-          ? [...Array<number>(padCount).fill(4), ...recent]
-          : recent;
-        setLiveBars(padded);
-      }, 100);
+      levelsRef.current = [];
+      setLiveBars(Array(BAR_COUNT).fill(4));
 
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -217,40 +141,23 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestartet werden");
     }
-  }, []);
+  }, [recorder]);
 
   const stopRecording = useCallback(async () => {
     try {
-      if (meteringTimerRef.current) {
-        clearInterval(meteringTimerRef.current);
-        meteringTimerRef.current = null;
-      }
       frozenBarsRef.current = [...liveBars];
-      const dur = elapsed;
+      const dur = recorderState.durationMillis / 1000;
 
-      const rec = recorderRef.current;
-      if (rec && typeof rec.stop === "function") {
-        await (rec.stop as () => Promise<void>)();
-      }
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
 
-      const uri = rec?.uri as string | undefined;
-      recordedUriRef.current = uri ?? null;
+      const uri = recorder.uri;
       setRecordedDuration(dur);
 
-      // Switch audio mode back
-      const mod = getAudioModule();
-      if (mod) {
-        const setMode = mod.setAudioModeAsync as ((opts: Record<string, boolean>) => Promise<void>) | undefined;
-        if (setMode) await setMode({ playsInSilentMode: true, allowsRecording: false });
-      }
-
       // Create preview player
-      if (uri && mod) {
+      if (uri) {
         try {
-          const createPlayer = mod.createAudioPlayer as ((src: string) => Record<string, unknown>) | undefined;
-          if (createPlayer) {
-            playerRef.current = createPlayer(uri);
-          }
+          playerRef.current = createAudioPlayer(uri);
         } catch { /* ignore preview player creation failure */ }
       }
 
@@ -263,44 +170,38 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestoppt werden");
     }
-  }, [elapsed, liveBars]);
+  }, [recorder, recorderState.durationMillis, liveBars]);
 
   const handlePreviewPlay = useCallback(async () => {
-    const mod = getAudioModule();
-    if (mod) {
-      try {
-        const setMode = mod.setAudioModeAsync as ((opts: Record<string, boolean>) => Promise<void>) | undefined;
-        if (setMode) await setMode({ playsInSilentMode: true, allowsRecording: false });
-      } catch { /* best effort */ }
-    }
+    try {
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    } catch { /* best effort */ }
+
     const pl = playerRef.current;
-    if (pl && typeof pl.play === "function") {
-      try {
-        (pl.play as () => void)();
-        setPreviewPlaying(true);
-        setPhase("previewing");
+    if (!pl) return;
 
-        // Poll progress
-        previewTimerRef.current = setInterval(() => {
-          const p = playerRef.current;
-          if (!p) return;
-          const ct = typeof p.currentTime === "number" ? p.currentTime : 0;
-          const dur = typeof p.duration === "number" ? p.duration : recordedDuration;
-          setPreviewCurrentTime(ct);
-          setPreviewProgress(dur > 0 ? Math.min(ct / dur, 1) : 0);
+    try {
+      pl.play();
+      setPreviewPlaying(true);
+      setPhase("previewing");
 
-          // Check if finished
-          const playing = !!p.playing;
-          if (!playing && ct > 0) {
-            if (previewTimerRef.current) clearInterval(previewTimerRef.current);
-            setPreviewPlaying(false);
-            setPhase("stopped");
-            try { if (typeof p.seekTo === "function") (p.seekTo as (t: number) => void)(0); } catch { /* ignore */ }
-          }
-        }, 150);
-      } catch (e) {
-        console.error("Preview play error:", e);
-      }
+      previewTimerRef.current = setInterval(() => {
+        const p = playerRef.current;
+        if (!p) return;
+        const ct = p.currentTime;
+        const dur = p.duration > 0 ? p.duration : recordedDuration;
+        setPreviewCurrentTime(ct);
+        setPreviewProgress(dur > 0 ? Math.min(ct / dur, 1) : 0);
+
+        if (!p.playing && ct > 0) {
+          if (previewTimerRef.current) clearInterval(previewTimerRef.current);
+          setPreviewPlaying(false);
+          setPhase("stopped");
+          try { p.seekTo(0); } catch { /* ignore */ }
+        }
+      }, 150);
+    } catch (e) {
+      console.error("Preview play error:", e);
     }
   }, [recordedDuration]);
 
@@ -309,17 +210,14 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       clearInterval(previewTimerRef.current);
       previewTimerRef.current = null;
     }
-    const pl = playerRef.current;
-    if (pl && typeof pl.pause === "function") {
-      try { (pl.pause as () => void)(); } catch { /* ignore */ }
-    }
+    try { playerRef.current?.pause(); } catch { /* ignore */ }
     setPreviewPlaying(false);
     setPhase("stopped");
   }, []);
 
   const handleSend = useCallback(() => {
     handlePreviewPause();
-    const uri = recordedUriRef.current;
+    const uri = recorder.uri;
     if (uri) {
       onSend(uri, recordedDuration * 1000);
       if (Platform.OS !== "web") {
@@ -329,21 +227,12 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Keine Aufnahme vorhanden");
     }
-  }, [recordedDuration, onSend, handlePreviewPause]);
+  }, [recorder.uri, recordedDuration, onSend, handlePreviewPause]);
 
   const handleDelete = useCallback(() => {
     handlePreviewPause();
-    if (meteringTimerRef.current) {
-      clearInterval(meteringTimerRef.current);
-      meteringTimerRef.current = null;
-    }
-    try {
-      const rec = recorderRef.current;
-      if (rec && typeof rec.stop === "function") (rec.stop as () => void)();
-    } catch { /* ignore */ }
-    recorderRef.current = null;
+    try { playerRef.current?.remove(); } catch { /* ignore */ }
     playerRef.current = null;
-    recordedUriRef.current = null;
     setPhase("idle");
     levelsRef.current = [];
     onCancel();
@@ -361,6 +250,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const elapsed = recorderState.durationMillis / 1000;
   const previewBars = frozenBarsRef.current.length > 0 ? frozenBarsRef.current : liveBars;
 
   // === ERROR STATE ===
@@ -479,7 +369,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       </TouchableOpacity>
       <View style={styles.center}>
         <View style={styles.preparingDot} />
-        <Text style={styles.preparingText}>Aufnahme wird vorbereitet…</Text>
+        <Text style={styles.preparingText}>Aufnahme wird vorbereitet\u2026</Text>
       </View>
     </View>
   );

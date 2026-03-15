@@ -1,116 +1,149 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { SymbolView } from "@/components/Icon";
 
-// ─── Audio engine (lazy-loaded, crash-safe) ──────────────────────────
-// expo-audio is imported dynamically the first time the user taps Play.
-// If it fails to load, the UI remains intact – only playback is disabled.
+// ─── Shared singleton audio player ──────────────────────────────────────────
+// Only ONE player instance exists at a time. When a different bubble is tapped,
+// the old source is replaced. This avoids resource exhaustion on iOS.
 
-interface AudioEngine {
+type PlayerState = {
+  url: string | null;
   playing: boolean;
   currentTime: number;
   duration: number;
+  isLoaded: boolean;
+};
+
+const DEFAULT_STATE: PlayerState = {
+  url: null,
+  playing: false,
+  currentTime: 0,
+  duration: 0,
+  isLoaded: false,
+};
+
+let _state: PlayerState = { ...DEFAULT_STATE };
+let _player: ReturnType<typeof import("expo-audio")["createAudioPlayer"]> | null = null;
+let _statusSub: { remove: () => void } | null = null;
+let _listeners = new Set<() => void>();
+let _audioLoaded = false;
+let _audioFailed = false;
+
+// Lazy-load expo-audio (crash-safe)
+function getAudioModule(): typeof import("expo-audio") | null {
+  if (_audioLoaded) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-audio") as typeof import("expo-audio");
+  }
+  if (_audioFailed) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-audio") as typeof import("expo-audio");
+    _audioLoaded = true;
+    return mod;
+  } catch (e) {
+    console.warn("[VoiceMessageBubble] expo-audio not available", e);
+    _audioFailed = true;
+    return null;
+  }
 }
 
-let _player: unknown = null;
-let _currentUrl: string | null = null;
-let _listeners: Set<() => void> = new Set();
-let _pollTimer: ReturnType<typeof setInterval> | null = null;
-let _audioModuleLoaded = false;
-let _audioModuleFailed = false;
-let _createPlayerFn: ((src?: unknown) => unknown) | null = null;
-let _setModeFn: ((opts: Record<string, boolean>) => Promise<void>) | null = null;
-
-function notifyListeners() {
+function broadcastState() {
   _listeners.forEach((fn) => fn());
 }
 
-function startPolling() {
-  if (_pollTimer) return;
-  _pollTimer = setInterval(notifyListeners, 200);
+function updateState(patch: Partial<PlayerState>) {
+  _state = { ..._state, ...patch };
+  broadcastState();
 }
 
-function stopPolling() {
-  if (_pollTimer) {
-    clearInterval(_pollTimer);
-    _pollTimer = null;
+function handleStatusUpdate(status: { playing: boolean; currentTime: number; duration: number; isLoaded?: boolean }) {
+  const wasPlaying = _state.playing;
+  const isPlaying = status.playing;
+  
+  updateState({
+    playing: isPlaying,
+    currentTime: status.currentTime,
+    duration: status.duration,
+    isLoaded: status.isLoaded ?? _state.isLoaded,
+  });
+
+  // Auto-reset when playback finishes naturally
+  if (wasPlaying && !isPlaying && status.duration > 0 && status.currentTime >= status.duration - 0.1) {
+    _player?.seekTo(0).catch(() => { /* ignore */ });
+    updateState({ playing: false, currentTime: 0 });
   }
 }
 
-function loadAudioModule(): boolean {
-  if (_audioModuleLoaded) return true;
-  if (_audioModuleFailed) return false;
-  try {
-    // Dynamic require – if expo-audio crashes, we catch it
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("expo-audio");
-    _createPlayerFn = mod.createAudioPlayer;
-    _setModeFn = mod.setAudioModeAsync;
-    _audioModuleLoaded = true;
-    return true;
-  } catch (e) {
-    console.warn("VoiceMessageBubble: expo-audio could not be loaded", e);
-    _audioModuleFailed = true;
-    return false;
+function ensurePlayer(audioMod: typeof import("expo-audio"), url: string) {
+  if (!_player) {
+    // First ever player — create with the source URL
+    _player = audioMod.createAudioPlayer(url);
+    _statusSub = (_player as unknown as { addListener: (event: string, cb: (s: unknown) => void) => { remove: () => void } })
+      .addListener("playbackStatusUpdate", (s: unknown) => {
+        const status = s as { playing: boolean; currentTime: number; duration: number; isLoaded?: boolean };
+        handleStatusUpdate(status);
+      });
+    _state.url = url;
+    return true; // new player
   }
-}
-
-function getPlayerState(): AudioEngine {
-  if (!_player) return { playing: false, currentTime: 0, duration: 0 };
-  try {
-    const p = _player as Record<string, unknown>;
-    return {
-      playing: !!p.playing,
-      currentTime: (typeof p.currentTime === "number" ? p.currentTime : 0),
-      duration: (typeof p.duration === "number" ? p.duration : 0),
-    };
-  } catch {
-    return { playing: false, currentTime: 0, duration: 0 };
+  if (_state.url !== url) {
+    // Switch to a different audio — replace source
+    _player.pause();
+    _player.replace(url);
+    _state = { url, playing: false, currentTime: 0, duration: 0, isLoaded: false };
+    return true; // source changed
   }
+  return false; // same player, same source
 }
 
 async function toggleAudio(url: string) {
-  if (!url) return;
-  if (!loadAudioModule()) return;
+  const audioMod = getAudioModule();
+  if (!audioMod || !url) return;
 
-  try { await _setModeFn?.({ playsInSilentMode: true, allowsRecording: false }); } catch { /* best effort */ }
-
-  if (!_player && _createPlayerFn) {
-    _player = _createPlayerFn();
-  }
-  if (!_player) return;
-
-  const p = _player as Record<string, unknown>;
-
+  // Ensure silent mode playback works on iOS
   try {
-    if (_currentUrl === url) {
-      // Same URL → toggle
-      if (p.playing) {
-        (p.pause as () => void)();
-        stopPolling();
-      } else {
-        (p.play as () => void)();
-        startPolling();
-      }
-    } else {
-      // Different URL → load new
-      if (p.playing) (p.pause as () => void)();
-      _currentUrl = url;
-      (p.replace as (src: string) => void)(url);
-      setTimeout(() => {
-        try {
-          (p.play as () => void)();
-          startPolling();
-        } catch { /* ignore */ }
-      }, 150);
+    await audioMod.setAudioModeAsync({ playsInSilentMode: true });
+  } catch { /* best effort */ }
+
+  const isNew = ensurePlayer(audioMod, url);
+
+  if (isNew) {
+    // Wait for the source to load before playing
+    // Poll isLoaded with a max wait of 3 seconds
+    let waited = 0;
+    const pollInterval = 50;
+    const maxWait = 3000;
+    while (waited < maxWait) {
+      if (_player && (_player as unknown as { isLoaded: boolean }).isLoaded) break;
+      await new Promise<void>((r) => setTimeout(r, pollInterval));
+      waited += pollInterval;
     }
-  } catch (e) {
-    console.warn("VoiceMessageBubble: playback error", e);
+    updateState({ isLoaded: true });
+    try {
+      _player?.play();
+      updateState({ playing: true });
+    } catch (e) {
+      console.warn("[VoiceMessageBubble] play failed", e);
+    }
+  } else {
+    // Same source — toggle play/pause
+    if (_state.playing) {
+      _player?.pause();
+      updateState({ playing: false });
+    } else {
+      // If at the end, seek back to start
+      if (_state.duration > 0 && _state.currentTime >= _state.duration - 0.2) {
+        await _player?.seekTo(0);
+        updateState({ currentTime: 0 });
+      }
+      _player?.play();
+      updateState({ playing: true });
+    }
   }
-  notifyListeners();
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "0:00";
@@ -138,7 +171,7 @@ function generateStableBars(seed: number): number[] {
   });
 }
 
-// ─── Component ───────────────────────────────────────────────────────
+// ─── Component ───────────────────────────────────────────────────────────────
 
 interface VoiceMessageBubbleProps {
   audioUrl: string;
@@ -155,32 +188,26 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
   const totalDuration = duration ?? (durationMs ? durationMs / 1000 : 0);
   const bars = useMemo(() => generateStableBars(hashString(audioUrl || "x")), [audioUrl]);
 
-  // Subscribe to shared player state changes
+  // Subscribe to singleton player state
   const [, forceUpdate] = useState(0);
   useEffect(() => {
     const listener = () => forceUpdate((n) => n + 1);
     _listeners.add(listener);
-    return () => {
-      _listeners.delete(listener);
-    };
+    return () => { _listeners.delete(listener); };
   }, []);
 
-  const isThisActive = _currentUrl === audioUrl && _player != null;
-  const state = isThisActive ? getPlayerState() : { playing: false, currentTime: 0, duration: 0 };
+  const isThisActive = _state.url === audioUrl && _player != null;
+  const playing = isThisActive && _state.playing;
+  const currentTime = isThisActive ? _state.currentTime : 0;
+  const effectiveDuration = (isThisActive && _state.duration > 0) ? _state.duration : totalDuration;
+
+  const progress = effectiveDuration > 0 ? Math.min(currentTime / effectiveDuration, 1) : 0;
+  const displayTime = playing ? formatTime(currentTime) : formatTime(effectiveDuration);
 
   const handleToggle = useCallback(() => {
     if (!audioUrl) return;
     toggleAudio(audioUrl);
   }, [audioUrl]);
-
-  // Progress
-  const effectiveDuration = state.duration > 0 ? state.duration : totalDuration;
-  const progress = state.playing && effectiveDuration > 0
-    ? Math.min(state.currentTime / effectiveDuration, 1)
-    : 0;
-  const displayTime = state.playing
-    ? formatTime(state.currentTime)
-    : formatTime(effectiveDuration);
 
   // No URL fallback
   if (!audioUrl) {
@@ -200,7 +227,7 @@ export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={handleToggle} style={styles.playBtn} activeOpacity={0.7}>
         <SymbolView
-          name={state.playing ? "pause.fill" : "play.fill"}
+          name={playing ? "pause.fill" : "play.fill"}
           size={16}
           tintColor={mine ? "#FFFFFF" : "#000000"}
         />
