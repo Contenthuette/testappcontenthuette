@@ -55,82 +55,6 @@ function meteringToHeight(metering: number | undefined): number {
   return 4 + normalised * 18;
 }
 
-/* ─── Preview player (only mounted in "previewing" phase) ─── */
-function PreviewPlayer({
-  uri,
-  bars,
-  duration,
-  onFinish,
-  onPause,
-}: {
-  uri: string;
-  bars: number[];
-  duration: number;
-  onFinish: () => void;
-  onPause: () => void;
-}) {
-  const player = useAudioPlayer(uri);
-  const status = useAudioPlayerStatus(player);
-  const [autoPlayed, setAutoPlayed] = useState(false);
-
-  useEffect(() => {
-    if (status.isLoaded && !autoPlayed) {
-      setAutoPlayed(true);
-      setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false })
-        .catch(() => {})
-        .then(() => {
-          try { player.play(); } catch { /* ignore */ }
-        });
-    }
-  }, [status.isLoaded, autoPlayed, player]);
-
-  useEffect(() => {
-    if (status.didJustFinish) {
-      onFinish();
-    }
-  }, [status.didJustFinish, onFinish]);
-
-  const effectiveDur = status.duration > 0 ? status.duration : duration;
-  const progress = effectiveDur > 0 ? Math.min(status.currentTime / effectiveDur, 1) : 0;
-
-  return (
-    <>
-      <TouchableOpacity
-        onPress={() => {
-          try { player.pause(); } catch { /* ignore */ }
-          onPause();
-        }}
-        style={styles.previewPlayBtn}
-        activeOpacity={0.7}
-      >
-        {!status.isLoaded ? (
-          <ActivityIndicator size="small" color="#000" />
-        ) : (
-          <SymbolView name="pause.fill" size={14} tintColor="#000" />
-        )}
-      </TouchableOpacity>
-      <View style={styles.waveform}>
-        {bars.map((h, i) => (
-          <View
-            key={`p-${i}`}
-            style={[
-              styles.waveBar,
-              {
-                height: h,
-                backgroundColor:
-                  i / bars.length <= progress ? "#000" : "#D4D4D8",
-              },
-            ]}
-          />
-        ))}
-      </View>
-      <Text style={styles.previewTime}>
-        {status.playing ? formatTime(status.currentTime) : formatTime(effectiveDur)}
-      </Text>
-    </>
-  );
-}
-
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
   const [recordedDuration, setRecordedDuration] = useState(0);
@@ -140,10 +64,15 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const audioRecorder = useAudioRecorder(RECORD_OPTIONS);
   const recorderState = useAudioRecorderState(audioRecorder, 100);
 
+  // Preview player – always created with null, source replaced after recording
+  const previewPlayer = useAudioPlayer(null);
+  const previewStatus = useAudioPlayerStatus(previewPlayer);
+
   const levelsRef = useRef<number[]>([]);
   const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(4));
   const frozenBarsRef = useRef<number[]>([]);
 
+  // Update live waveform bars during recording
   useEffect(() => {
     if (phase !== "recording") return;
     const h = meteringToHeight(recorderState.metering);
@@ -160,6 +89,14 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   }, [recorderState.durationMillis, recorderState.metering, phase]);
 
   const elapsed = Math.floor((recorderState.durationMillis ?? 0) / 1000);
+
+  // When preview finishes playing, go back to stopped
+  useEffect(() => {
+    if (previewStatus.didJustFinish && phase === "previewing") {
+      try { previewPlayer.seekTo(0); } catch { /* ignore */ }
+      setPhase("stopped");
+    }
+  }, [previewStatus.didJustFinish, phase, previewPlayer]);
 
   // Pulsing red dot
   const dotScale = useSharedValue(1);
@@ -183,8 +120,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      const status = await AudioModule.requestRecordingPermissionsAsync();
-      if (!status.granted) {
+      const permStatus = await AudioModule.requestRecordingPermissionsAsync();
+      if (!permStatus.granted) {
         setPhase("error");
         setErrorMsg("Mikrofon-Zugriff verweigert");
         return;
@@ -211,6 +148,13 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       const dur = elapsed;
       await audioRecorder.stop();
       setRecordedDuration(dur);
+      // Switch audio mode back to playback
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      // Load the recorded file into the preview player
+      const uri = audioRecorder.uri;
+      if (uri) {
+        previewPlayer.replace(uri);
+      }
       setPhase("stopped");
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -220,9 +164,30 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestoppt werden");
     }
-  }, [audioRecorder, elapsed, liveBars]);
+  }, [audioRecorder, elapsed, liveBars, previewPlayer]);
+
+  const handlePreviewPlay = useCallback(async () => {
+    try {
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    } catch { /* best effort */ }
+    try {
+      previewPlayer.play();
+      setPhase("previewing");
+    } catch (e) {
+      console.error("Preview play error:", e);
+    }
+  }, [previewPlayer]);
+
+  const handlePreviewPause = useCallback(() => {
+    try {
+      previewPlayer.pause();
+    } catch { /* ignore */ }
+    setPhase("stopped");
+  }, [previewPlayer]);
 
   const handleSend = useCallback(() => {
+    // Stop preview if playing
+    try { previewPlayer.pause(); } catch { /* ignore */ }
     const uri = audioRecorder.uri;
     if (uri) {
       onSend(uri, recordedDuration * 1000);
@@ -233,16 +198,17 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Keine Aufnahme vorhanden");
     }
-  }, [audioRecorder.uri, recordedDuration, onSend]);
+  }, [audioRecorder.uri, recordedDuration, onSend, previewPlayer]);
 
   const handleDelete = useCallback(() => {
+    try { previewPlayer.pause(); } catch { /* ignore */ }
     setPhase("idle");
     levelsRef.current = [];
     onCancel();
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [onCancel]);
+  }, [onCancel, previewPlayer]);
 
   // Auto-start on mount
   useEffect(() => {
@@ -252,6 +218,11 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Frozen bars for preview
+  const previewBars = frozenBarsRef.current.length > 0 ? frozenBarsRef.current : liveBars;
+  const previewDur = previewStatus.duration > 0 ? previewStatus.duration : recordedDuration;
+  const previewProgress = previewDur > 0 ? Math.min(previewStatus.currentTime / previewDur, 1) : 0;
 
   // === ERROR STATE ===
   if (phase === "error") {
@@ -297,22 +268,38 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     );
   }
 
-  // === PREVIEWING STATE (player mounted) ===
-  if (phase === "previewing" && audioRecorder.uri) {
-    const previewBars = frozenBarsRef.current.length > 0 ? frozenBarsRef.current : liveBars;
+  // === PREVIEWING STATE (audio playing) ===
+  if (phase === "previewing") {
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
         <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} activeOpacity={0.7} hitSlop={8}>
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
         <View style={styles.center}>
-          <PreviewPlayer
-            uri={audioRecorder.uri}
-            bars={previewBars}
-            duration={recordedDuration}
-            onFinish={() => setPhase("stopped")}
-            onPause={() => setPhase("stopped")}
-          />
+          <TouchableOpacity onPress={handlePreviewPause} style={styles.previewPlayBtn} activeOpacity={0.7}>
+            {!previewStatus.isLoaded ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <SymbolView name="pause.fill" size={14} tintColor="#000" />
+            )}
+          </TouchableOpacity>
+          <View style={styles.waveform}>
+            {previewBars.map((h, i) => (
+              <View
+                key={`p-${i}`}
+                style={[
+                  styles.waveBar,
+                  {
+                    height: h,
+                    backgroundColor: i / previewBars.length <= previewProgress ? "#000" : "#D4D4D8",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          <Text style={styles.previewTime}>
+            {previewStatus.playing ? formatTime(previewStatus.currentTime) : formatTime(previewDur)}
+          </Text>
         </View>
         <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.7} hitSlop={8}>
           <SymbolView name="arrow.up" size={15} tintColor="#FFF" />
@@ -323,24 +310,19 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   // === STOPPED / REVIEW STATE ===
   if (phase === "stopped") {
-    const previewBars = frozenBarsRef.current.length > 0 ? frozenBarsRef.current : liveBars;
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
         <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} activeOpacity={0.7} hitSlop={8}>
           <SymbolView name="trash" size={17} tintColor="#9CA3AF" />
         </TouchableOpacity>
         <View style={styles.center}>
-          <TouchableOpacity
-            onPress={() => setPhase("previewing")}
-            style={styles.previewPlayBtn}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity onPress={handlePreviewPlay} style={styles.previewPlayBtn} activeOpacity={0.7}>
             <SymbolView name="play.fill" size={14} tintColor="#000" />
           </TouchableOpacity>
           <View style={styles.waveform}>
             {previewBars.map((h, i) => (
               <View
-                key={`p-${i}`}
+                key={`s-${i}`}
                 style={[styles.waveBar, { height: h, backgroundColor: "#000" }]}
               />
             ))}
