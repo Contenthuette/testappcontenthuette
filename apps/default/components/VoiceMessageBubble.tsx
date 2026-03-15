@@ -1,179 +1,215 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { SymbolView } from "@/components/Icon";
 
-// ─── Shared singleton audio player ──────────────────────────────────────────
-// Only ONE player instance exists at a time. When a different bubble is tapped,
-// the old source is replaced. This avoids resource exhaustion on iOS.
+// ─── Singleton audio player with polling ────────────────────────────────────
+// ONE player at a time. Polling reads properties directly — no event issues.
 
-type PlayerState = {
+interface PlayerSnapshot {
   url: string | null;
+  playing: boolean;
+  currentTime: number;
+  duration: number;
+  isLoaded: boolean;
+  isLoading: boolean;
+}
+
+const EMPTY: PlayerSnapshot = {
+  url: null,
+  playing: false,
+  currentTime: 0,
+  duration: 0,
+  isLoaded: false,
+  isLoading: false,
+};
+
+type AudioPlayer = {
+  play(): void;
+  pause(): void;
+  seekTo(s: number): Promise<void>;
+  replace(source: string | { uri: string }): void;
+  remove(): void;
   playing: boolean;
   currentTime: number;
   duration: number;
   isLoaded: boolean;
 };
 
-const DEFAULT_STATE: PlayerState = {
-  url: null,
-  playing: false,
-  currentTime: 0,
-  duration: 0,
-  isLoaded: false,
-};
+let _snap: PlayerSnapshot = { ...EMPTY };
+let _player: AudioPlayer | null = null;
+let _pollTimer: ReturnType<typeof setInterval> | null = null;
+let _subs = new Set<() => void>();
+let _audioModCache: typeof import("expo-audio") | null | false = null;
 
-let _state: PlayerState = { ...DEFAULT_STATE };
-let _player: ReturnType<typeof import("expo-audio")["createAudioPlayer"]> | null = null;
-let _statusSub: { remove: () => void } | null = null;
-let _listeners = new Set<() => void>();
-let _audioLoaded = false;
-let _audioFailed = false;
-
-// Lazy-load expo-audio (crash-safe)
-function getAudioModule(): typeof import("expo-audio") | null {
-  if (_audioLoaded) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("expo-audio") as typeof import("expo-audio");
-  }
-  if (_audioFailed) return null;
+function getAudio(): typeof import("expo-audio") | null {
+  if (_audioModCache === false) return null;
+  if (_audioModCache) return _audioModCache;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("expo-audio") as typeof import("expo-audio");
-    _audioLoaded = true;
-    return mod;
-  } catch (e) {
-    console.warn("[VoiceMessageBubble] expo-audio not available", e);
-    _audioFailed = true;
+    _audioModCache = require("expo-audio") as typeof import("expo-audio");
+    return _audioModCache;
+  } catch {
+    _audioModCache = false;
     return null;
   }
 }
 
-function broadcastState() {
-  _listeners.forEach((fn) => fn());
+function notify() {
+  _subs.forEach((fn) => fn());
 }
 
-function updateState(patch: Partial<PlayerState>) {
-  _state = { ..._state, ...patch };
-  broadcastState();
+function startPolling() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(() => {
+    if (!_player) {
+      stopPolling();
+      return;
+    }
+    const prev = _snap;
+    const playing = _player.playing;
+    const currentTime = _player.currentTime;
+    const duration = _player.duration;
+    const isLoaded = _player.isLoaded;
+
+    // Detect playback finished (was playing, now stopped, near end)
+    if (prev.playing && !playing && duration > 0 && currentTime >= duration - 0.15) {
+      _player.seekTo(0).catch(() => {});
+      _snap = { ..._snap, playing: false, currentTime: 0, isLoaded };
+      notify();
+      stopPolling();
+      return;
+    }
+
+    if (
+      prev.playing !== playing ||
+      Math.abs(prev.currentTime - currentTime) > 0.05 ||
+      Math.abs(prev.duration - duration) > 0.05 ||
+      prev.isLoaded !== isLoaded
+    ) {
+      _snap = { ..._snap, playing, currentTime, duration, isLoaded };
+      notify();
+    }
+
+    // Stop polling when paused & not loading
+    if (!playing && isLoaded && !_snap.isLoading) {
+      stopPolling();
+    }
+  }, 80);
 }
 
-function handleStatusUpdate(status: { playing: boolean; currentTime: number; duration: number; isLoaded?: boolean }) {
-  const wasPlaying = _state.playing;
-  const isPlaying = status.playing;
-  
-  updateState({
-    playing: isPlaying,
-    currentTime: status.currentTime,
-    duration: status.duration,
-    isLoaded: status.isLoaded ?? _state.isLoaded,
-  });
-
-  // Auto-reset when playback finishes naturally
-  if (wasPlaying && !isPlaying && status.duration > 0 && status.currentTime >= status.duration - 0.1) {
-    _player?.seekTo(0).catch(() => { /* ignore */ });
-    updateState({ playing: false, currentTime: 0 });
+function stopPolling() {
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
   }
 }
 
-function ensurePlayer(audioMod: typeof import("expo-audio"), url: string) {
-  if (!_player) {
-    // First ever player — create with the source URL
-    _player = audioMod.createAudioPlayer(url);
-    _statusSub = (_player as unknown as { addListener: (event: string, cb: (s: unknown) => void) => { remove: () => void } })
-      .addListener("playbackStatusUpdate", (s: unknown) => {
-        const status = s as { playing: boolean; currentTime: number; duration: number; isLoaded?: boolean };
-        handleStatusUpdate(status);
-      });
-    _state.url = url;
-    return true; // new player
-  }
-  if (_state.url !== url) {
-    // Switch to a different audio — replace source
-    _player.pause();
-    _player.replace(url);
-    _state = { url, playing: false, currentTime: 0, duration: 0, isLoaded: false };
-    return true; // source changed
-  }
-  return false; // same player, same source
-}
+async function togglePlay(url: string) {
+  const mod = getAudio();
+  if (!mod || !url) return;
 
-async function toggleAudio(url: string) {
-  const audioMod = getAudioModule();
-  if (!audioMod || !url) return;
-
-  // Ensure silent mode playback works on iOS
   try {
-    await audioMod.setAudioModeAsync({ playsInSilentMode: true });
+    await mod.setAudioModeAsync({ playsInSilentMode: true });
   } catch { /* best effort */ }
 
-  const isNew = ensurePlayer(audioMod, url);
-
-  if (isNew) {
-    // Wait for the source to load before playing
-    // Poll isLoaded with a max wait of 3 seconds
-    let waited = 0;
-    const pollInterval = 50;
-    const maxWait = 3000;
-    while (waited < maxWait) {
-      if (_player && (_player as unknown as { isLoaded: boolean }).isLoaded) break;
-      await new Promise<void>((r) => setTimeout(r, pollInterval));
-      waited += pollInterval;
-    }
-    updateState({ isLoaded: true });
-    try {
-      _player?.play();
-      updateState({ playing: true });
-    } catch (e) {
-      console.warn("[VoiceMessageBubble] play failed", e);
-    }
-  } else {
-    // Same source — toggle play/pause
-    if (_state.playing) {
-      _player?.pause();
-      updateState({ playing: false });
+  // ── Same URL: toggle play/pause ──
+  if (_player && _snap.url === url) {
+    if (_snap.playing) {
+      _player.pause();
+      _snap = { ..._snap, playing: false };
+      notify();
+      stopPolling();
     } else {
-      // If at the end, seek back to start
-      if (_state.duration > 0 && _state.currentTime >= _state.duration - 0.2) {
-        await _player?.seekTo(0);
-        updateState({ currentTime: 0 });
+      // If at end, restart
+      if (_snap.duration > 0 && _snap.currentTime >= _snap.duration - 0.2) {
+        await _player.seekTo(0);
+        _snap = { ..._snap, currentTime: 0 };
       }
-      _player?.play();
-      updateState({ playing: true });
+      _player.play();
+      _snap = { ..._snap, playing: true };
+      notify();
+      startPolling();
     }
+    return;
+  }
+
+  // ── Different URL or first play ──
+  _snap = { url, playing: false, currentTime: 0, duration: 0, isLoaded: false, isLoading: true };
+  notify();
+
+  if (_player) {
+    // Reuse existing player, swap source
+    _player.pause();
+    _player.replace({ uri: url });
+  } else {
+    // Create brand new player
+    _player = mod.createAudioPlayer({ uri: url }) as unknown as AudioPlayer;
+  }
+
+  // Poll until loaded (max 5s)
+  startPolling();
+  const maxWait = 5000;
+  const step = 60;
+  let waited = 0;
+  while (waited < maxWait) {
+    if (_player?.isLoaded) break;
+    await new Promise<void>((r) => setTimeout(r, step));
+    waited += step;
+  }
+
+  if (!_player?.isLoaded) {
+    // Timed out — still try to play, some platforms report isLoaded late
+    console.warn("[Voice] isLoaded timeout, attempting play anyway");
+  }
+
+  _snap = { ..._snap, isLoading: false, isLoaded: true };
+  notify();
+
+  try {
+    _player?.play();
+    _snap = { ..._snap, playing: true };
+    notify();
+    startPolling();
+  } catch (e) {
+    console.warn("[Voice] play() failed", e);
+    _snap = { ..._snap, playing: false, isLoading: false };
+    notify();
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
+function fmt(sec: number): string {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function hashString(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
+function hash(str: string): number {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
-const BAR_COUNT = 24;
-
-function generateStableBars(seed: number): number[] {
-  return Array.from({ length: BAR_COUNT }, (_, i) => {
+const N_BARS = 24;
+function makeBars(seed: number): number[] {
+  return Array.from({ length: N_BARS }, (_, i) => {
     const a = Math.sin(seed * 0.001 + i * 0.8) * 6;
     const b = Math.sin(seed * 0.0007 + i * 1.3) * 4;
-    const h = 10 + a + b;
-    return Math.max(4, Math.min(22, h));
+    return Math.max(4, Math.min(22, 10 + a + b));
   });
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ──────────────────────────────────────────────────────────────
 
-interface VoiceMessageBubbleProps {
+interface Props {
   audioUrl: string;
   duration?: number;
   durationMs?: number;
@@ -182,84 +218,89 @@ interface VoiceMessageBubbleProps {
   timestamp?: string;
 }
 
-export function VoiceMessageBubble(props: VoiceMessageBubbleProps) {
-  const { audioUrl, duration, durationMs, isMine, isMe, timestamp } = props;
+export function VoiceMessageBubble(props: Props) {
+  const { audioUrl, duration, durationMs, isMine, isMe } = props;
   const mine = isMine ?? isMe ?? false;
-  const totalDuration = duration ?? (durationMs ? durationMs / 1000 : 0);
-  const bars = useMemo(() => generateStableBars(hashString(audioUrl || "x")), [audioUrl]);
+  const totalDur = duration ?? (durationMs ? durationMs / 1000 : 0);
+  const bars = useMemo(() => makeBars(hash(audioUrl || "x")), [audioUrl]);
 
-  // Subscribe to singleton player state
-  const [, forceUpdate] = useState(0);
+  // Subscribe to singleton state
+  const [, bump] = useState(0);
   useEffect(() => {
-    const listener = () => forceUpdate((n) => n + 1);
-    _listeners.add(listener);
-    return () => { _listeners.delete(listener); };
+    const cb = () => bump((n) => n + 1);
+    _subs.add(cb);
+    return () => { _subs.delete(cb); };
   }, []);
 
-  const isThisActive = _state.url === audioUrl && _player != null;
-  const playing = isThisActive && _state.playing;
-  const currentTime = isThisActive ? _state.currentTime : 0;
-  const effectiveDuration = (isThisActive && _state.duration > 0) ? _state.duration : totalDuration;
+  const active = _snap.url === audioUrl && _player != null;
+  const playing = active && _snap.playing;
+  const loading = active && _snap.isLoading;
+  const curTime = active ? _snap.currentTime : 0;
+  const dur = active && _snap.duration > 0 ? _snap.duration : totalDur;
+  const progress = dur > 0 ? Math.min(curTime / dur, 1) : 0;
+  const timeLabel = playing ? fmt(curTime) : fmt(dur);
 
-  const progress = effectiveDuration > 0 ? Math.min(currentTime / effectiveDuration, 1) : 0;
-  const displayTime = playing ? formatTime(currentTime) : formatTime(effectiveDuration);
-
-  const handleToggle = useCallback(() => {
+  const onPress = useCallback(() => {
     if (!audioUrl) return;
-    toggleAudio(audioUrl);
+    togglePlay(audioUrl);
   }, [audioUrl]);
 
-  // No URL fallback
   if (!audioUrl) {
     return (
-      <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
-        <View style={styles.playBtn}>
+      <View style={[s.wrap, mine ? s.wrapMine : s.wrapOther]}>
+        <View style={s.btn}>
           <SymbolView name="exclamationmark.triangle" size={14} tintColor={mine ? "rgba(255,255,255,0.5)" : "#A1A1AA"} />
         </View>
-        <Text style={[styles.errorLabel, { color: mine ? "rgba(255,255,255,0.6)" : "#A1A1AA" }]}>
-          Audio nicht verfügbar
-        </Text>
+        <Text style={[s.errTxt, { color: mine ? "rgba(255,255,255,0.6)" : "#A1A1AA" }]}>Audio nicht verfügbar</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
-      <TouchableOpacity onPress={handleToggle} style={styles.playBtn} activeOpacity={0.7}>
-        <SymbolView
-          name={playing ? "pause.fill" : "play.fill"}
-          size={16}
-          tintColor={mine ? "#FFFFFF" : "#000000"}
-        />
+    <View style={[s.wrap, mine ? s.wrapMine : s.wrapOther]}>
+      <TouchableOpacity onPress={onPress} style={s.btn} activeOpacity={0.7}>
+        {loading ? (
+          <ActivityIndicator size="small" color={mine ? "#FFF" : "#000"} />
+        ) : (
+          <SymbolView
+            name={playing ? "pause.fill" : "play.fill"}
+            size={16}
+            tintColor={mine ? "#FFFFFF" : "#000000"}
+          />
+        )}
       </TouchableOpacity>
-      <View style={styles.waveContainer}>
-        <View style={styles.bars}>
-          {bars.map((h, i) => (
-            <View
-              key={`bar-${i}`}
-              style={[
-                styles.bar,
-                {
-                  height: h,
-                  backgroundColor:
-                    i / bars.length <= progress
+
+      <View style={s.wavWrap}>
+        <View style={s.barsRow}>
+          {bars.map((h, i) => {
+            const filled = i / bars.length <= progress;
+            return (
+              <View
+                key={i}
+                style={[
+                  s.singleBar,
+                  {
+                    height: h,
+                    backgroundColor: filled
                       ? (mine ? "#FFFFFF" : "#000000")
                       : (mine ? "rgba(255,255,255,0.3)" : "#D4D4D8"),
-                },
-              ]}
-            />
-          ))}
+                  },
+                ]}
+              />
+            );
+          })}
         </View>
       </View>
-      <Text style={[styles.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
-        {displayTime}
+
+      <Text style={[s.time, { color: mine ? "rgba(255,255,255,0.7)" : "#71717A" }]}>
+        {timeLabel}
       </Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const s = StyleSheet.create({
+  wrap: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -269,9 +310,9 @@ const styles = StyleSheet.create({
     minWidth: 200,
     maxWidth: 280,
   },
-  meContainer: { backgroundColor: "#000000" },
-  otherContainer: { backgroundColor: "#F4F4F5" },
-  playBtn: {
+  wrapMine: { backgroundColor: "#000" },
+  wrapOther: { backgroundColor: "#F4F4F5" },
+  btn: {
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -279,9 +320,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  waveContainer: { flex: 1, justifyContent: "center" },
-  bars: { flexDirection: "row", alignItems: "center", gap: 2, height: 24 },
-  bar: { width: 3, borderRadius: 2 },
+  wavWrap: { flex: 1, justifyContent: "center" },
+  barsRow: { flexDirection: "row", alignItems: "center", gap: 2, height: 24 },
+  singleBar: { width: 3, borderRadius: 2 },
   time: { fontSize: 11, fontWeight: "500", fontVariant: ["tabular-nums"] },
-  errorLabel: { fontSize: 12, fontWeight: "500", flex: 1 },
+  errTxt: { fontSize: 12, fontWeight: "500", flex: 1 },
 });
