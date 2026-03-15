@@ -40,25 +40,29 @@ type RecorderPhase = "idle" | "recording" | "stopped" | "error";
 
 const BAR_COUNT = 28;
 
+/** Recording options with metering enabled */
+const RECORD_OPTIONS = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+};
+
 /** Normalise dBFS metering (typically -160…0) to a bar height in px. */
 function meteringToHeight(metering: number | undefined): number {
   if (metering === undefined || metering === null) return 4;
-  // Map -50 dB … 0 dB  →  3 px … 22 px
+  // Map -50 dB … 0 dB  →  4 px … 22 px
   const clamped = Math.max(-50, Math.min(0, metering));
   const normalised = (clamped + 50) / 50; // 0 … 1
-  return 3 + normalised * 19;
+  return 4 + normalised * 18;
 }
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<RecorderPhase>("idle");
-  const [elapsed, setElapsed] = useState(0);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasStartedRef = useRef(false);
 
-  // expo-audio hooks
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // expo-audio hooks – metering enabled!
+  const audioRecorder = useAudioRecorder(RECORD_OPTIONS);
   const recorderState = useAudioRecorderState(audioRecorder, 100);
 
   // ── Real-time waveform from metering ──
@@ -66,7 +70,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(4));
   const frozenBarsRef = useRef<number[]>([]);
 
-  // Collect metering values every ~100 ms
+  // Collect metering values every ~100 ms while recording
   useEffect(() => {
     if (phase !== "recording") return;
     const h = meteringToHeight(recorderState.metering);
@@ -79,10 +83,13 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     const recent = levelsRef.current.slice(-BAR_COUNT);
     const padCount = Math.max(0, BAR_COUNT - recent.length);
     const padded = padCount > 0
-      ? [...Array<number>(padCount).fill(3), ...recent]
+      ? [...Array<number>(padCount).fill(4), ...recent]
       : recent;
     setLiveBars(padded);
-  }, [recorderState.durationMillis, phase]);
+  }, [recorderState.durationMillis, recorderState.metering, phase]);
+
+  // Elapsed time from recorder state (more accurate than manual timer)
+  const elapsed = Math.floor((recorderState.durationMillis ?? 0) / 1000);
 
   // Pulsing red dot
   const dotScale = useSharedValue(1);
@@ -105,21 +112,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     transform: [{ scale: dotScale.value }],
   }));
 
-  // Timer (1 s for display)
-  useEffect(() => {
-    if (phase === "recording") {
-      timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [phase]);
-
   const startRecording = useCallback(async () => {
     try {
       const status = await AudioModule.requestRecordingPermissionsAsync();
@@ -137,10 +129,10 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       levelsRef.current = [];
       setLiveBars(Array(BAR_COUNT).fill(4));
 
-      await audioRecorder.prepareToRecordAsync();
+      // Pass options with metering to prepareToRecordAsync too
+      await audioRecorder.prepareToRecordAsync(RECORD_OPTIONS);
       audioRecorder.record();
 
-      setElapsed(0);
       setPhase("recording");
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -183,7 +175,6 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   }, [audioRecorder.uri, recordedDuration, onSend]);
 
   const handleDelete = useCallback(() => {
-    setElapsed(0);
     setPhase("idle");
     levelsRef.current = [];
     onCancel();

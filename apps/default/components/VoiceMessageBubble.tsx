@@ -1,9 +1,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect, Component } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { SymbolView } from "@/components/Icon";
-
-type Player = ReturnType<typeof createAudioPlayer>;
 
 interface VoiceMessageBubbleProps {
   audioUrl: string;
@@ -15,6 +13,7 @@ interface VoiceMessageBubbleProps {
 }
 
 function formatTime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "0:00";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
@@ -48,7 +47,15 @@ class AudioErrorBoundary extends Component<EBProps, EBState> {
   render() { return this.state.hasError ? this.props.fallback : this.props.children; }
 }
 
-/* ─── Inner player ─── */
+/* ─── Audio mode singleton ─── */
+let _modeReady = false;
+async function ensurePlaybackMode() {
+  if (_modeReady) return;
+  await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  _modeReady = true;
+}
+
+/* ─── Inner player (hook-based) ─── */
 function VoiceMessageBubbleInner({
   audioUrl,
   duration: durationSec,
@@ -60,122 +67,37 @@ function VoiceMessageBubbleInner({
   const mine = isMine ?? isMe ?? false;
   const totalDuration = durationSec ?? (durationMs ? durationMs / 1000 : 0);
 
-  const playerRef = useRef<Player | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [playerDuration, setPlayerDuration] = useState(0);
+  // Hook-based player – auto-cleans up on unmount
+  const player = useAudioPlayer({ uri: audioUrl }, { updateInterval: 200 });
+  const status = useAudioPlayerStatus(player);
   const [error, setError] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const loadingTicksRef = useRef(0);
 
-  // Clean up
+  // Reset position when playback finishes
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      try { playerRef.current?.remove(); } catch { /* ignore */ }
-      playerRef.current = null;
-    };
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (status.didJustFinish) {
+      try { player.seekTo(0); } catch { /* ignore */ }
     }
-    loadingTicksRef.current = 0;
-  }, []);
-
-  const startPolling = useCallback(() => {
-    stopPolling();
-    timerRef.current = setInterval(() => {
-      const p = playerRef.current;
-      if (!p) return;
-
-      try {
-        const ct = p.currentTime;
-        const dur = p.duration;
-
-        setCurrentTime(ct);
-        if (dur > 0) {
-          setPlayerDuration(dur);
-          setIsLoading(false);
-          loadingTicksRef.current = 0;
-        }
-
-        if (p.playing) {
-          // Actively playing – keep polling
-          loadingTicksRef.current = 0;
-        } else if (dur > 0 && ct >= dur - 0.3) {
-          // Finished
-          setCurrentTime(dur);
-          setIsPlaying(false);
-          stopPolling();
-        } else if (dur === 0) {
-          // Still loading
-          loadingTicksRef.current++;
-          if (loadingTicksRef.current > 75) {
-            // 15 s timeout
-            setIsPlaying(false);
-            setIsLoading(false);
-            setError(true);
-            stopPolling();
-          }
-        } else {
-          // Paused or stopped mid-track
-          setIsPlaying(false);
-          stopPolling();
-        }
-      } catch {
-        setIsPlaying(false);
-        setIsLoading(false);
-        stopPolling();
-      }
-    }, 200);
-  }, [stopPolling]);
+  }, [status.didJustFinish, player]);
 
   const togglePlay = useCallback(async () => {
     try {
-      // Create player lazily on first tap
-      if (!playerRef.current) {
-        setIsLoading(true);
-        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-        const p = createAudioPlayer({ uri: audioUrl });
-        playerRef.current = p;
-        // Give native player a moment to initialise
-        await new Promise((r) => setTimeout(r, 250));
-      }
-
-      const p = playerRef.current;
-
-      if (isPlaying) {
-        p.pause();
-        setIsPlaying(false);
-        stopPolling();
+      await ensurePlaybackMode();
+      if (status.playing) {
+        player.pause();
       } else {
-        // Reset if at end
-        const dur = p.duration > 0 ? p.duration : totalDuration;
-        if (dur > 0 && p.currentTime >= dur - 0.3) {
-          p.seekTo(0);
-          setCurrentTime(0);
-          await new Promise((r) => setTimeout(r, 80));
-        }
-        p.play();
-        setIsPlaying(true);
-        startPolling();
+        player.play();
       }
     } catch (err) {
       console.warn("VoiceMessageBubble play error:", err);
-      setIsPlaying(false);
-      setIsLoading(false);
       setError(true);
-      stopPolling();
     }
-  }, [audioUrl, isPlaying, totalDuration, startPolling, stopPolling]);
+  }, [player, status.playing]);
 
-  const effectiveDuration = playerDuration > 0 ? playerDuration : totalDuration;
-  const progress = effectiveDuration > 0 ? Math.min(currentTime / effectiveDuration, 1) : 0;
-  const displayTime = isPlaying ? formatTime(currentTime) : formatTime(effectiveDuration);
+  const effectiveDuration = status.duration > 0 ? status.duration : totalDuration;
+  const progress = effectiveDuration > 0 ? Math.min(status.currentTime / effectiveDuration, 1) : 0;
+  const displayTime = status.playing
+    ? formatTime(status.currentTime)
+    : formatTime(effectiveDuration);
   const bars = useMemo(() => generateStableBars(hashString(audioUrl)), [audioUrl]);
 
   if (error) {
@@ -190,14 +112,16 @@ function VoiceMessageBubbleInner({
     );
   }
 
+  const isLoading = !status.isLoaded && !status.playing;
+
   return (
     <View style={[styles.container, mine ? styles.meContainer : styles.otherContainer]}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn} activeOpacity={0.7}>
-        {isLoading && !isPlaying ? (
+        {isLoading ? (
           <ActivityIndicator size="small" color={mine ? "#FFFFFF" : "#000000"} />
         ) : (
           <SymbolView
-            name={isPlaying ? "pause.fill" : "play.fill"}
+            name={status.playing ? "pause.fill" : "play.fill"}
             size={16}
             tintColor={mine ? "#FFFFFF" : "#000000"}
           />
