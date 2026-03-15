@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  Alert,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -16,14 +15,28 @@ import Animated, {
   FadeIn,
   Easing,
 } from "react-native-reanimated";
-import {
-  useAudioRecorder,
-  RecordingPresets,
-  AudioModule,
-  setAudioModeAsync,
-} from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "@/components/Icon";
+
+// ── Lazy-load expo-audio to prevent render crashes ──────────────
+function getExpoAudio(): {
+  AudioModule: { requestRecordingPermissionsAsync: () => Promise<{ granted: boolean }> };
+  setAudioModeAsync: (opts: Record<string, boolean>) => Promise<void>;
+  AudioRecorder: new () => {
+    prepareToRecordAsync: (opts?: unknown) => Promise<void>;
+    record: () => void;
+    stop: () => Promise<void>;
+    uri: string | null;
+  };
+  RecordingPresets: { HIGH_QUALITY: unknown };
+} | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-audio");
+  } catch {
+    return null;
+  }
+}
 
 interface VoiceRecorderProps {
   onSend: (uri: string, duration: number) => void;
@@ -47,10 +60,15 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const [errorMsg, setErrorMsg] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasStartedRef = useRef(false);
+  // Imperative recorder ref – no hook, no render crash
+  const recorderRef = useRef<{
+    prepareToRecordAsync: (opts?: unknown) => Promise<void>;
+    record: () => void;
+    stop: () => Promise<void>;
+    uri: string | null;
+  } | null>(null);
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-
-  // Pulsing red dot
+  // ── Pulsing red dot ─────────────────────────────────────────────
   const dotScale = useSharedValue(1);
   useEffect(() => {
     if (phase === "recording") {
@@ -71,7 +89,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     transform: [{ scale: dotScale.value }],
   }));
 
-  // Timer
+  // ── Timer ───────────────────────────────────────────────────────
   useEffect(() => {
     if (phase === "recording") {
       timerRef.current = setInterval(() => {
@@ -88,7 +106,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     };
   }, [phase]);
 
-  // Waveform bars
+  // ── Waveform bars ───────────────────────────────────────────────
   const waveformHeights = useMemo(() => {
     return Array.from({ length: BAR_COUNT }, (_, i) => {
       const seed = Math.sin(i * 0.9 + elapsed * 1.2) * 0.5 + 0.5;
@@ -100,22 +118,34 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   const frozenWaveform = useRef<number[]>([]);
 
+  // ── Recording controls (fully imperative) ───────────────────────
   const startRecording = useCallback(async () => {
+    const ExpoAudio = getExpoAudio();
+    if (!ExpoAudio || !ExpoAudio.AudioRecorder) {
+      setPhase("error");
+      setErrorMsg("Audio-Modul nicht verfügbar");
+      return;
+    }
+
     try {
-      const status = await AudioModule.requestRecordingPermissionsAsync();
+      const status = await ExpoAudio.AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) {
         setPhase("error");
         setErrorMsg("Mikrofon-Zugriff verweigert");
         return;
       }
 
-      await setAudioModeAsync({
+      await ExpoAudio.setAudioModeAsync({
         playsInSilentMode: true,
         allowsRecording: true,
       });
 
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
+      // Create recorder imperatively – NOT via hook
+      const recorder = new ExpoAudio.AudioRecorder();
+      const preset = ExpoAudio.RecordingPresets?.HIGH_QUALITY;
+      await recorder.prepareToRecordAsync(preset);
+      recorder.record();
+      recorderRef.current = recorder;
 
       setElapsed(0);
       setPhase("recording");
@@ -127,13 +157,17 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestartet werden");
     }
-  }, [audioRecorder]);
+  }, []);
 
   const stopRecording = useCallback(async () => {
     try {
       frozenWaveform.current = [...waveformHeights];
       const dur = elapsed;
-      await audioRecorder.stop();
+
+      if (recorderRef.current) {
+        await recorderRef.current.stop();
+      }
+
       setRecordedDuration(dur);
       setPhase("stopped");
       if (Platform.OS !== "web") {
@@ -144,10 +178,10 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Aufnahme konnte nicht gestoppt werden");
     }
-  }, [audioRecorder, elapsed, waveformHeights]);
+  }, [elapsed, waveformHeights]);
 
   const handleSend = useCallback(() => {
-    const uri = audioRecorder.uri;
+    const uri = recorderRef.current?.uri;
     if (uri) {
       onSend(uri, recordedDuration * 1000);
       if (Platform.OS !== "web") {
@@ -157,9 +191,16 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       setPhase("error");
       setErrorMsg("Keine Aufnahme vorhanden");
     }
-  }, [audioRecorder.uri, recordedDuration, onSend]);
+  }, [recordedDuration, onSend]);
 
   const handleDelete = useCallback(() => {
+    // Clean up recorder
+    try {
+      recorderRef.current?.stop().catch(() => {});
+    } catch {
+      // ignore
+    }
+    recorderRef.current = null;
     setElapsed(0);
     setPhase("idle");
     onCancel();
@@ -177,7 +218,20 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // === ERROR STATE ===
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        recorderRef.current?.stop().catch(() => {});
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // ERROR STATE
+  // ═══════════════════════════════════════════════════════════════
   if (phase === "error") {
     return (
       <View style={styles.bar}>
@@ -190,18 +244,16 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
           <SymbolView name="xmark" size={15} tintColor="#9CA3AF" />
         </TouchableOpacity>
         <View style={styles.center}>
-          <SymbolView
-            name="exclamationmark.triangle"
-            size={16}
-            tintColor="#EF4444"
-          />
+          <SymbolView name="exclamationmark.triangle" size={16} tintColor="#EF4444" />
           <Text style={styles.errorText}>{errorMsg || "Fehler"}</Text>
         </View>
       </View>
     );
   }
 
-  // === RECORDING STATE ===
+  // ═══════════════════════════════════════════════════════════════
+  // RECORDING STATE
+  // ═══════════════════════════════════════════════════════════════
   if (phase === "recording") {
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.bar}>
@@ -224,8 +276,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
                   styles.waveBar,
                   {
                     height: h,
-                    backgroundColor:
-                      i < BAR_COUNT * 0.8 ? "#000" : "#D1D5DB",
+                    backgroundColor: i < BAR_COUNT * 0.8 ? "#000" : "#D1D5DB",
                   },
                 ]}
               />
@@ -246,7 +297,9 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     );
   }
 
-  // === STOPPED / REVIEW STATE ===
+  // ═══════════════════════════════════════════════════════════════
+  // STOPPED / REVIEW STATE
+  // ═══════════════════════════════════════════════════════════════
   if (phase === "stopped") {
     const previewBars =
       frozenWaveform.current.length > 0
@@ -270,16 +323,11 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
             {previewBars.map((h, i) => (
               <View
                 key={`p-${i}`}
-                style={[
-                  styles.waveBar,
-                  { height: h, backgroundColor: "#000" },
-                ]}
+                style={[styles.waveBar, { height: h, backgroundColor: "#000" }]}
               />
             ))}
           </View>
-          <Text style={styles.previewTime}>
-            {formatTime(recordedDuration)}
-          </Text>
+          <Text style={styles.previewTime}>{formatTime(recordedDuration)}</Text>
         </View>
 
         <TouchableOpacity
@@ -294,7 +342,9 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     );
   }
 
-  // === IDLE (preparing) ===
+  // ═══════════════════════════════════════════════════════════════
+  // IDLE (preparing)
+  // ═══════════════════════════════════════════════════════════════
   return (
     <View style={styles.bar}>
       <TouchableOpacity
