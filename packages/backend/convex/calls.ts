@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { authQuery, authMutation } from "./functions";
+import { authQuery, authMutation, authAction } from "./functions";
+import { internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -492,5 +494,65 @@ export const getConversationPartner = authQuery({
       name: other.name,
       avatarUrl: avatarUrl ?? undefined,
     };
+  },
+});
+
+// ── verify user is a call participant (internal) ─────────────────────────────
+export const verifyParticipant = internalQuery({
+  args: {
+    callId: v.id("calls"),
+    authUserId: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      userId: v.string(),
+      userName: v.string(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_authId", (q) => q.eq("authId", args.authUserId))
+      .unique();
+    if (!user) return null;
+
+    const participant = await ctx.db
+      .query("callParticipants")
+      .withIndex("by_callId_and_userId", (q) =>
+        q.eq("callId", args.callId).eq("userId", user._id)
+      )
+      .unique();
+    if (!participant) return null;
+
+    return { userId: user._id, userName: user.name };
+  },
+});
+
+// ── get LiveKit token for a call ─────────────────────────────────────────────
+export const getCallToken = authAction({
+  args: { callId: v.id("calls") },
+  returns: v.object({
+    token: v.string(),
+    wsUrl: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const participant: { userId: string; userName: string } | null =
+      await ctx.runQuery(internal.calls.verifyParticipant, {
+        callId: args.callId,
+        authUserId: ctx.user._id,
+      });
+    if (!participant) throw new Error("Not a call participant");
+
+    const result: { token: string; wsUrl: string } = await ctx.runAction(
+      internal.livekit.generateToken,
+      {
+        identity: participant.userId,
+        name: participant.userName,
+        roomName: `call_${args.callId}`,
+      }
+    );
+
+    return result;
   },
 });
