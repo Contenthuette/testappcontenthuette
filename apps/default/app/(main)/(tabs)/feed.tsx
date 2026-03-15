@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useMemo, memo } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   useWindowDimensions, ActivityIndicator, ViewToken,
+  Alert, Platform, ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -18,6 +19,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { ShareSheet } from "@/components/ShareSheet";
 import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 import type { Id } from "@/convex/_generated/dataModel";
+import * as Haptics from "expo-haptics";
 
 const FEED_ASPECT_RATIO = 3 / 4;
 
@@ -64,11 +66,12 @@ interface FeedPostProps {
   onToggleLike: (postId: Id<"posts">) => void;
   onToggleSave: (postId: Id<"posts">) => void;
   onShare: (postId: Id<"posts">) => void;
+  onDelete: (postId: Id<"posts">) => void;
 }
 
 const FeedPost = memo(function FeedPost({
   item, screenWidth, feedMediaHeight, isVideoPlaying,
-  onToggleLike, onToggleSave, onShare,
+  onToggleLike, onToggleSave, onShare, onDelete,
 }: FeedPostProps) {
   if (item.isAnnouncement) {
     return (
@@ -188,8 +191,25 @@ const FeedPost = memo(function FeedPost({
           <Text style={styles.postAuthor}>{item.authorName}</Text>
           <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
         </View>
-        <TouchableOpacity hitSlop={12}>
-          <SymbolView name="ellipsis" size={18} tintColor={colors.gray400} />
+        <TouchableOpacity hitSlop={12} onPress={() => {
+          if (!item.isOwn) return;
+          if (Platform.OS === "ios") {
+            ActionSheetIOS.showActionSheetWithOptions(
+              {
+                options: ["Abbrechen", "Beitrag l\u00f6schen"],
+                destructiveButtonIndex: 1,
+                cancelButtonIndex: 0,
+              },
+              (idx) => { if (idx === 1) onDelete(item._id); },
+            );
+          } else {
+            Alert.alert("Beitrag l\u00f6schen?", "Dieser Beitrag wird unwiderruflich gel\u00f6scht.", [
+              { text: "Abbrechen", style: "cancel" },
+              { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
+            ]);
+          }
+        }}>
+          <SymbolView name="ellipsis" size={18} tintColor={item.isOwn ? colors.black : colors.gray300} />
         </TouchableOpacity>
       </TouchableOpacity>
 
@@ -264,6 +284,14 @@ export default function FeedScreen() {
     },
   );
 
+  const deletePost = useMutation(api.posts.deletePost).withOptimisticUpdate(
+    (store, { postId }) => {
+      const currentFeed = store.getQuery(api.posts.feed, {});
+      if (!currentFeed) return;
+      store.setQuery(api.posts.feed, {}, currentFeed.filter(p => p._id !== postId));
+    },
+  );
+
   // Stable callbacks that don't depend on feed data
   const handleToggleLike = useCallback((postId: Id<"posts">) => {
     toggleLike({ postId });
@@ -276,6 +304,17 @@ export default function FeedScreen() {
   const handleShare = useCallback((postId: Id<"posts">) => {
     setSharePostId(postId);
   }, []);
+
+  const handleDelete = useCallback(async (postId: Id<"posts">) => {
+    try {
+      await deletePost({ postId });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {
+      Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
+    }
+  }, [deletePost]);
 
   // Viewability: only tracks video ID, doesn't depend on feed
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -318,8 +357,9 @@ export default function FeedScreen() {
       onToggleLike={handleToggleLike}
       onToggleSave={handleToggleSave}
       onShare={handleShare}
+      onDelete={handleDelete}
     />
-  ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare]);
+  ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
 
   const listEmpty = useMemo(() => {
     if (feed === undefined) {

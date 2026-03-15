@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   ActivityIndicator,
+  Alert,
+  Platform,
+  ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -31,6 +34,7 @@ export default function PostDetailScreen() {
   );
   const toggleLike = useMutation(api.posts.toggleLike);
   const toggleSave = useMutation(api.posts.toggleSave);
+  const deletePost = useMutation(api.posts.deletePost);
   const { width: screenWidth } = useWindowDimensions();
   const [shareVisible, setShareVisible] = useState(false);
 
@@ -62,6 +66,44 @@ export default function PostDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  const handleDelete = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Abbrechen", "Beitrag l\u00f6schen"],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 0,
+        },
+        async (idx) => {
+          if (idx === 1) {
+            try {
+              await deletePost({ postId: post._id });
+              safeBack("post-detail");
+            } catch {
+              Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
+            }
+          }
+        },
+      );
+    } else {
+      Alert.alert("Beitrag l\u00f6schen?", "Dieser Beitrag wird unwiderruflich gel\u00f6scht.", [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "L\u00f6schen",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deletePost({ postId: post._id });
+              safeBack("post-detail");
+            } catch {
+              Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
+            }
+          },
+        },
+      ]);
+    }
+  };
 
   const isOriginal = post.aspectMode === "original";
   const isVideo = post.type === "video";
@@ -149,6 +191,12 @@ export default function PostDetailScreen() {
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Beitrag</Text>
+        <View style={{ flex: 1 }} />
+        {post.isOwn && (
+          <TouchableOpacity onPress={handleDelete} style={styles.backBtn} hitSlop={12}>
+            <SymbolView name="ellipsis" size={20} tintColor={colors.black} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>

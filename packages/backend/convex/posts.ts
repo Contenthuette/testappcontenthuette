@@ -79,6 +79,7 @@ export const feed = authQuery({
     isSaved: v.boolean(),
     isPinned: v.boolean(),
     isAnnouncement: v.boolean(),
+    isOwn: v.boolean(),
     createdAt: v.number(),
   })),
   handler: async (ctx, args) => {
@@ -165,6 +166,7 @@ export const feed = authQuery({
         isSaved: !!saveChecks[i],
         isPinned: post.isPinned,
         isAnnouncement: post.isAnnouncement,
+        isOwn: myUserId === post.authorId,
         createdAt: post.createdAt,
       };
     });
@@ -196,6 +198,7 @@ export const getById = authQuery({
       isSaved: v.boolean(),
       isPinned: v.boolean(),
       isAnnouncement: v.boolean(),
+      isOwn: v.boolean(),
       createdAt: v.number(),
     }),
   ),
@@ -246,6 +249,7 @@ export const getById = authQuery({
       isSaved: !!saved,
       isPinned: post.isPinned,
       isAnnouncement: post.isAnnouncement,
+      isOwn: myUserId === post.authorId,
       createdAt: post.createdAt,
     };
   },
@@ -289,6 +293,62 @@ export const create = authMutation({
       isAnnouncement: isAnnouncement ?? false,
       createdAt: Date.now(),
     });
+  },
+});
+
+// Delete post (owner only, cleans up all related data)
+export const deletePost = authMutation({
+  args: { postId: v.id("posts") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Beitrag nicht gefunden");
+    if (post.authorId !== myUserId) throw new Error("Nur der Autor kann diesen Beitrag löschen");
+
+    // 1. Delete all likes for this post
+    const likes = await ctx.db.query("likes")
+      .withIndex("by_postId", q => q.eq("postId", args.postId))
+      .collect();
+    for (const like of likes) {
+      await ctx.db.delete(like._id);
+    }
+
+    // 2. Delete all comments + their likes
+    const comments = await ctx.db.query("comments")
+      .withIndex("by_postId", q => q.eq("postId", args.postId))
+      .collect();
+    for (const comment of comments) {
+      const commentLikes = await ctx.db.query("commentLikes")
+        .withIndex("by_commentId", q => q.eq("commentId", comment._id))
+        .collect();
+      for (const cl of commentLikes) {
+        await ctx.db.delete(cl._id);
+      }
+      await ctx.db.delete(comment._id);
+    }
+
+    // 3. Delete all saved entries
+    const saved = await ctx.db.query("savedPosts")
+      .withIndex("by_postId_and_userId", q => q.eq("postId", args.postId))
+      .collect();
+    for (const s of saved) {
+      await ctx.db.delete(s._id);
+    }
+
+    // 4. Delete storage files
+    if (post.mediaStorageId) {
+      await ctx.storage.delete(post.mediaStorageId);
+    }
+    if (post.thumbnailStorageId) {
+      await ctx.storage.delete(post.thumbnailStorageId);
+    }
+
+    // 5. Delete the post itself
+    await ctx.db.delete(args.postId);
+    return null;
   },
 });
 
