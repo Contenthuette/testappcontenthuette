@@ -29,9 +29,7 @@ function AnnouncementBanner() {
       exiting={FadeOut.duration(200)}
       style={styles.announceBanner}
     >
-      <View style={styles.announceIcon}>
-        <SymbolView name="exclamationmark" size={13} tintColor={colors.white} />
-      </View>
+      <SymbolView name="exclamationmark.circle.fill" size={22} tintColor={colors.white} />
       <Text style={styles.announceText} numberOfLines={2}>
         {announcement.text}
       </Text>
