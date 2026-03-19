@@ -1,5 +1,3 @@
-// App root layout - updated
-// Force restart after babel-preset-expo install
 import { ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
 import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
@@ -17,7 +15,12 @@ export default function RootLayout() {
       <StatusBar style="dark" />
       <SoundProvider>
         <CallProvider>
-          <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          >
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(main)" />
