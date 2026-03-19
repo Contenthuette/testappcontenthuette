@@ -15,7 +15,6 @@ import { SymbolView } from "@/components/Icon";
 let expoAudio: typeof import("expo-audio") | null = null;
 try {
   if (Platform.OS !== "web") {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     expoAudio = require("expo-audio") as typeof import("expo-audio");
   }
 } catch {

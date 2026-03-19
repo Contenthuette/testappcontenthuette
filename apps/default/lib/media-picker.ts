@@ -18,7 +18,6 @@ let ImageManipulator: {
 } | null = null;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   ImageManipulator = require("expo-image-manipulator") as typeof ImageManipulator;
 } catch {
   // not available

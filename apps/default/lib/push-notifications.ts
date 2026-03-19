@@ -26,9 +26,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (Platform.OS === "web") return null;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Notifications = require("expo-notifications") as NotificationsModule;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Constants = require("expo-constants") as { default: ConstantsModule };
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
