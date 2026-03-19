@@ -1,7 +1,6 @@
 import { ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { authClient } from "@/lib/auth-client";
+import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
 import { StatusBar } from "expo-status-bar";
 import { CallProvider } from "@/components/CallProvider";
 import { SoundProvider } from "@/lib/sounds";
@@ -12,7 +11,7 @@ const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
 
 export default function RootLayout() {
   return (
-    <ConvexBetterAuthProvider client={convex} authClient={authClient}>
+    <ConvexAuthProvider client={convex}>
       <StatusBar style="dark" />
       <SoundProvider>
         <CallProvider>
@@ -24,6 +23,6 @@ export default function RootLayout() {
           </Stack>
         </CallProvider>
       </SoundProvider>
-    </ConvexBetterAuthProvider>
+    </ConvexAuthProvider>
   );
 }
