@@ -1,3 +1,5 @@
+// App root layout - updated
+// Force restart after babel-preset-expo install
 import { ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
 import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
