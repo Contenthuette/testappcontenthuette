@@ -97,22 +97,6 @@ export default function CreatePostScreen() {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-  // Clamp helper
-  const clampTranslation = useCallback(
-    (tx: number, ty: number, s: number) => {
-      const scaledW = baseMediaWidth * s;
-      const scaledH = baseMediaHeight * s;
-      const overflowX = Math.max(0, scaledW - previewWidth);
-      const overflowY = Math.max(0, scaledH - containerHeight);
-
-      // Media can only go negative (moving left/up) to show more of right/bottom
-      const clampedX = Math.max(-overflowX / 2, Math.min(overflowX / 2, tx));
-      const clampedY = Math.max(-overflowY / 2, Math.min(overflowY / 2, ty));
-      return { x: clampedX, y: clampedY };
-    },
-    [baseMediaWidth, baseMediaHeight, previewWidth, containerHeight],
-  );
-
   const syncCropState = useCallback(
     (tx: number, ty: number, s: number) => {
       const scaledW = baseMediaWidth * s;

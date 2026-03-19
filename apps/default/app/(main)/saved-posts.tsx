@@ -3,10 +3,9 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";

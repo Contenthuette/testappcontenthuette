@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -34,7 +32,7 @@ export default function LoginScreen() {
       } else {
         router.replace("/");
       }
-    } catch (e: unknown) {
+    } catch (_e: unknown) {
       setError("Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
     } finally {
       setLoading(false);
@@ -45,7 +43,7 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     try {
       await authClient.signIn.social({ provider: "google" });
-    } catch (e: unknown) {
+    } catch (_e: unknown) {
       setError("Google-Anmeldung fehlgeschlagen");
     } finally {
       setGoogleLoading(false);
@@ -56,7 +54,7 @@ export default function LoginScreen() {
     setAppleLoading(true);
     try {
       await authClient.signIn.social({ provider: "apple" });
-    } catch (e: unknown) {
+    } catch (_e: unknown) {
       setError("Apple-Anmeldung fehlgeschlagen");
     } finally {
       setAppleLoading(false);

@@ -17,7 +17,7 @@ export function Input({ label, error, icon, isPassword, style, ...props }: Input
       {label && <Text style={styles.label}>{label}</Text>}
       <View style={[styles.inputContainer, error && styles.inputError]}>
         {icon && (
-          <SymbolView name={icon as any} size={18} tintColor={colors.gray400} style={styles.icon} />
+          <SymbolView name={icon as string} size={18} tintColor={colors.gray400} style={styles.icon} />
         )}
         <TextInput
           style={[styles.input, style]}

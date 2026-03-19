@@ -43,13 +43,13 @@ export default function SignupScreen() {
         setTimeout(async () => {
           try {
             await ensureUser({ name: name.trim(), email: email.trim() });
-          } catch (e) {
+          } catch (_e) {
             // User record will be created on next login
           }
           router.replace("/");
         }, 1000);
       }
-    } catch (e: unknown) {
+    } catch (_e: unknown) {
       setError("Registrierung fehlgeschlagen. Bitte versuche es erneut.");
     } finally {
       setLoading(false);

@@ -3,10 +3,10 @@ import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
@@ -88,7 +88,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.xxl,
     borderCurve: "continuous",
-    ...shadows.md,
   },
   cardTop: {
     flexDirection: "row",

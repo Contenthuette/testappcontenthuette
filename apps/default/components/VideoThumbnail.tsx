@@ -68,7 +68,6 @@ export function VideoThumbnail({
       clearTimeout(immediateTimer);
       retryTimers.forEach(clearTimeout);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, seekToPreview]);
 
   return (

@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
-  Alert,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";

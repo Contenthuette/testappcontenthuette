@@ -29,7 +29,7 @@ export default function OnboardingInterestsScreen() {
         interests: selected,
       });
       router.replace("/");
-    } catch (e) {
+    } catch (_e) {
       // handle error
     } finally {
       setLoading(false);

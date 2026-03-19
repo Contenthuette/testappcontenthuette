@@ -45,7 +45,7 @@ export default function EventDetailScreen() {
     try {
       const result = await buyTicket({ eventId: event._id });
       router.push({ pathname: "/(main)/ticket", params: { id: result.ticketId } });
-    } catch (e) {
+    } catch (_e) {
       if (Platform.OS !== "web") Alert.alert("Fehler", "Ticket konnte nicht gekauft werden.");
     } finally {
       setBuying(false);

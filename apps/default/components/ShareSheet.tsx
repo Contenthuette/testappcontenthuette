@@ -9,14 +9,13 @@ import {
   FlatList,
   ActivityIndicator,
   Platform,
-  Keyboard,
   Animated as RNAnimated,
 } from "react-native";
 import { Image } from "expo-image";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 
@@ -171,7 +170,7 @@ export function ShareSheet({ visible, postId, onClose }: ShareSheetProps) {
     );
   };
 
-  const keyExtractor = (item: ListItem, index: number) =>
+  const keyExtractor = (item: ListItem, _index: number) =>
     item.kind === "header" ? `h-${item.section}` : `t-${item.data.id}`;
 
   return (

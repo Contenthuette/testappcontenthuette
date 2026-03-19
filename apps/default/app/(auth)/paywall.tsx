@@ -20,7 +20,7 @@ export default function PaywallScreen() {
     try {
       await updateSubscription({ plan: selectedPlan, status: "active" });
       router.replace("/");
-    } catch (e) {
+    } catch (_e) {
       // handle error
     } finally {
       setLoading(false);

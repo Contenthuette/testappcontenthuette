@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -25,7 +24,7 @@ export default function SubscriptionScreen() {
     try {
       await updateSubscription({ status: "canceled", plan: me?.subscriptionPlan ?? "monthly" });
       safeBack("subscription");
-    } catch (e) {
+    } catch (_e) {
       // handle
     } finally {
       setLoading(false);

@@ -4,8 +4,6 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 // Conditional native-only import
 let RTC: {
   RTCPeerConnection: any;
@@ -150,7 +148,6 @@ export function useWebRTC({
       cancelled = true;
     };
     // These don't change during a call
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, callId]);
 
   // Process incoming signals reactively
