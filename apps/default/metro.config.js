@@ -1,53 +1,65 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const path = require("path");
+const fs = require("fs");
+const { FileStore } = require("metro-cache");
 
 const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, "../..");
+const monorepoRoot = path.resolve(projectRoot, "../..");
+const appNodeModules = path.resolve(projectRoot, "node_modules");
+
+/**
+ * SINGLETON MODULE RESOLUTION
+ *
+ * In bun monorepos, packages live in node_modules/.bun/ and are symlinked.
+ * When Metro follows different symlink chains (app → convex/react vs
+ * better-auth → convex/react), it can load TWO copies of the same module.
+ *
+ * This breaks React context: ConvexBetterAuthProvider creates context with
+ * one copy, but the app reads with another → "Could not find ConvexProviderWithAuth".
+ *
+ * Fix: Resolve each singleton to its canonical (real) file path at config time,
+ * then force ALL imports to use that exact path.
+ */
+function resolveCanonical(specifier) {
+  try {
+    const resolved = require.resolve(specifier, { paths: [appNodeModules] });
+    return fs.realpathSync(resolved);
+  } catch {
+    return null;
+  }
+}
+
+const SINGLETONS = {};
+for (const spec of ["convex/react", "react", "react/jsx-runtime"]) {
+  const canonical = resolveCanonical(spec);
+  if (canonical) {
+    SINGLETONS[spec] = canonical;
+  }
+}
 
 const config = getDefaultConfig(projectRoot);
 
-// Monorepo support: watch root + resolve from both locations.
-config.watchFolders = [workspaceRoot];
+// Monorepo setup
+config.watchFolders = [monorepoRoot];
 config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  path.resolve(workspaceRoot, "node_modules"),
+  appNodeModules,
+  path.resolve(monorepoRoot, "node_modules"),
 ];
+config.resolver.disableHierarchicalLookup = true;
 
-// ---------------------------------------------------------------------------
-// Singleton enforcement.
-// In bun workspaces the .bun cache can hold TWO physical copies of a package
-// (e.g. node_modules/.bun/convex@…/node_modules/convex AND
-// node_modules/.bun/node_modules/convex). Metro keys modules by *path*, so
-// two paths = two module instances = two React contexts = provider not found.
-//
-// Fix: for any package that relies on shared singleton state (React context,
-// module-level variables, etc.), force Metro to resolve it from the project
-// root so every importer gets the exact same physical file.
-// ---------------------------------------------------------------------------
-const SINGLETONS = ["convex", "react", "react-native", "react-dom"];
-
+// Force singleton resolution — returns exact file paths, no further resolution needed
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // Only intercept bare specifiers (skip relative & absolute paths).
-  if (moduleName.startsWith(".") || moduleName.startsWith("/")) {
-    return context.resolveRequest(context, moduleName, platform);
+  if (SINGLETONS[moduleName]) {
+    return { type: "sourceFile", filePath: SINGLETONS[moduleName] };
   }
-
-  const pkgName = moduleName.startsWith("@")
-    ? moduleName.split("/").slice(0, 2).join("/")
-    : moduleName.split("/")[0];
-
-  if (SINGLETONS.includes(pkgName)) {
-    // Re-resolve as if the import originated from the project root.
-    // This guarantees Metro walks apps/default/node_modules/ first,
-    // landing on the canonical symlink every time.
-    return context.resolveRequest(
-      { ...context, originModulePath: path.join(projectRoot, "_singleton.js") },
-      moduleName,
-      platform,
-    );
-  }
-
   return context.resolveRequest(context, moduleName, platform);
 };
+
+// Isolated cache per project
+config.cacheStores = [
+  new FileStore({
+    root: path.join(appNodeModules, ".cache", "metro"),
+  }),
+];
 
 module.exports = config;
