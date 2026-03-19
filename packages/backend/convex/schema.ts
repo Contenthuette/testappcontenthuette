@@ -323,6 +323,17 @@ export default defineSchema({
     .index("by_userId_and_status", ["userId", "status"])
     .index("by_callId_and_userId", ["callId", "userId"]),
 
+  callSignaling: defineTable({
+    callId: v.id("calls"),
+    senderId: v.id("users"),
+    type: v.union(
+      v.literal("offer"),
+      v.literal("answer"),
+      v.literal("ice-candidate")
+    ),
+    payload: v.string(),
+  }).index("by_callId", ["callId"]),
+
   // ── Announcements ──────────────────────────────────────────────
   announcements: defineTable({
     text: v.string(),

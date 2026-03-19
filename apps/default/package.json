@@ -55,7 +55,8 @@
     "react-native-svg": "^15.15.3",
     "expo-video": "~55.0.10",
     "expo-image-manipulator": "~55.0.10",
-    "expo-video-thumbnails": "~55.0.10"
+    "expo-video-thumbnails": "~55.0.10",
+    "react-native-webrtc": "^124.0.7"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -1,7 +1,5 @@
 import { v } from "convex/values";
-import { authQuery, authMutation, authAction } from "./functions";
-import { internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -292,6 +290,15 @@ export const endCall = authMutation({
           await ctx.db.patch(p._id, { status: "left", leftAt: Date.now() });
         }
       }
+
+      // Clean up WebRTC signaling records
+      const signals = await ctx.db
+        .query("callSignaling")
+        .withIndex("by_callId", (q) => q.eq("callId", args.callId))
+        .collect();
+      for (const sig of signals) {
+        await ctx.db.delete(sig._id);
+      }
     }
   },
 });
@@ -497,62 +504,64 @@ export const getConversationPartner = authQuery({
   },
 });
 
-// ── verify user is a call participant (internal) ─────────────────────────────
-export const verifyParticipant = internalQuery({
+// ── WebRTC signaling ─────────────────────────────────────────────────────────
+export const sendSignal = authMutation({
   args: {
     callId: v.id("calls"),
-    authUserId: v.string(),
+    type: v.union(
+      v.literal("offer"),
+      v.literal("answer"),
+      v.literal("ice-candidate")
+    ),
+    payload: v.string(),
   },
-  returns: v.union(
-    v.object({
-      userId: v.string(),
-      userName: v.string(),
-    }),
-    v.null()
-  ),
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", args.authUserId))
-      .unique();
-    if (!user) return null;
+    const myId = await resolveUserId(ctx);
+    if (!myId) throw new Error("User not found");
 
-    const participant = await ctx.db
-      .query("callParticipants")
-      .withIndex("by_callId_and_userId", (q) =>
-        q.eq("callId", args.callId).eq("userId", user._id)
-      )
-      .unique();
-    if (!participant) return null;
-
-    return { userId: user._id, userName: user.name };
+    await ctx.db.insert("callSignaling", {
+      callId: args.callId,
+      senderId: myId,
+      type: args.type,
+      payload: args.payload,
+    });
   },
 });
 
-// ── get LiveKit token for a call ─────────────────────────────────────────────
-export const getCallToken = authAction({
+export const getSignals = authQuery({
   args: { callId: v.id("calls") },
-  returns: v.object({
-    token: v.string(),
-    wsUrl: v.string(),
-  }),
+  returns: v.array(
+    v.object({
+      _id: v.id("callSignaling"),
+      _creationTime: v.number(),
+      senderId: v.id("users"),
+      type: v.union(
+        v.literal("offer"),
+        v.literal("answer"),
+        v.literal("ice-candidate")
+      ),
+      payload: v.string(),
+    })
+  ),
   handler: async (ctx, args) => {
-    const participant: { userId: string; userName: string } | null =
-      await ctx.runQuery(internal.calls.verifyParticipant, {
-        callId: args.callId,
-        authUserId: ctx.user._id,
-      });
-    if (!participant) throw new Error("Not a call participant");
+    const myId = await resolveUserId(ctx);
+    if (!myId) return [];
 
-    const result: { token: string; wsUrl: string } = await ctx.runAction(
-      internal.livekit.generateToken,
-      {
-        identity: participant.userId,
-        name: participant.userName,
-        roomName: `call_${args.callId}`,
-      }
-    );
+    const signals = await ctx.db
+      .query("callSignaling")
+      .withIndex("by_callId", (q) => q.eq("callId", args.callId))
+      .collect();
 
-    return result;
+    // Return only signals from the other participant
+    return signals
+      .filter((s) => s.senderId !== myId)
+      .map((s) => ({
+        _id: s._id,
+        _creationTime: s._creationTime,
+        senderId: s.senderId,
+        type: s.type as "offer" | "answer" | "ice-candidate",
+        payload: s.payload,
+      }));
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar } from "@/components/Avatar";
@@ -17,10 +17,7 @@ import { SymbolView } from "@/components/Icon";
 import { router } from "expo-router";
 import { useCallContext } from "@/lib/call-context";
 import { useSound } from "@/lib/sounds";
-import {
-  LiveKitCallView,
-  type LiveKitCallViewHandle,
-} from "@/components/LiveKitCallView";
+import { useWebRTC } from "@/lib/useWebRTC";
 
 interface ActiveCallScreenProps {
   callId: Id<"calls">;
@@ -29,105 +26,114 @@ interface ActiveCallScreenProps {
 export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const call = useQuery(api.calls.getCallDetails, { callId });
   const endCallMutation = useMutation(api.calls.endCall);
-  const getCallToken = useAction(api.calls.getCallToken);
   const me = useQuery(api.users.me);
   const { minimizeCall } = useCallContext();
   const { playSound } = useSound();
 
-  const [phase, setPhase] = useState<
-    "ringing" | "connecting" | "live" | "ended" | "error"
-  >("ringing");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const livekitRef = useRef<LiveKitCallViewHandle>(null);
-  const tokenFetchedRef = useRef(false);
   const hangingUpRef = useRef(false);
+  const [callDuration, setCallDuration] = useState(0);
 
   const isVideoCall = call?.type === "video";
+  const isInitiator = !!(call && me && call.callerId === me._id);
+  const webrtcEnabled = !!(
+    call &&
+    (call.status === "ringing" || call.status === "active")
+  );
 
-  // Connect to LiveKit when call becomes active
-  useEffect(() => {
+  const {
+    localStreamUrl,
+    remoteStreamUrl,
+    connectionState,
+    isMuted,
+    isVideoOff,
+    toggleMute,
+    toggleVideo,
+    flipCamera,
+    cleanup: cleanupWebRTC,
+    isSupported,
+    RTCView,
+  } = useWebRTC({
+    callId: webrtcEnabled ? callId : null,
+    isInitiator,
+    isVideo: isVideoCall ?? false,
+    enabled: webrtcEnabled,
+  });
+
+  // Derive phase from call status + WebRTC state
+  const phase = useMemo(() => {
+    if (!call) return "loading" as const;
     if (
-      call?.status === "active" &&
-      phase === "ringing" &&
-      !tokenFetchedRef.current
-    ) {
-      tokenFetchedRef.current = true;
-      setPhase("connecting");
+      call.status === "ended" ||
+      call.status === "declined" ||
+      call.status === "missed"
+    )
+      return "ended" as const;
+    if (!isSupported && call.status === "active") return "error" as const;
+    if (connectionState === "failed") return "error" as const;
+    if (connectionState === "connected") return "live" as const;
+    if (call.status === "active") return "connecting" as const;
+    return "ringing" as const;
+  }, [call, connectionState, isSupported]);
 
-      getCallToken({ callId })
-        .then(({ token, wsUrl }) => {
-          setTimeout(() => {
-            livekitRef.current?.connect(wsUrl, token, call.type === "video");
-          }, 800);
-        })
-        .catch((err: unknown) => {
-          console.error("Failed to get call token:", err);
-          setPhase("error");
-          setErrorMsg(err instanceof Error ? err.message : "Token-Fehler");
-        });
-    }
-  }, [call?.status, call?.type, callId, phase, getCallToken]);
-
-  // Watch for call ending in DB
+  // Call duration timer
   useEffect(() => {
-    if (
-      call &&
-      (call.status === "ended" ||
-        call.status === "declined" ||
-        call.status === "missed")
-    ) {
-      livekitRef.current?.disconnect();
-      setPhase("ended");
+    if (phase !== "live") return;
+    const interval = setInterval(() => setCallDuration((d) => d + 1), 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  // Auto-dismiss when call ends
+  useEffect(() => {
+    if (phase === "ended") {
+      cleanupWebRTC();
       const timeout = setTimeout(() => {
         if (router.canGoBack()) router.back();
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [call?.status]);
+  }, [phase, cleanupWebRTC]);
 
-  // ─── INSTANT native handlers ───
+  function formatTime(secs: number) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  // ─── Handlers ───
 
   const handleHangUp = useCallback(() => {
     if (hangingUpRef.current) return;
     hangingUpRef.current = true;
-
     playSound("hangup");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-    livekitRef.current?.disconnect();
-    setPhase("ended");
+    cleanupWebRTC();
     endCallMutation({ callId }).catch(() => {});
     setTimeout(() => {
       if (router.canGoBack()) router.back();
     }, 400);
-  }, [callId, endCallMutation, playSound]);
+  }, [callId, endCallMutation, playSound, cleanupWebRTC]);
 
   const handleToggleMute = useCallback(() => {
     playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Optimistic UI update — instant visual feedback
-    setIsMuted((prev) => !prev);
-    livekitRef.current?.toggleMute();
-  }, [playSound]);
+    toggleMute();
+  }, [playSound, toggleMute]);
 
   const handleToggleVideo = useCallback(() => {
     playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsVideoOff((prev) => !prev);
-    livekitRef.current?.toggleVideo();
-  }, [playSound]);
+    toggleVideo();
+  }, [playSound, toggleVideo]);
 
   const handleFlipCamera = useCallback(() => {
     playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    livekitRef.current?.flipCamera();
-  }, [playSound]);
+    flipCamera();
+  }, [playSound, flipCamera]);
 
   const handleMinimize = useCallback(() => {
     playSound("tap");
@@ -137,38 +143,8 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (router.canGoBack()) router.back();
   }, [callId, minimizeCall, playSound]);
 
-  const handleLiveKitConnected = useCallback(() => {
-    setPhase("live");
-  }, []);
-
-  const handleLiveKitDisconnected = useCallback(() => {
-    if (phase === "live" && !hangingUpRef.current) {
-      hangingUpRef.current = true;
-      setPhase("ended");
-      endCallMutation({ callId }).catch(() => {});
-      setTimeout(() => {
-        if (router.canGoBack()) router.back();
-      }, 500);
-    }
-  }, [phase, callId, endCallMutation]);
-
-  const handleLiveKitError = useCallback((message: string) => {
-    console.error("LiveKit error:", message);
-    setPhase("error");
-    setErrorMsg(message);
-  }, []);
-
-  const handleControlState = useCallback(
-    (state: { isMuted: boolean; isVideoOff: boolean }) => {
-      // Sync native state with WebView truth
-      setIsMuted(state.isMuted);
-      setIsVideoOff(state.isVideoOff);
-    },
-    []
-  );
-
-  // Loading
-  if (!call) {
+  // ─── Loading ───
+  if (!call || phase === "loading") {
     return (
       <View style={styles.container}>
         <ActivityIndicator color="#FFF" size="large" />
@@ -182,7 +158,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const mainOther = otherParticipants[0];
   const displayName = call.groupName ?? call.callerName;
 
-  // Ringing / connecting
+  // ─── Ringing / Connecting ───
   if (phase === "ringing" || phase === "connecting") {
     return (
       <View style={styles.container}>
@@ -241,8 +217,11 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     );
   }
 
-  // Error
+  // ─── Error ───
   if (phase === "error") {
+    const errorMessage = !isSupported
+      ? "Anrufe sind nur in der mobilen App verfügbar"
+      : "Verbindungsfehler";
     return (
       <View style={styles.container}>
         <SafeAreaView style={styles.ringingContent} edges={["top", "bottom"]}>
@@ -252,9 +231,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               size={48}
               tintColor="#EF4444"
             />
-            <Text style={styles.errorText}>
-              {errorMsg ?? "Verbindungsfehler"}
-            </Text>
+            <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
           <View style={styles.ringingBottom}>
             <Pressable
@@ -262,7 +239,11 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 styles.backBtn,
                 pressed && { opacity: 0.7 },
               ]}
-              onPress={() => router.canGoBack() && router.back()}
+              onPress={() => {
+                cleanupWebRTC();
+                endCallMutation({ callId }).catch(() => {});
+                if (router.canGoBack()) router.back();
+              }}
             >
               <Text style={styles.backBtnText}>Zurück</Text>
             </Pressable>
@@ -272,7 +253,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     );
   }
 
-  // Ended
+  // ─── Ended ───
   if (phase === "ended") {
     return (
       <View style={styles.container}>
@@ -288,25 +269,49 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     );
   }
 
-  // ─── Live call: WebView + NATIVE control overlay ───
+  // ─── Live Call ───
   return (
     <View style={styles.container}>
-      <LiveKitCallView
-        ref={livekitRef}
-        onConnected={handleLiveKitConnected}
-        onDisconnected={handleLiveKitDisconnected}
-        onHangUp={handleHangUp}
-        onError={handleLiveKitError}
-        onControlState={handleControlState}
-      />
+      {/* Remote video (full screen) or audio avatar */}
+      {isVideoCall && RTCView && remoteStreamUrl ? (
+        <RTCView
+          streamURL={remoteStreamUrl}
+          style={styles.remoteVideo}
+          objectFit="cover"
+          zOrder={0}
+        />
+      ) : (
+        <View style={styles.audioCallCenter}>
+          <Avatar
+            uri={mainOther?.userAvatarUrl}
+            name={mainOther?.userName ?? displayName}
+            size={120}
+          />
+          <Text style={styles.audioCallName}>{displayName}</Text>
+          <Text style={styles.audioCallTimer}>{formatTime(callDuration)}</Text>
+        </View>
+      )}
 
-      {/* Full native overlay — 100% touch reliable */}
+      {/* Local video PiP */}
+      {isVideoCall && RTCView && localStreamUrl && (
+        <View style={styles.localVideoContainer}>
+          <RTCView
+            streamURL={localStreamUrl}
+            style={styles.localVideo}
+            objectFit="cover"
+            mirror={true}
+            zOrder={1}
+          />
+        </View>
+      )}
+
+      {/* Native control overlay */}
       <SafeAreaView
         style={styles.nativeOverlay}
         edges={["top", "bottom"]}
         pointerEvents="box-none"
       >
-        {/* Top: minimize */}
+        {/* Top row */}
         <View style={styles.topRow} pointerEvents="box-none">
           <Pressable
             onPress={handleMinimize}
@@ -322,9 +327,14 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               tintColor="rgba(255,255,255,0.9)"
             />
           </Pressable>
+
+          {/* Timer badge */}
+          <View style={styles.timerBadge}>
+            <Text style={styles.timerText}>{formatTime(callDuration)}</Text>
+          </View>
         </View>
 
-        {/* Bottom: all controls — fully native */}
+        {/* Bottom controls */}
         <View style={styles.bottomControls} pointerEvents="box-none">
           {/* Mute */}
           <View style={styles.controlGroup}>
@@ -348,7 +358,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             </Text>
           </View>
 
-          {/* Video toggle — only for video calls */}
+          {/* Video toggle */}
           {isVideoCall && (
             <View style={styles.controlGroup}>
               <Pressable
@@ -361,11 +371,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 hitSlop={8}
               >
                 <SymbolView
-                  name={
-                    isVideoOff
-                      ? "video.slash.fill"
-                      : "video.fill"
-                  }
+                  name={isVideoOff ? "video.slash.fill" : "video.fill"}
                   size={22}
                   tintColor={isVideoOff ? "#111" : "#FFF"}
                 />
@@ -391,7 +397,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             <Text style={styles.controlLabel}>Auflegen</Text>
           </View>
 
-          {/* Flip camera — only for video calls */}
+          {/* Flip camera */}
           {isVideoCall && (
             <View style={styles.controlGroup}>
               <Pressable
@@ -437,10 +443,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
   },
-  ringingTop: {
-    alignItems: "center",
-    paddingTop: 40,
-  },
+  ringingTop: { alignItems: "center", paddingTop: 40 },
   ringingLabel: {
     fontSize: 14,
     color: "rgba(255,255,255,0.4)",
@@ -464,15 +467,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
-  avatarRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  ringingBottom: {
-    alignItems: "center",
-    paddingBottom: 40,
-    gap: 8,
-  },
+  avatarRow: { flexDirection: "row", gap: 12 },
+  ringingBottom: { alignItems: "center", paddingBottom: 40, gap: 8 },
   endCallBtn: {
     width: 72,
     height: 72,
@@ -495,11 +491,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 28,
   },
-  backBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFF",
-  },
+  backBtnText: { fontSize: 16, fontWeight: "600", color: "#FFF" },
 
   // Ended
   endedText: {
@@ -509,7 +501,47 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  // ─── Native overlay on live call ───
+  // ─── Live call ───
+  remoteVideo: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000",
+  },
+  localVideoContainer: {
+    position: "absolute",
+    top: 60,
+    right: 16,
+    width: 110,
+    height: 150,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.2)",
+    zIndex: 10,
+  },
+  localVideo: { flex: 1, backgroundColor: "#222" },
+
+  // Audio call live view
+  audioCallCenter: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  audioCallName: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFF",
+    marginTop: 8,
+  },
+  audioCallTimer: {
+    fontSize: 17,
+    color: "rgba(255,255,255,0.5)",
+    fontVariant: ["tabular-nums"],
+  },
+
+  // Native overlay
   nativeOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "space-between",
@@ -517,6 +549,8 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
   },
@@ -528,8 +562,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  timerBadge: {
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  timerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFF",
+    fontVariant: ["tabular-nums"],
+  },
 
-  // ─── Bottom controls bar ───
+  // Bottom controls
   bottomControls: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -538,11 +584,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 16,
   },
-  controlGroup: {
-    alignItems: "center",
-    gap: 6,
-    minWidth: 56,
-  },
+  controlGroup: { alignItems: "center", gap: 6, minWidth: 56 },
   controlBtn: {
     width: 52,
     height: 52,
@@ -551,9 +593,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  controlBtnActive: {
-    backgroundColor: "#FFF",
-  },
+  controlBtnActive: { backgroundColor: "#FFF" },
   hangupBtn: {
     width: 64,
     height: 64,
@@ -568,8 +608,5 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.5)",
     textAlign: "center",
   },
-  btnPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.92 }],
-  },
+  btnPressed: { opacity: 0.7, transform: [{ scale: 0.92 }] },
 });
