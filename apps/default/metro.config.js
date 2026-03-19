@@ -1,50 +1,52 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const path = require("path");
-const fs = require("fs");
 
 const projectRoot = __dirname;
-const monorepoRoot = path.resolve(projectRoot, "../..");
-
-// Load environment variables from monorepo root
-require("@expo/env").loadProjectEnv(monorepoRoot, { force: true });
+const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
-// Watch all files in the monorepo
-config.watchFolders = [monorepoRoot];
-
-// Let Metro know where to resolve packages from
+// Monorepo support: watch root + resolve from both locations.
+config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
-    path.resolve(projectRoot, "node_modules"),
-    path.resolve(monorepoRoot, "node_modules"),
+  path.resolve(projectRoot, "node_modules"),
+  path.resolve(workspaceRoot, "node_modules"),
 ];
 
-// Ensure asset resolution always checks the shared assets directory
-config.resolver.assetExts = config.resolver.assetExts || [];
-const sharedAssetsDir = path.resolve(monorepoRoot, "assets");
-if (!config.watchFolders.includes(sharedAssetsDir)) {
-  config.watchFolders.push(sharedAssetsDir);
-}
+// ---------------------------------------------------------------------------
+// Singleton enforcement.
+// In bun workspaces the .bun cache can hold TWO physical copies of a package
+// (e.g. node_modules/.bun/convex@…/node_modules/convex AND
+// node_modules/.bun/node_modules/convex). Metro keys modules by *path*, so
+// two paths = two module instances = two React contexts = provider not found.
+//
+// Fix: for any package that relies on shared singleton state (React context,
+// module-level variables, etc.), force Metro to resolve it from the project
+// root so every importer gets the exact same physical file.
+// ---------------------------------------------------------------------------
+const SINGLETONS = ["convex", "react", "react-native", "react-dom"];
 
-// Redirect asset requests from the ghost apps/default/images/ to the real assets/images/
-const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // If the request looks like a local ./images/ or ../images/ asset path
-  // and the file doesn't exist at the resolved location, try the shared assets folder
-  if (moduleName && typeof moduleName === "string") {
-    const localImagesDir = path.join(projectRoot, "images");
-    const sharedImagesDir = path.join(monorepoRoot, "assets", "images");
-    if (moduleName.includes(localImagesDir) || moduleName.startsWith("./images/")) {
-      const basename = path.basename(moduleName);
-      const sharedPath = path.join(sharedImagesDir, basename);
-      if (fs.existsSync(sharedPath)) {
-        return { type: "sourceFile", filePath: sharedPath };
-      }
-    }
+  // Only intercept bare specifiers (skip relative & absolute paths).
+  if (moduleName.startsWith(".") || moduleName.startsWith("/")) {
+    return context.resolveRequest(context, moduleName, platform);
   }
-  if (originalResolveRequest) {
-    return originalResolveRequest(context, moduleName, platform);
+
+  const pkgName = moduleName.startsWith("@")
+    ? moduleName.split("/").slice(0, 2).join("/")
+    : moduleName.split("/")[0];
+
+  if (SINGLETONS.includes(pkgName)) {
+    // Re-resolve as if the import originated from the project root.
+    // This guarantees Metro walks apps/default/node_modules/ first,
+    // landing on the canonical symlink every time.
+    return context.resolveRequest(
+      { ...context, originModulePath: path.join(projectRoot, "_singleton.js") },
+      moduleName,
+      platform,
+    );
   }
+
   return context.resolveRequest(context, moduleName, platform);
 };
 
