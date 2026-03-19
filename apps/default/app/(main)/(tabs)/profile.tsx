@@ -15,6 +15,13 @@ import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 
+interface UserPost {
+  _id: string;
+  type: string;
+  thumbnailUrl?: string;
+  mediaUrl?: string;
+}
+
 const { width: screenWidth } = Dimensions.get("window");
 const GRID_GAP = 2;
 const GRID_COL = 3;
@@ -125,7 +132,7 @@ export default function ProfileScreen() {
 
         {myPosts && myPosts.length > 0 ? (
           <View style={styles.grid}>
-            {myPosts.map(post => (
+            {myPosts.map((post: UserPost) => (
               <TouchableOpacity
                 key={post._id}
                 style={styles.gridItem}

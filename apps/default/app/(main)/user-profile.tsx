@@ -26,6 +26,8 @@ import {
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import type { Id } from "@/convex/_generated/dataModel";
 
+interface UserPostItem { _id: string; type: string; thumbnailUrl?: string; mediaUrl?: string }
+
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_GAP = 2;
 const GRID_COL = 3;
@@ -252,7 +254,7 @@ export default function UserProfileScreen() {
             </View>
           ) : (
             <View style={styles.postsGrid}>
-              {posts.map((post, index) => {
+              {posts.map((post: UserPostItem, index: number) => {
                 const isVideo = post.type === "video";
 
                 return (

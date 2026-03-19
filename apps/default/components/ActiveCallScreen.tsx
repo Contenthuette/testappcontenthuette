@@ -19,6 +19,8 @@ import { useCallContext } from "@/lib/call-context";
 import { useSound } from "@/lib/sounds";
 import { useWebRTC } from "@/lib/useWebRTC";
 
+interface CallParticipant { _id: string; userId: string; userName: string; userAvatarUrl?: string }
+
 interface ActiveCallScreenProps {
   callId: Id<"calls">;
 }
@@ -154,7 +156,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   }
 
   const otherParticipants =
-    call.participants.filter((p) => p.userId !== me?._id) ?? [];
+    call.participants.filter((p: CallParticipant) => p.userId !== me?._id) ?? [];
   const mainOther = otherParticipants[0];
   const displayName = call.groupName ?? call.callerName;
 
@@ -176,7 +178,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
           <View style={styles.ringingCenter}>
             {call.groupId && otherParticipants.length > 1 ? (
               <View style={styles.avatarRow}>
-                {otherParticipants.slice(0, 4).map((p) => (
+                {otherParticipants.slice(0, 4).map((p: CallParticipant) => (
                   <Avatar
                     key={p._id}
                     uri={p.userAvatarUrl}

@@ -14,7 +14,7 @@ import { SymbolView } from "@/components/Icon";
 export default function TicketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const tickets = useQuery(api.events.getMyTickets);
-  const ticket = tickets?.find(t => t._id === id);
+  const ticket = tickets?.find((t: { _id: string }) => t._id === id);
 
   if (!ticket) {
     return (

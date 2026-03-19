@@ -21,6 +21,13 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 const ABO_PRICE = "5,99";
 
+/* ─── Local types for dashboard data ─────────────────────── */
+interface Buyer { ticketId: string; userName: string; userEmail: string; status: string }
+interface DayStats { label: string; photos: number; videos: number }
+interface GrowthDay { label: string; count: number }
+interface EventRevenue { eventName: string; soldTickets: number; totalTickets: number; revenue: number; currency: string }
+interface AdminEvent { _id: Id<"events">; name: string; date: string; city: string; totalTickets: number; soldTickets: number; ticketPrice: number; currency: string; status: string }
+
 /* ─── KPI Card ───────────────────────────────────────────── */
 function KPI({
   label,
@@ -146,7 +153,7 @@ function EventRow({
           ) : detail.buyers.length === 0 ? (
             <Text style={styles.noBuyers}>Noch keine Tickets verkauft</Text>
           ) : (
-            detail.buyers.map((b) => (
+            detail.buyers.map((b: Buyer) => (
               <View key={b.ticketId} style={styles.buyerRow}>
                 <View style={styles.buyerAvatar}>
                   <Text style={styles.buyerInitial}>
@@ -277,12 +284,12 @@ export default function AdminDashboard() {
   }
 
   /* chart data */
-  const postChartData = stats.postsByDay.map((d) => d.photos + d.videos);
-  const postChartLabels = stats.postsByDay.map((d) => d.label);
-  const userChartData = stats.userGrowthByDay.map((d) => d.count);
-  const userChartLabels = stats.userGrowthByDay.map((d) => d.label);
+  const postChartData = stats.postsByDay.map((d: DayStats) => d.photos + d.videos);
+  const postChartLabels = stats.postsByDay.map((d: DayStats) => d.label);
+  const userChartData = stats.userGrowthByDay.map((d: GrowthDay) => d.count);
+  const userChartLabels = stats.userGrowthByDay.map((d: GrowthDay) => d.label);
 
-  const barData = stats.postsByDay.map((d) => ({
+  const barData = stats.postsByDay.map((d: DayStats) => ({
     label: d.label,
     value: d.photos + d.videos,
   }));
@@ -452,7 +459,7 @@ export default function AdminDashboard() {
           {stats.ticketRevenuePerEvent.length > 0 && (
             <View style={styles.eventRevenueSection}>
               <Text style={styles.eventRevenueTitle}>Pro Event</Text>
-              {stats.ticketRevenuePerEvent.map((ev, i) => (
+              {stats.ticketRevenuePerEvent.map((ev: EventRevenue, i: number) => (
                 <RevenueRow
                   key={i}
                   label={ev.eventName}
@@ -559,7 +566,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Events</Text>
             </View>
           ) : (
-            events.map((ev) => (
+            events.map((ev: AdminEvent) => (
               <EventRow
                 key={ev._id}
                 event={ev}

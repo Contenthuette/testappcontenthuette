@@ -14,6 +14,9 @@ import { Image } from "expo-image";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
 
+interface GroupMember { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; role: string; status: string }
+interface PendingRequest { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; requestedAt: number }
+
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
@@ -125,7 +128,7 @@ export default function GroupDetailScreen() {
           {/* Interests tags */}
           {group.interests && group.interests.length > 0 && (
             <View style={styles.interestTags}>
-              {group.interests.map(i => (
+              {group.interests.map((i: string) => (
                 <View key={i} style={styles.interestTag}>
                   <Text style={styles.interestTagText}>{i}</Text>
                 </View>
@@ -180,7 +183,7 @@ export default function GroupDetailScreen() {
               <Text style={styles.sectionTitle}>
                 Beitrittsanfragen ({pendingRequests.length})
               </Text>
-              {pendingRequests.map(req => (
+              {pendingRequests.map((req: PendingRequest) => (
                 <View key={req._id} style={styles.requestRow}>
                   <Avatar uri={req.avatarUrl} name={req.name} size={44} />
                   <View style={styles.requestInfo}>
@@ -212,7 +215,7 @@ export default function GroupDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Mitglieder</Text>
             {members && members.length > 0 ? (
-              members.filter(m => m.status === "active").map(m => (
+              members.filter((m: GroupMember) => m.status === "active").map((m: GroupMember) => (
                 <TouchableOpacity
                   key={m._id}
                   style={styles.memberRow}

@@ -269,7 +269,7 @@ export default function FeedScreen() {
     (store, { postId }) => {
       const currentFeed = store.getQuery(api.posts.feed, {});
       if (!currentFeed) return;
-      store.setQuery(api.posts.feed, {}, currentFeed.map(p =>
+      store.setQuery(api.posts.feed, {}, currentFeed.map((p: FeedItem) =>
         p._id === postId ? { ...p, isLiked: !p.isLiked, likeCount: p.isLiked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 } : p,
       ));
     },
@@ -278,7 +278,7 @@ export default function FeedScreen() {
     (store, { postId }) => {
       const currentFeed = store.getQuery(api.posts.feed, {});
       if (!currentFeed) return;
-      store.setQuery(api.posts.feed, {}, currentFeed.map(p =>
+      store.setQuery(api.posts.feed, {}, currentFeed.map((p: FeedItem) =>
         p._id === postId ? { ...p, isSaved: !p.isSaved } : p,
       ));
     },
@@ -288,7 +288,7 @@ export default function FeedScreen() {
     (store, { postId }) => {
       const currentFeed = store.getQuery(api.posts.feed, {});
       if (!currentFeed) return;
-      store.setQuery(api.posts.feed, {}, currentFeed.filter(p => p._id !== postId));
+      store.setQuery(api.posts.feed, {}, currentFeed.filter((p: FeedItem) => p._id !== postId));
     },
   );
 
@@ -333,7 +333,7 @@ export default function FeedScreen() {
   const onScrollEndDrag = useCallback(() => {
     if (!feed) return;
     // Prefetch next batch of images
-    const start = feed.findIndex(f => f._id === visibleVideoId) + 1;
+    const start = feed.findIndex((f: FeedItem) => f._id === visibleVideoId) + 1;
     for (let i = start; i < start + 5 && i < feed.length; i++) {
       const uri = feed[i]?.thumbnailUrl ?? feed[i]?.mediaUrl;
       if (uri) Image.prefetch(uri);
