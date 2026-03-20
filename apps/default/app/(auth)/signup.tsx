@@ -12,6 +12,19 @@ import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 
+function getErrorMessage(error: unknown): string | null {
+  if (typeof error === "string") return error;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return null;
+}
+
 export default function SignupScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,8 +62,8 @@ export default function SignupScreen() {
           router.replace("/");
         }, 1000);
       }
-    } catch (_e: unknown) {
-      setError("Registrierung fehlgeschlagen. Bitte versuche es erneut.");
+    } catch (signupError: unknown) {
+      setError(getErrorMessage(signupError) ?? "Registrierung fehlgeschlagen. Bitte versuche es erneut.");
     } finally {
       setLoading(false);
     }

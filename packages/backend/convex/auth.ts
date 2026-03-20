@@ -20,6 +20,14 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
 export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
 
 const siteUrl = process.env.SITE_URL!;
+const trustedOrigins = [
+    siteUrl,
+    "myapp://",
+    "exp://",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+    "https://*.preview.bl.run",
+];
 
 export const createAuth = (
     ctx: GenericCtx<DataModel>,
@@ -37,7 +45,7 @@ export const createAuth = (
         logger: {
             disabled: optionsOnly,
         },
-        trustedOrigins: [siteUrl, "myapp://", "exp://"],
+        trustedOrigins,
         database: authComponent.adapter(ctx),
         // Configure simple, non-verified email/password to get started
         emailAndPassword: {

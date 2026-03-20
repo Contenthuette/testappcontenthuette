@@ -1,33 +1,24 @@
-import { ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
-import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
 import { StatusBar } from "expo-status-bar";
-import { CallProvider } from "@/components/CallProvider";
-import { SoundProvider } from "@/lib/sounds";
+import React from "react";
+import { ConvexReactClient } from "convex/react";
+import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
 
-const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
-  unsavedChangesWarning: false,
-});
+const convex = new ConvexReactClient(
+  process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://glad-canary-992.convex.cloud",
+  { unsavedChangesWarning: false }
+);
 
 export default function RootLayout() {
   return (
     <ConvexAuthProvider client={convex}>
       <StatusBar style="dark" />
-      <SoundProvider>
-        <CallProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "slide_from_right",
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(main)" />
-            <Stack.Screen name="(admin)" />
-          </Stack>
-        </CallProvider>
-      </SoundProvider>
+      <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(main)" />
+        <Stack.Screen name="(admin)" />
+      </Stack>
     </ConvexAuthProvider>
   );
 }

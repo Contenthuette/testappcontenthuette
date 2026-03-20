@@ -14,6 +14,11 @@ import type { ConvexReactClient } from "convex/react";
 import { authClient } from "./auth-client";
 import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 
+const convexSiteUrl =
+  process.env.EXPO_PUBLIC_CONVEX_SITE_URL ??
+  process.env.EXPO_PUBLIC_CONVEX_URL ??
+  "https://glad-canary-992.convex.cloud";
+
 // Better Auth session shape from useSession().data
 interface BetterAuthSession {
   session?: { id: string };
@@ -26,10 +31,7 @@ interface BetterAuthSession {
  * The endpoint is served by the Better Auth HTTP routes on the Convex site URL.
  */
 async function fetchConvexJWT(sessionToken: string): Promise<string | null> {
-  const siteUrl = process.env.EXPO_PUBLIC_CONVEX_SITE_URL;
-  if (!siteUrl) return null;
-
-  const res = await fetch(`${siteUrl}/api/auth/convex/token`, {
+  const res = await fetch(`${convexSiteUrl}/api/auth/convex/token`, {
     headers: { Authorization: `Bearer ${sessionToken}` },
   });
 
