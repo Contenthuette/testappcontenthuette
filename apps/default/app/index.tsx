@@ -1,21 +1,50 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { router } from "expo-router";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { colors } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
 import { usePushNotifications } from "@/lib/push-notifications";
+import { authClient } from "@/lib/auth-client";
+
+interface SessionUser {
+  email?: string;
+  name?: string;
+}
 
 function AuthenticatedRouter() {
   const me = useQuery(api.users.me);
+  const ensureUser = useMutation(api.users.ensureUser);
+  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const [isBootstrappingUser, setIsBootstrappingUser] = useState(false);
   usePushNotifications();
 
+  const sessionUser =
+    typeof session === "object" && session !== null && "user" in session
+      ? (session.user as SessionUser | undefined)
+      : undefined;
+
   useEffect(() => {
-    if (me === undefined) return; // loading
+    if (me !== null || isBootstrappingUser || isSessionPending) return;
+    const email = sessionUser?.email?.trim();
+    if (!email) return;
+
+    const fallbackName = email.split("@")[0] ?? "Z User";
+    const name = sessionUser?.name?.trim() || fallbackName;
+
+    setIsBootstrappingUser(true);
+    void ensureUser({ name, email })
+      .catch(() => null)
+      .finally(() => {
+        setIsBootstrappingUser(false);
+      });
+  }, [ensureUser, isBootstrappingUser, isSessionPending, me, sessionUser?.email, sessionUser?.name]);
+
+  useEffect(() => {
+    if (me === undefined || isSessionPending || isBootstrappingUser) return;
     if (me === null) {
-      // No user record yet - go to auth to create one
       router.replace("/(auth)/welcome");
       return;
     }
@@ -39,7 +68,7 @@ function AuthenticatedRouter() {
     }
     // All good - go to app
     router.replace("/(main)/(tabs)/groups");
-  }, [me]);
+  }, [isBootstrappingUser, isSessionPending, me]);
 
   return (
     <View style={styles.container}>

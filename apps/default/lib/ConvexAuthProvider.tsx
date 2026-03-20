@@ -7,78 +7,100 @@
  * separate React context that the app can't read.
  *
  * By importing `ConvexProviderWithAuth` directly here, we guarantee a single
- * React context for the entire app.
+ * React context for the entire app while keeping the official auth handoff logic.
  */
 import { ConvexProviderWithAuth } from "convex/react";
 import type { ConvexReactClient } from "convex/react";
-import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { authClient } from "./auth-client";
 
-// Better Auth session shape from useSession().data
 interface BetterAuthSession {
   session?: { id: string };
-  user?: { id: string; name?: string; email?: string };
 }
 
-/**
- * Custom useAuth hook that bridges Better Auth with Convex.
- * Mirrors the logic from `@convex-dev/better-auth/react`'s internal
- * `useUseAuthFromBetterAuth` hook, but imports everything from the
- * app's own module instances.
- */
-function useBetterAuth() {
-  const { data: session, isPending } = authClient.useSession();
-  const [cachedToken, setCachedToken] = useState<string | null>(null);
-  const pendingRef = useRef<Promise<string | null> | null>(null);
+interface CrossDomainSessionToken {
+  token: string;
+}
 
-  const sessionData = session as BetterAuthSession | null;
-  const sessionId = sessionData?.session?.id;
+interface CrossDomainVerifyResult {
+  data?: {
+    session?: CrossDomainSessionToken;
+  };
+}
 
-  const fetchAccessToken = useCallback(
-    async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-      if (cachedToken && !forceRefreshToken) {
-        return cachedToken;
-      }
+interface CrossDomainAuthClient {
+  crossDomain: {
+    oneTimeToken: {
+      verify(args: { token: string }): Promise<CrossDomainVerifyResult>;
+    };
+  };
+  updateSession(): void;
+}
 
-      if (!forceRefreshToken && pendingRef.current) {
-        return pendingRef.current;
-      }
+let initialTokenUsed = false;
 
-      if (!sessionData?.session) {
-        if (!isPending && cachedToken) {
-          setCachedToken(null);
-        }
-        return null;
-      }
-
-      const promise = authClient.convex
-        .token({ fetchOptions: { throw: false } })
-        .then(({ data }) => {
-          const token = data?.token ?? null;
-          setCachedToken(token);
-          return token;
-        })
-        .catch(() => {
-          setCachedToken(null);
-          return null;
-        })
-        .finally(() => {
-          pendingRef.current = null;
-        });
-
-      pendingRef.current = promise;
-      return promise;
-    },
-    [cachedToken, isPending, sessionData?.session, sessionId],
+function useUseAuthFromBetterAuth(initialToken?: string | null) {
+  const [cachedToken, setCachedToken] = useState<string | null>(
+    initialTokenUsed ? null : (initialToken ?? null),
   );
+  const pendingTokenRef = useRef<Promise<string | null> | null>(null);
+
+  useEffect(() => {
+    if (!initialTokenUsed) {
+      initialTokenUsed = true;
+    }
+  }, []);
 
   return useMemo(
-    () => ({
-      isLoading: isPending && !cachedToken,
-      isAuthenticated: Boolean(sessionData?.session) || cachedToken !== null,
-      fetchAccessToken,
-    }),
-    [isPending, sessionId, fetchAccessToken, cachedToken, sessionData?.session],
+    () =>
+      function useAuthFromBetterAuth() {
+        const { data: session, isPending: isSessionPending } = authClient.useSession();
+        const sessionData = session as BetterAuthSession | null;
+        const sessionId = sessionData?.session?.id;
+
+        useEffect(() => {
+          if (!sessionData?.session && !isSessionPending && cachedToken) {
+            setCachedToken(null);
+          }
+        }, [cachedToken, isSessionPending, sessionData?.session]);
+
+        const fetchAccessToken = useCallback(
+          async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
+            if (cachedToken && !forceRefreshToken) {
+              return cachedToken;
+            }
+            if (!forceRefreshToken && pendingTokenRef.current) {
+              return pendingTokenRef.current;
+            }
+            pendingTokenRef.current = authClient.convex
+              .token({ fetchOptions: { throw: false } })
+              .then(({ data }) => {
+                const token = data?.token ?? null;
+                setCachedToken(token);
+                return token;
+              })
+              .catch(() => {
+                setCachedToken(null);
+                return null;
+              })
+              .finally(() => {
+                pendingTokenRef.current = null;
+              });
+            return pendingTokenRef.current;
+          },
+          [cachedToken, sessionId],
+        );
+
+        return useMemo(
+          () => ({
+            isLoading: isSessionPending && !cachedToken,
+            isAuthenticated: Boolean(sessionData?.session) || cachedToken !== null,
+            fetchAccessToken,
+          }),
+          [cachedToken, fetchAccessToken, isSessionPending, sessionData?.session],
+        );
+      },
+    [],
   );
 }
 
@@ -88,6 +110,41 @@ interface ConvexAuthProviderProps {
 }
 
 export function ConvexAuthProvider({ client, children }: ConvexAuthProviderProps) {
+  const useBetterAuth = useUseAuthFromBetterAuth();
+
+  useEffect(() => {
+    void (async () => {
+      if (typeof window === "undefined" || !window.location?.href) {
+        return;
+      }
+
+      const url = new URL(window.location.href);
+      const token = url.searchParams.get("ott");
+      if (!token) {
+        return;
+      }
+
+      const authClientWithCrossDomain = authClient as typeof authClient & CrossDomainAuthClient;
+      url.searchParams.delete("ott");
+      window.history.replaceState({}, "", url);
+
+      const result = await authClientWithCrossDomain.crossDomain.oneTimeToken.verify({ token });
+      const session = result.data?.session;
+      if (!session) {
+        return;
+      }
+
+      await authClient.getSession({
+        fetchOptions: {
+          headers: {
+            Authorization: `Bearer ${session.token}`,
+          },
+        },
+      });
+      authClientWithCrossDomain.updateSession();
+    })();
+  }, []);
+
   return (
     <ConvexProviderWithAuth client={client} useAuth={useBetterAuth}>
       {children}

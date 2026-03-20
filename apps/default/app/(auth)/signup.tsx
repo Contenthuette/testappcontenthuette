@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -31,7 +29,6 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const ensureUser = useMutation(api.users.ensureUser);
 
   const handleSignup = async () => {
     if (!name.trim()) { setError("Bitte gib deinen Namen ein"); return; }
@@ -52,15 +49,7 @@ export default function SignupScreen() {
           setError(result.error.message ?? "Registrierung fehlgeschlagen");
         }
       } else {
-        // Wait a moment for auth to propagate, then create user record
-        setTimeout(async () => {
-          try {
-            await ensureUser({ name: name.trim(), email: email.trim() });
-          } catch (_e) {
-            // User record will be created on next login
-          }
-          router.replace("/");
-        }, 1000);
+        router.replace("/");
       }
     } catch (signupError: unknown) {
       setError(getErrorMessage(signupError) ?? "Registrierung fehlgeschlagen. Bitte versuche es erneut.");
