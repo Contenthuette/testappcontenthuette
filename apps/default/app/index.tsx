@@ -27,6 +27,15 @@ function AuthenticatedRouter() {
       : undefined;
 
   useEffect(() => {
+    console.log("[index] auth state", {
+      me,
+      isSessionPending,
+      isBootstrappingUser,
+      hasSessionUser: Boolean(sessionUser?.email),
+    });
+  }, [isBootstrappingUser, isSessionPending, me, sessionUser?.email]);
+
+  useEffect(() => {
     if (me !== null || isBootstrappingUser || isSessionPending) return;
     const email = sessionUser?.email?.trim();
     if (!email) return;
@@ -34,9 +43,13 @@ function AuthenticatedRouter() {
     const fallbackName = email.split("@")[0] ?? "Z User";
     const name = sessionUser?.name?.trim() || fallbackName;
 
+    console.log("[index] bootstrapping user", { email, name });
     setIsBootstrappingUser(true);
     void ensureUser({ name, email })
-      .catch(() => null)
+      .catch((error: unknown) => {
+        console.log("[index] ensureUser failed", { error });
+        return null;
+      })
       .finally(() => {
         setIsBootstrappingUser(false);
       });

@@ -19,8 +19,5 @@ export const convexSiteUrl =
   process.env.EXPO_PUBLIC_CONVEX_SITE_URL ?? deriveConvexSiteUrl(convexUrl);
 
 export function getAuthBaseUrl(): string {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
-  }
   return convexSiteUrl;
 }

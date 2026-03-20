@@ -14,6 +14,10 @@ function isAdminEmail(email: string): boolean {
     return normalizedEmail === "live@z-social.com" || normalizedEmail === "leif@z-social.com";
 }
 
+function isAllowedPreviewOrigin(origin: string): boolean {
+    return /^https:\/\/[a-z0-9-]+\.preview\.bl\.run$/i.test(origin);
+}
+
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
 export const authComponent = createClient<DataModel>(components.betterAuth, {
@@ -62,14 +66,21 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
 export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
 
 const siteUrl = process.env.SITE_URL!;
-const trustedOrigins = [
+const defaultTrustedOrigins = [
     siteUrl,
     "myapp://",
     "exp://",
     "http://localhost:*",
     "http://127.0.0.1:*",
-    "https://*.preview.bl.run",
 ];
+
+async function trustedOrigins(request?: Request): Promise<string[]> {
+    const requestOrigin = request?.headers.get("origin");
+    if (requestOrigin && isAllowedPreviewOrigin(requestOrigin)) {
+        return [...defaultTrustedOrigins, requestOrigin];
+    }
+    return [...defaultTrustedOrigins, "https://*.preview.bl.run"];
+}
 
 export const createAuth = (
     ctx: GenericCtx<DataModel>,
