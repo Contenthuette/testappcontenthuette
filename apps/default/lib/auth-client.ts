@@ -5,11 +5,7 @@ import { expoClient } from "@better-auth/expo/client";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-
-const convexSiteUrl =
-  process.env.EXPO_PUBLIC_CONVEX_SITE_URL ??
-  process.env.EXPO_PUBLIC_CONVEX_URL ??
-  "https://glad-canary-992.convex.cloud";
+import { getAuthBaseUrl } from "@/lib/convex-urls";
 
 const configuredScheme = Constants.expoConfig?.scheme;
 const appScheme =
@@ -18,7 +14,7 @@ const appScheme =
     : configuredScheme?.[0] ?? "z";
 
 export const authClient = createAuthClient({
-  baseURL: convexSiteUrl,
+  baseURL: getAuthBaseUrl(),
   plugins: [
     anonymousClient(),
     ...(Platform.OS === "web"

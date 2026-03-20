@@ -11,37 +11,13 @@
  */
 import { ConvexProviderWithAuth } from "convex/react";
 import type { ConvexReactClient } from "convex/react";
-import { authClient } from "./auth-client";
 import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
-
-const convexSiteUrl =
-  process.env.EXPO_PUBLIC_CONVEX_SITE_URL ??
-  process.env.EXPO_PUBLIC_CONVEX_URL ??
-  "https://glad-canary-992.convex.cloud";
+import { authClient } from "./auth-client";
 
 // Better Auth session shape from useSession().data
 interface BetterAuthSession {
   session?: { id: string };
   user?: { id: string; name?: string; email?: string };
-  token?: string;
-}
-
-/**
- * Fetches a Convex JWT from the Better Auth token endpoint.
- * The endpoint is served by the Better Auth HTTP routes on the Convex site URL.
- */
-async function fetchConvexJWT(sessionToken: string): Promise<string | null> {
-  const res = await fetch(`${convexSiteUrl}/api/auth/convex/token`, {
-    headers: { Authorization: `Bearer ${sessionToken}` },
-  });
-
-  if (!res.ok) return null;
-  const data: unknown = await res.json();
-  if (typeof data === "object" && data !== null && "token" in data) {
-    const token = (data as { token: unknown }).token;
-    return typeof token === "string" ? token : null;
-  }
-  return null;
 }
 
 /**
@@ -57,48 +33,43 @@ function useBetterAuth() {
 
   const sessionData = session as BetterAuthSession | null;
   const sessionId = sessionData?.session?.id;
-  const sessionToken = sessionData?.token;
 
   const fetchAccessToken = useCallback(
     async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-      // Reuse in-flight request
-      if (!forceRefreshToken && pendingRef.current) {
-        return pendingRef.current;
-      }
-
-      // Signed out — clear cached token
-      if (!session && !isPending && cachedToken) {
-        setCachedToken(null);
-        return null;
-      }
-
-      // Return cached token when not forcing refresh
       if (cachedToken && !forceRefreshToken) {
         return cachedToken;
       }
 
-      // No session token available yet
-      if (!sessionToken) {
+      if (!forceRefreshToken && pendingRef.current) {
+        return pendingRef.current;
+      }
+
+      if (!sessionData?.session) {
+        if (!isPending && cachedToken) {
+          setCachedToken(null);
+        }
         return null;
       }
 
-      // Fetch a fresh Convex JWT
-      const promise = fetchConvexJWT(sessionToken);
+      const promise = authClient.convex
+        .token({ fetchOptions: { throw: false } })
+        .then(({ data }) => {
+          const token = data?.token ?? null;
+          setCachedToken(token);
+          return token;
+        })
+        .catch(() => {
+          setCachedToken(null);
+          return null;
+        })
+        .finally(() => {
+          pendingRef.current = null;
+        });
+
       pendingRef.current = promise;
-
-      try {
-        const token = await promise;
-        setCachedToken(token);
-        return token;
-      } catch {
-        setCachedToken(null);
-        return null;
-      } finally {
-        pendingRef.current = null;
-      }
+      return promise;
     },
-    // Re-create when the session changes (sign in / out)
-    [sessionId, session, isPending, cachedToken, sessionToken],
+    [cachedToken, isPending, sessionData?.session, sessionId],
   );
 
   return useMemo(

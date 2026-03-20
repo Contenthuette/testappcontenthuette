@@ -9,11 +9,53 @@ import authConfig from "./auth.config";
 
 const authFunctions: AuthFunctions = internal.auth;
 
+function isAdminEmail(email: string): boolean {
+    const normalizedEmail = email.toLowerCase();
+    return normalizedEmail === "live@z-social.com" || normalizedEmail === "leif@z-social.com";
+}
+
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
 export const authComponent = createClient<DataModel>(components.betterAuth, {
     authFunctions,
-    triggers: {},
+    triggers: {
+        user: {
+            onCreate: async (ctx, doc) => {
+                const existingUser = await ctx.db
+                    .query("users")
+                    .withIndex("by_authId", (q) => q.eq("authId", doc._id))
+                    .unique();
+                if (existingUser) {
+                    return;
+                }
+
+                await ctx.db.insert("users", {
+                    authId: doc._id,
+                    email: doc.email,
+                    name: doc.name,
+                    role: isAdminEmail(doc.email) ? "admin" : "user",
+                    onboardingComplete: false,
+                    subscriptionStatus: "none",
+                    createdAt: doc.createdAt,
+                });
+            },
+            onUpdate: async (ctx, newDoc) => {
+                const existingUser = await ctx.db
+                    .query("users")
+                    .withIndex("by_authId", (q) => q.eq("authId", newDoc._id))
+                    .unique();
+                if (!existingUser) {
+                    return;
+                }
+
+                await ctx.db.patch(existingUser._id, {
+                    email: newDoc.email,
+                    name: newDoc.name,
+                    role: isAdminEmail(newDoc.email) ? "admin" : existingUser.role,
+                });
+            },
+        },
+    },
 });
 
 // export the trigger API functions so that triggers work
