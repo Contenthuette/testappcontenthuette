@@ -119,10 +119,12 @@ function startNativePoll() {
     }
 
     // ── Detect natural end of playback ──
+    // CRITICAL FIX: Fully destroy the player on end instead of seekTo(0).
+    // Reusing a completed player causes silent failures on subsequent plays.
     if (_snap.playing && !playing && dur > 0 && ct >= dur - 0.15) {
-      try { p.seekTo(0); } catch { /* ignore */ }
-      set({ playing: false, currentTime: 0 });
-      stopPoll();
+      const finishedUrl = _snap.url;
+      destroyPlayer();
+      set({ url: finishedUrl, playing: false, currentTime: 0, duration: dur });
       return;
     }
 
@@ -200,27 +202,24 @@ async function playNative(url: string): Promise<void> {
   await ensurePlaybackMode();
 
   // ── Same URL: toggle play/pause ──
-  if (_player && _snap.url === url) {
+  if (_snap.url === url && _player) {
     if (_snap.playing) {
       try { _player.pause(); } catch { /* ignore */ }
       set({ playing: false });
       stopPoll();
     } else {
-      // Resume from current position (or restart if at end)
-      if (_snap.duration > 0 && _snap.currentTime >= _snap.duration - 0.2) {
-        try { _player.seekTo(0); } catch { /* ignore */ }
-        set({ currentTime: 0 });
-      }
-      try {
-        _player.play();
-        set({ playing: true });
-        startNativePoll();
-      } catch {
-        // Player might be dead — recreate
-        destroyPlayer();
-        await createAndPlayNative(url);
-      }
+      // CRITICAL FIX: Always create a fresh player for replay.
+      // After natural end the old player is destroyed, and even if it
+      // still exists calling play() on a completed player is unreliable.
+      destroyPlayer();
+      await createAndPlayNative(url);
     }
+    return;
+  }
+
+  // ── Same URL but player was already destroyed (finished naturally) ──
+  if (_snap.url === url && !_player) {
+    await createAndPlayNative(url);
     return;
   }
 
