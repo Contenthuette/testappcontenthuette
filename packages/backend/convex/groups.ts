@@ -3,6 +3,7 @@ import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { buildGroupSearchText, normalizeSearchQuery } from "./searchText";
 
 // Helper to get userId from authId
 async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
@@ -36,14 +37,12 @@ export const list = authQuery({
     const myUserId = await getMyUserId(ctx);
     let groups;
     const searchQuery = args.searchQuery;
-    if (searchQuery && searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const allGroups = await ctx.db.query("groups").take(200);
-      groups = allGroups.filter(g => {
-        const nameMatch = g.name.toLowerCase().includes(q);
-        const interestMatch = g.interests?.some(i => i.toLowerCase().includes(q)) ?? false;
-        return nameMatch || interestMatch;
-      }).slice(0, 50);
+    const normalizedQuery = normalizeSearchQuery(searchQuery ?? "");
+    if (normalizedQuery) {
+      groups = await ctx.db
+        .query("groups")
+        .withSearchIndex("search_text", (q) => q.search("searchText", normalizedQuery))
+        .take(50);
     } else {
       const county = args.county;
       const city = args.city;
@@ -141,6 +140,14 @@ export const create = authMutation({
     if (!myUserId) throw new Error("User not found");
     const groupId = await ctx.db.insert("groups", {
       ...args,
+      searchText: buildGroupSearchText({
+        name: args.name,
+        description: args.description,
+        county: args.county,
+        city: args.city,
+        topic: args.topic,
+        interests: args.interests,
+      }),
       creatorId: myUserId,
       memberCount: 1,
       createdAt: Date.now(),
@@ -426,6 +433,13 @@ export const update = authMutation({
       throw new Error("Only group admins can edit this group");
     }
 
+    const nextName = args.name !== undefined ? args.name : group.name;
+    const nextDescription = args.description !== undefined ? args.description : group.description;
+    const nextCounty = args.county !== undefined ? args.county : group.county;
+    const nextCity = args.city !== undefined ? args.city : group.city;
+    const nextTopic = args.topic !== undefined ? args.topic : group.topic;
+    const nextInterests = args.interests !== undefined ? args.interests : group.interests;
+
     const patch: Record<string, unknown> = {};
     if (args.name !== undefined) patch.name = args.name;
     if (args.description !== undefined) patch.description = args.description;
@@ -437,6 +451,14 @@ export const update = authMutation({
     if (args.thumbnailStorageId !== undefined) patch.thumbnailStorageId = args.thumbnailStorageId;
 
     if (Object.keys(patch).length > 0) {
+      patch.searchText = buildGroupSearchText({
+        name: nextName,
+        description: nextDescription,
+        county: nextCounty,
+        city: nextCity,
+        topic: nextTopic,
+        interests: nextInterests,
+      });
       await ctx.db.patch(args.groupId, patch);
     }
     return null;

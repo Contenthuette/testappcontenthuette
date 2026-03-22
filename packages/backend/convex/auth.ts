@@ -6,6 +6,7 @@ import { components, internal } from "./_generated/api";
 import { DataModel } from "./_generated/dataModel";
 import { anonymous } from "better-auth/plugins";
 import authConfig from "./auth.config";
+import { buildUserSearchText } from "./searchText";
 
 const authFunctions: AuthFunctions = internal.auth;
 
@@ -37,6 +38,7 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
                     authId: doc._id,
                     email: doc.email,
                     name: doc.name,
+                    searchText: buildUserSearchText({ name: doc.name }),
                     role: isAdminEmail(doc.email) ? "admin" : "user",
                     onboardingComplete: false,
                     subscriptionStatus: "none",
@@ -55,6 +57,13 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
                 await ctx.db.patch(existingUser._id, {
                     email: newDoc.email,
                     name: newDoc.name,
+                    searchText: buildUserSearchText({
+                        name: newDoc.name,
+                        bio: existingUser.bio,
+                        county: existingUser.county,
+                        city: existingUser.city,
+                        interests: existingUser.interests,
+                    }),
                     role: isAdminEmail(newDoc.email) ? "admin" : existingUser.role,
                 });
             },

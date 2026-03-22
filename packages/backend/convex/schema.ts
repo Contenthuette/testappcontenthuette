@@ -17,6 +17,7 @@ export default defineSchema({
     gender: v.optional(v.union(v.literal("male"), v.literal("female"), v.literal("other"), v.literal("prefer_not_to_say"))),
     birthDate: v.optional(v.string()),
     interests: v.optional(v.array(v.string())),
+    searchText: v.optional(v.string()),
     role: v.union(v.literal("user"), v.literal("admin")),
     onboardingComplete: v.boolean(),
     subscriptionStatus: v.union(v.literal("none"), v.literal("active"), v.literal("canceled"), v.literal("expired")),
@@ -30,7 +31,9 @@ export default defineSchema({
     .index("by_role", ["role"])
     .index("by_subscriptionStatus", ["subscriptionStatus"])
     .index("by_county_and_city", ["county", "city"])
-    .index("by_lastActiveAt", ["lastActiveAt"]),
+    .index("by_lastActiveAt", ["lastActiveAt"])
+    .index("by_createdAt", ["createdAt"])
+    .searchIndex("search_text", { searchField: "searchText" }),
 
   // ── Groups ─────────────────────────────────────────────────────
   groups: defineTable({
@@ -42,6 +45,7 @@ export default defineSchema({
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
     interests: v.optional(v.array(v.string())),
+    searchText: v.optional(v.string()),
     visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
     creatorId: v.id("users"),
     memberCount: v.number(),
@@ -50,7 +54,9 @@ export default defineSchema({
     .index("by_creatorId", ["creatorId"])
     .index("by_county_and_city", ["county", "city"])
     .index("by_topic", ["topic"])
-    .searchIndex("search_name", { searchField: "name" }),
+    .index("by_createdAt", ["createdAt"])
+    .searchIndex("search_name", { searchField: "name" })
+    .searchIndex("search_text", { searchField: "searchText" }),
 
   groupMembers: defineTable({
     groupId: v.id("groups"),
@@ -182,7 +188,8 @@ export default defineSchema({
   })
     .index("by_eventId", ["eventId"])
     .index("by_userId", ["userId"])
-    .index("by_qrCode", ["qrCode"]),
+    .index("by_qrCode", ["qrCode"])
+    .index("by_purchasedAt", ["purchasedAt"]),
 
   // ── Partners ───────────────────────────────────────────────────
   partners: defineTable({

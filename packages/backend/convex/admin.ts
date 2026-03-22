@@ -1,17 +1,23 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
 /* ─── helpers ─────────────────────────────────────────────────── */
-async function requireAdmin(ctx: { user: { _id: string }; db: any }) {
+type AdminCtx = {
+  user: { _id: string };
+  db: QueryCtx["db"];
+};
+
+async function requireAdmin(ctx: AdminCtx): Promise<{ _id: Id<"users"> }> {
   const authId = ctx.user._id;
   const user = await ctx.db
     .query("users")
-    .withIndex("by_authId", (q: any) => q.eq("authId", authId))
+    .withIndex("by_authId", (q) => q.eq("authId", authId))
     .unique();
   if (!user || user.role !== "admin") throw new Error("Admin access required");
-  return user as { _id: Id<"users"> };
+  return { _id: user._id };
 }
 
 const DAY = 86_400_000;
@@ -75,124 +81,126 @@ export const getAdminDashboard = authQuery({
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const now = Date.now();
+    const monthStart = now - MONTH;
+    const weekStart = now - WEEK;
+    const dayStart = now - DAY;
 
-    const users = await ctx.db.query("users").take(50000);
-    const posts = await ctx.db.query("posts").take(50000);
-    const events = await ctx.db.query("events").take(10000);
-    const tickets = await ctx.db.query("tickets").take(50000);
-    const groups = await ctx.db.query("groups").take(50000);
+    const [
+      activeUsers,
+      canceledUsers,
+      noneUsers,
+      expiredUsers,
+      recentUsers,
+      activeUsersThisWeek,
+      recentPosts,
+      allPosts,
+      allGroups,
+      events,
+      recentTickets,
+    ] = await Promise.all([
+      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "active")).collect(),
+      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "canceled")).collect(),
+      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "none")).collect(),
+      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "expired")).collect(),
+      ctx.db.query("users").withIndex("by_createdAt", (q) => q.gte("createdAt", monthStart)).collect(),
+      ctx.db.query("users").withIndex("by_lastActiveAt", (q) => q.gte("lastActiveAt", weekStart)).collect(),
+      ctx.db.query("posts").withIndex("by_createdAt", (q) => q.gte("createdAt", monthStart)).collect(),
+      ctx.db.query("posts").take(50000),
+      ctx.db.query("groups").take(50000),
+      ctx.db.query("events").take(10000),
+      ctx.db.query("tickets").withIndex("by_purchasedAt", (q) => q.gte("purchasedAt", monthStart)).collect(),
+    ]);
 
-    const activeSubscriptions = users.filter(
-      (u) => u.subscriptionStatus === "active",
-    ).length;
-    const canceledSubscriptions = users.filter(
-      (u) => u.subscriptionStatus === "canceled",
-    ).length;
+    const activeSubscriptions = activeUsers.length;
+    const canceledSubscriptions = canceledUsers.length;
+    const totalMembers = activeUsers.length + canceledUsers.length + noneUsers.length + expiredUsers.length;
 
-    /* subscription revenue */
     const ABO_PRICE = 5.99;
     const subscriptionRevenueMonthly = activeSubscriptions * ABO_PRICE;
-    const subscriptionRevenueTotal = users.filter(
-      (u) => u.subscriptionStatus === "active" || u.subscriptionStatus === "canceled",
-    ).length * ABO_PRICE;
+    const subscriptionRevenueTotal = (activeUsers.length + canceledUsers.length) * ABO_PRICE;
 
-    /* ticket revenue total + monthly */
-    let ticketRevenueTotal = 0;
+    const eventById = new Map(events.map((event) => [event._id, event] as const));
     let ticketRevenueMonth = 0;
-    for (const t of tickets) {
-      const ev = events.find((e) => e._id === t.eventId);
-      if (!ev) continue;
-      ticketRevenueTotal += ev.ticketPrice;
-      if (t.purchasedAt > now - MONTH) ticketRevenueMonth += ev.ticketPrice;
+    for (const ticket of recentTickets) {
+      const event = eventById.get(ticket.eventId);
+      if (event) {
+        ticketRevenueMonth += event.ticketPrice;
+      }
     }
 
-    /* ticket revenue per event */
-    const ticketRevenuePerEvent = events.map((ev) => {
-      const evTickets = tickets.filter((t) => t.eventId === ev._id);
-      return {
-        eventName: ev.name,
-        revenue: evTickets.length * ev.ticketPrice,
-        soldTickets: ev.soldTickets,
-        totalTickets: ev.totalTickets,
-        currency: ev.currency,
-      };
-    });
+    const ticketRevenuePerEvent = events.map((event) => ({
+      eventName: event.name,
+      revenue: event.soldTickets * event.ticketPrice,
+      soldTickets: event.soldTickets,
+      totalTickets: event.totalTickets,
+      currency: event.currency,
+    }));
+    const ticketRevenueTotal = ticketRevenuePerEvent.reduce((sum, event) => sum + event.revenue, 0);
 
-    /* posts by day (last 7 days) */
+    const newMembersWeek = recentUsers.filter((user) => user.createdAt > weekStart).length;
+    const newMembersMonth = recentUsers.length;
+
+    const activeWeek = activeUsersThisWeek.length;
+    const activeToday = activeUsersThisWeek.filter(
+      (user) => user.lastActiveAt != null && user.lastActiveAt > dayStart,
+    ).length;
+
+    const postsThisWeek = recentPosts.filter((post) => post.createdAt > weekStart);
+    const photosToday = recentPosts.filter((post) => post.type === "photo" && post.createdAt > dayStart).length;
+    const videosToday = recentPosts.filter((post) => post.type === "video" && post.createdAt > dayStart).length;
+    const photosWeek = postsThisWeek.filter((post) => post.type === "photo").length;
+    const videosWeek = postsThisWeek.filter((post) => post.type === "video").length;
+    const photosMonth = recentPosts.filter((post) => post.type === "photo").length;
+    const videosMonth = recentPosts.filter((post) => post.type === "video").length;
+
     const postsByDay: Array<{ label: string; photos: number; videos: number }> = [];
     for (let i = 6; i >= 0; i--) {
-      const dayStart = now - i * DAY;
-      const dayEnd = dayStart + DAY;
-      const dayLabel = new Date(dayStart).toLocaleDateString("de-DE", {
+      const rangeStart = now - (i + 1) * DAY;
+      const rangeEnd = now - i * DAY;
+      const dayLabel = new Date(rangeStart).toLocaleDateString("de-DE", {
         weekday: "short",
       });
-      const photos = posts.filter(
-        (p) => p.type === "photo" && p.createdAt >= dayStart - 6 * DAY && p.createdAt < dayEnd - 6 * DAY + DAY,
-      ).length;
-      const videos = posts.filter(
-        (p) => p.type === "video" && p.createdAt >= dayStart - 6 * DAY && p.createdAt < dayEnd - 6 * DAY + DAY,
-      ).length;
-      // Recalculate properly
-      const dStart = now - (i + 1) * DAY;
-      const dEnd = now - i * DAY;
       postsByDay.push({
         label: dayLabel,
-        photos: posts.filter((p) => p.type === "photo" && p.createdAt >= dStart && p.createdAt < dEnd).length,
-        videos: posts.filter((p) => p.type === "video" && p.createdAt >= dStart && p.createdAt < dEnd).length,
+        photos: postsThisWeek.filter((post) => post.type === "photo" && post.createdAt >= rangeStart && post.createdAt < rangeEnd).length,
+        videos: postsThisWeek.filter((post) => post.type === "video" && post.createdAt >= rangeStart && post.createdAt < rangeEnd).length,
       });
     }
 
-    /* user growth by day (last 7 days) */
     const userGrowthByDay: Array<{ label: string; count: number }> = [];
     for (let i = 6; i >= 0; i--) {
-      const dStart = now - (i + 1) * DAY;
-      const dEnd = now - i * DAY;
-      const dayLabel = new Date(dStart).toLocaleDateString("de-DE", {
+      const rangeStart = now - (i + 1) * DAY;
+      const rangeEnd = now - i * DAY;
+      const dayLabel = new Date(rangeStart).toLocaleDateString("de-DE", {
         weekday: "short",
       });
       userGrowthByDay.push({
         label: dayLabel,
-        count: users.filter((u) => u.createdAt >= dStart && u.createdAt < dEnd).length,
+        count: recentUsers.filter((user) => user.createdAt >= rangeStart && user.createdAt < rangeEnd).length,
       });
     }
 
     return {
-      totalMembers: users.length,
+      totalMembers,
       activeSubscriptions,
       canceledSubscriptions,
-      newMembersWeek: users.filter((u) => u.createdAt > now - WEEK).length,
-      newMembersMonth: users.filter((u) => u.createdAt > now - MONTH).length,
+      newMembersWeek,
+      newMembersMonth,
       ticketRevenueTotal,
       ticketRevenueMonth,
       subscriptionRevenueMonthly,
       subscriptionRevenueTotal,
-      activeToday: users.filter(
-        (u) => u.lastActiveAt != null && u.lastActiveAt > now - DAY,
-      ).length,
-      activeWeek: users.filter(
-        (u) => u.lastActiveAt != null && u.lastActiveAt > now - WEEK,
-      ).length,
-      photosToday: posts.filter(
-        (p) => p.type === "photo" && p.createdAt > now - DAY,
-      ).length,
-      videosToday: posts.filter(
-        (p) => p.type === "video" && p.createdAt > now - DAY,
-      ).length,
-      photosWeek: posts.filter(
-        (p) => p.type === "photo" && p.createdAt > now - WEEK,
-      ).length,
-      videosWeek: posts.filter(
-        (p) => p.type === "video" && p.createdAt > now - WEEK,
-      ).length,
-      photosMonth: posts.filter(
-        (p) => p.type === "photo" && p.createdAt > now - MONTH,
-      ).length,
-      videosMonth: posts.filter(
-        (p) => p.type === "video" && p.createdAt > now - MONTH,
-      ).length,
-      totalGroups: groups.length,
+      activeToday,
+      activeWeek,
+      photosToday,
+      videosToday,
+      photosWeek,
+      videosWeek,
+      photosMonth,
+      videosMonth,
+      totalGroups: allGroups.length,
       totalEvents: events.length,
-      totalPosts: posts.length,
+      totalPosts: allPosts.length,
       ticketRevenuePerEvent,
       postsByDay,
       userGrowthByDay,
@@ -640,8 +648,6 @@ export const listGroups = authQuery({
 });
 
 /* ─── Announcements ────────────────────────────────────────────── */
-
-import { query } from "./_generated/server";
 
 /** Public: returns the currently active announcement (or null). */
 export const getActiveAnnouncement = query({

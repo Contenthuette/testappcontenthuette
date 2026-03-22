@@ -3,12 +3,14 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
+import { buildUserSearchText, normalizeSearchQuery } from "./searchText";
 
 // Helper: get user by authId
-async function getUserByAuthId(ctx: any, authId: string) {
+async function getUserByAuthId(ctx: { db: QueryCtx["db"] }, authId: string) {
   return await ctx.db
     .query("users")
-    .withIndex("by_authId", (q: any) => q.eq("authId", authId))
+    .withIndex("by_authId", (q) => q.eq("authId", authId))
     .unique();
 }
 
@@ -79,6 +81,7 @@ export const ensureUser = authMutation({
       authId,
       email: args.email,
       name: args.name,
+      searchText: buildUserSearchText({ name: args.name }),
       role: isAdmin ? "admin" : "user",
       onboardingComplete: false,
       subscriptionStatus: "none",
@@ -122,10 +125,23 @@ export const completeOnboarding = authMutation({
     const authId = ctx.user._id;
     const user = await getUserByAuthId(ctx, authId);
     if (!user) throw new Error("User not found");
+
+    const nextBio = args.bio !== undefined ? args.bio : user.bio;
+    const nextCounty = args.county !== undefined ? args.county : user.county;
+    const nextCity = args.city !== undefined ? args.city : user.city;
+    const nextInterests = args.interests !== undefined ? args.interests : user.interests;
+
     await ctx.db.patch(user._id, {
       ...args,
       onboardingComplete: true,
       lastActiveAt: Date.now(),
+      searchText: buildUserSearchText({
+        name: user.name,
+        bio: nextBio,
+        county: nextCounty,
+        city: nextCity,
+        interests: nextInterests,
+      }),
     });
     return null;
   },
@@ -149,7 +165,23 @@ export const updateProfile = authMutation({
     const authId = ctx.user._id;
     const user = await getUserByAuthId(ctx, authId);
     if (!user) throw new Error("User not found");
-    await ctx.db.patch(user._id, args);
+
+    const nextName = args.name !== undefined ? args.name : user.name;
+    const nextBio = args.bio !== undefined ? args.bio : user.bio;
+    const nextCounty = args.county !== undefined ? args.county : user.county;
+    const nextCity = args.city !== undefined ? args.city : user.city;
+    const nextInterests = args.interests !== undefined ? args.interests : user.interests;
+
+    await ctx.db.patch(user._id, {
+      ...args,
+      searchText: buildUserSearchText({
+        name: nextName,
+        bio: nextBio,
+        county: nextCounty,
+        city: nextCity,
+        interests: nextInterests,
+      }),
+    });
     return null;
   },
 });
@@ -307,10 +339,14 @@ export const search = authQuery({
     city: v.optional(v.string()),
   })),
   handler: async (ctx, args) => {
-    if (!args.query.trim()) return [];
-    const allUsers = await ctx.db.query("users").take(200);
-    const q = args.query.toLowerCase();
-    const matched = allUsers.filter(u => u.name.toLowerCase().includes(q));
+    const normalizedQuery = normalizeSearchQuery(args.query);
+    if (!normalizedQuery) return [];
+
+    const matched = await ctx.db
+      .query("users")
+      .withSearchIndex("search_text", (q) => q.search("searchText", normalizedQuery))
+      .take(24);
+
     const results: Array<{ _id: Id<"users">; name: string; avatarUrl?: string; city?: string }> = [];
     for (const u of matched.slice(0, 20)) {
       results.push({
@@ -340,19 +376,17 @@ export const listAll = authQuery({
     const myId = me?._id;
 
     let users;
-    const sq = args.searchQuery;
-    if (sq && sq.trim()) {
-      const q = sq.toLowerCase().trim();
-      const allUsers = await ctx.db.query("users").take(300);
-      users = allUsers.filter(u => {
-        if (myId && u._id === myId) return false;
-        const nameMatch = u.name.toLowerCase().includes(q);
-        const interestMatch = u.interests?.some(i => i.toLowerCase().includes(q)) ?? false;
-        return nameMatch || interestMatch;
-      }).slice(0, 50);
+    const searchQuery = args.searchQuery;
+    const normalizedQuery = normalizeSearchQuery(searchQuery ?? "");
+    if (normalizedQuery) {
+      const matched = await ctx.db
+        .query("users")
+        .withSearchIndex("search_text", (q) => q.search("searchText", normalizedQuery))
+        .take(80);
+      users = matched.filter((u) => (myId ? u._id !== myId : true)).slice(0, 50);
     } else {
       const allUsers = await ctx.db.query("users").order("desc").take(60);
-      users = myId ? allUsers.filter(u => u._id !== myId) : allUsers;
+      users = myId ? allUsers.filter((u) => u._id !== myId) : allUsers;
     }
 
     const results: Array<{

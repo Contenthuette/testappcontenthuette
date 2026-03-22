@@ -1,6 +1,7 @@
 import { Migrations } from "@convex-dev/migrations";
 import { DataModel } from "./_generated/dataModel";
 import { components } from "./_generated/api";
+import { buildGroupSearchText, buildUserSearchText } from "./searchText";
 
 const migrations = new Migrations<DataModel>(components.migrations);
 
@@ -39,6 +40,39 @@ export const backfillCommentLikeCount = migrations.define({
   migrateOne: async (_ctx, doc) => {
     if ((doc as Record<string, unknown>).likeCount === undefined) {
       return { likeCount: 0 };
+    }
+  },
+});
+
+export const backfillUserSearchText = migrations.define({
+  table: "users",
+  migrateOne: async (_ctx, doc) => {
+    const nextSearchText = buildUserSearchText({
+      name: doc.name,
+      bio: doc.bio,
+      county: doc.county,
+      city: doc.city,
+      interests: doc.interests,
+    });
+    if (doc.searchText !== nextSearchText) {
+      return { searchText: nextSearchText };
+    }
+  },
+});
+
+export const backfillGroupSearchText = migrations.define({
+  table: "groups",
+  migrateOne: async (_ctx, doc) => {
+    const nextSearchText = buildGroupSearchText({
+      name: doc.name,
+      description: doc.description,
+      county: doc.county,
+      city: doc.city,
+      topic: doc.topic,
+      interests: doc.interests,
+    });
+    if (doc.searchText !== nextSearchText) {
+      return { searchText: nextSearchText };
     }
   },
 });
