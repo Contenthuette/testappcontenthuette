@@ -26,14 +26,24 @@ export default function LoginScreen() {
     setLoading(true);
     setError("");
     try {
+      console.log("[Login] Attempting email login for:", email.trim());
       const result = await authClient.signIn.email({ email: email.trim(), password });
+      console.log("[Login] Result:", JSON.stringify(result, null, 2));
       if (result.error) {
-        setError("Ungültige Anmeldedaten. Konto noch nicht vorhanden?");
+        console.error("[Login] Auth error:", JSON.stringify(result.error, null, 2));
+        const msg = result.error.message ?? result.error.code ?? "";
+        if (msg.includes("not found") || msg.includes("Invalid") || msg.includes("invalid")) {
+          setError("Kein Konto mit dieser E-Mail gefunden. Bitte registriere dich zuerst.");
+        } else {
+          setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
+        }
       } else {
         router.replace("/");
       }
-    } catch (_e: unknown) {
-      setError("Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
+    } catch (e: unknown) {
+      console.error("[Login] Exception:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
     } finally {
       setLoading(false);
     }
