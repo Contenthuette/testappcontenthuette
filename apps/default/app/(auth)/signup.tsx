@@ -10,19 +10,6 @@ import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 
-function _getErrorMessage(error: unknown): string | null {
-  if (typeof error === "string") return error;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return null;
-}
-
 export default function SignupScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,15 +24,12 @@ export default function SignupScreen() {
     setLoading(true);
     setError("");
     try {
-      console.log("[Signup] Attempting signup for:", email.trim(), "name:", name.trim());
       const result = await authClient.signUp.email({
         email: email.trim(),
         password,
         name: name.trim(),
       });
-      console.log("[Signup] Result:", JSON.stringify(result, null, 2));
       if (result.error) {
-        console.error("[Signup] Auth error:", JSON.stringify(result.error, null, 2));
         const msg = result.error.message ?? result.error.code ?? "";
         if (msg.includes("already") || msg.includes("exists")) {
           setError("Ein Konto mit dieser E-Mail existiert bereits. Bitte melde dich an.");
@@ -56,7 +40,6 @@ export default function SignupScreen() {
         router.replace("/");
       }
     } catch (signupError: unknown) {
-      console.error("[Signup] Exception:", signupError);
       const msg = signupError instanceof Error ? signupError.message : String(signupError);
       setError(msg || "Registrierung fehlgeschlagen. Bitte versuche es erneut.");
     } finally {

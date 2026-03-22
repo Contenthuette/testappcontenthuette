@@ -1,14 +1,3 @@
-/**
- * Local implementation of the Better Auth provider for Convex.
- *
- * This replaces `ConvexBetterAuthProvider` from `@convex-dev/better-auth/react`
- * to fix the dual-instance issue in bun monorepos. The package's version imports
- * `ConvexProviderWithAuth` from its own copy of `convex/react`, creating a
- * separate React context that the app can't read.
- *
- * By importing `ConvexProviderWithAuth` directly here, we guarantee a single
- * React context for the entire app while keeping the official auth handoff logic.
- */
 import { ConvexProviderWithAuth } from "convex/react";
 import type { ConvexReactClient } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -59,15 +48,6 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
         const sessionId = sessionData?.session?.id;
 
         useEffect(() => {
-          console.log("[auth-provider] session state", {
-            hasSession: Boolean(sessionData?.session),
-            sessionId,
-            isSessionPending,
-            hasCachedToken: Boolean(cachedToken),
-          });
-        }, [cachedToken, isSessionPending, sessionData?.session, sessionId]);
-
-        useEffect(() => {
           if (!sessionData?.session && !isSessionPending && cachedToken) {
             setCachedToken(null);
           }
@@ -75,12 +55,6 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
 
         const fetchAccessToken = useCallback(
           async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
-            console.log("[auth-provider] fetchAccessToken", {
-              forceRefreshToken,
-              hasCachedToken: Boolean(cachedToken),
-              hasPendingToken: Boolean(pendingTokenRef.current),
-              sessionId,
-            });
             if (cachedToken && !forceRefreshToken) {
               return cachedToken;
             }
@@ -91,12 +65,10 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
               .token({ fetchOptions: { throw: false } })
               .then(({ data }) => {
                 const token = data?.token ?? null;
-                console.log("[auth-provider] token response", { hasToken: Boolean(token) });
                 setCachedToken(token);
                 return token;
               })
-              .catch((error: unknown) => {
-                console.log("[auth-provider] token fetch failed", { error });
+              .catch(() => {
                 setCachedToken(null);
                 return null;
               })
@@ -137,10 +109,6 @@ export function ConvexAuthProvider({ client, children }: ConvexAuthProviderProps
 
       const url = new URL(window.location.href);
       const token = url.searchParams.get("ott");
-      console.log("[auth-provider] startup", {
-        href: window.location.href,
-        hasOneTimeToken: Boolean(token),
-      });
       if (!token) {
         return;
       }
@@ -151,9 +119,6 @@ export function ConvexAuthProvider({ client, children }: ConvexAuthProviderProps
 
       const result = await authClientWithCrossDomain.crossDomain.oneTimeToken.verify({ token });
       const session = result.data?.session;
-      console.log("[auth-provider] verified one-time token", {
-        hasSession: Boolean(session),
-      });
       if (!session) {
         return;
       }

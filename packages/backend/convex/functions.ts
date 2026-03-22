@@ -1,53 +1,65 @@
 import { action, mutation, query } from "./_generated/server";
 import {
-    customQuery,
-    customCtx,
-    customMutation,
-    customAction,
+  customAction,
+  customCtx,
+  customMutation,
+  customQuery,
 } from "convex-helpers/server/customFunctions";
-import { authComponent } from "./auth";
 
-// =============================================================================
-// ROW-LEVEL SECURITY (optional)
-// =============================================================================
-// To enable RLS, uncomment the imports below and the wrapDatabaseReader/Writer
-// calls inside each custom function. Then define your rules in rules.ts.
-//
-// import { wrapDatabaseReader, wrapDatabaseWriter } from "convex-helpers/server/rowLevelSecurity";
-// import { rules } from "./rules";
-// import type { DataModel } from "./_generated/dataModel";
+interface AuthIdentity {
+  subject: string;
+}
+
+interface AuthenticatedUser {
+  _id: string;
+}
+
+function getAuthIdFromSubject(subject: string): string {
+  const authId = subject.split("|")[0]?.trim();
+  if (!authId) {
+    throw new Error("Invalid authentication token");
+  }
+  return authId;
+}
+
+async function requireAuthenticatedUser(ctx: {
+  auth: {
+    getUserIdentity: () => Promise<AuthIdentity | null>;
+  };
+}): Promise<AuthenticatedUser> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Authentication required");
+  }
+
+  return {
+    _id: getAuthIdFromSubject(identity.subject),
+  };
+}
 
 export const authQuery = customQuery(
-    query,
-    customCtx(async (ctx) => {
-        const user = await authComponent.getAuthUser(ctx);
-        if (!user) throw new Error("Authentication required");
-        return {
-            user,
-            // Uncomment to enable RLS on reads:
-            // db: wrapDatabaseReader<DataModel>({ user }, ctx.db, rules),
-        };
-    })
+  query,
+  customCtx(async (ctx) => {
+    return {
+      user: await requireAuthenticatedUser(ctx),
+    };
+  }),
 );
 
 export const authMutation = customMutation(
-    mutation,
-    customCtx(async (ctx) => {
-        const user = await authComponent.getAuthUser(ctx);
-        if (!user) throw new Error("Authentication required");
-        return {
-            user,
-            // Uncomment to enable RLS on reads + writes:
-            // db: wrapDatabaseWriter<DataModel>({ user }, ctx.db, rules),
-        };
-    })
+  mutation,
+  customCtx(async (ctx) => {
+    return {
+      user: await requireAuthenticatedUser(ctx),
+    };
+  }),
 );
 
 export const authAction = customAction(
-    action,
-    customCtx(async (ctx) => {
-        const user = await authComponent.getAuthUser(ctx);
-        if (!user) throw new Error("Authentication required");
-        return { user };
-    })
+  action,
+  customCtx(async (ctx) => {
+    return {
+      user: await requireAuthenticatedUser(ctx),
+    };
+  }),
 );
