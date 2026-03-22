@@ -61,20 +61,35 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
             if (!forceRefreshToken && pendingTokenRef.current) {
               return pendingTokenRef.current;
             }
-            pendingTokenRef.current = authClient.convex
-              .token({ fetchOptions: { throw: false } })
-              .then(({ data }) => {
-                const token = data?.token ?? null;
-                setCachedToken(token);
-                return token;
-              })
-              .catch(() => {
-                setCachedToken(null);
-                return null;
-              })
-              .finally(() => {
-                pendingTokenRef.current = null;
-              });
+            pendingTokenRef.current = (async () => {
+              const maxAttempts = sessionId ? 3 : 1;
+              for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                  const { data } = await authClient.convex.token({
+                    fetchOptions: { throw: false },
+                  });
+                  const token = data?.token ?? null;
+                  if (token) {
+                    setCachedToken(token);
+                    return token;
+                  }
+                  // Token null but we have a session — retry after delay
+                  if (attempt < maxAttempts - 1) {
+                    await new Promise((r) => setTimeout(r, 600));
+                    continue;
+                  }
+                } catch {
+                  if (attempt < maxAttempts - 1) {
+                    await new Promise((r) => setTimeout(r, 600));
+                    continue;
+                  }
+                }
+              }
+              setCachedToken(null);
+              return null;
+            })().finally(() => {
+              pendingTokenRef.current = null;
+            });
             return pendingTokenRef.current;
           },
           [cachedToken, sessionId],
