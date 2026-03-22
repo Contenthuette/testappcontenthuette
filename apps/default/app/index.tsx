@@ -59,6 +59,22 @@ function AuthenticatedRouter() {
 }
 
 export default function Index() {
+  const [authTimeout, setAuthTimeout] = useState(false);
+
+  // Safety net: if AuthLoading persists beyond 10s, show unauthenticated flow
+  useEffect(() => {
+    const timer = setTimeout(() => setAuthTimeout(true), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (authTimeout) {
+    return (
+      <View style={styles.container}>
+        <UnauthenticatedRedirect />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <AuthLoading>

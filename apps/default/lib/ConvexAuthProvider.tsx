@@ -33,6 +33,7 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
     initialTokenUsed ? null : (initialToken ?? null),
   );
   const pendingTokenRef = useRef<Promise<string | null> | null>(null);
+  const [sessionTimedOut, setSessionTimedOut] = useState(false);
 
   useEffect(() => {
     if (!initialTokenUsed) {
@@ -47,6 +48,22 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
         const sessionData = session as BetterAuthSession | null;
         const sessionId = sessionData?.session?.id;
         const prevSessionIdRef = useRef<string | undefined>(undefined);
+
+        // Timeout: if session stays pending for too long, stop waiting
+        useEffect(() => {
+          if (!isSessionPending) {
+            // Session resolved — clear any timeout state
+            setSessionTimedOut(false);
+            return;
+          }
+          const timer = setTimeout(() => {
+            setSessionTimedOut(true);
+          }, 6000);
+          return () => clearTimeout(timer);
+        }, [isSessionPending]);
+
+        // Effective pending: actually pending AND not timed out
+        const effectivelyPending = isSessionPending && !sessionTimedOut;
 
         // When session appears or changes, clear cached token to force a fresh fetch
         useEffect(() => {
@@ -119,13 +136,13 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
 
         return useMemo(
           () => ({
-            // Loading while session is pending OR while we have a session but are still fetching token
-            isLoading: isSessionPending || (Boolean(sessionId) && cachedToken === null),
+            // Loading while session is pending (and not timed out) OR while we have a session but are still fetching token
+            isLoading: effectivelyPending || (Boolean(sessionId) && cachedToken === null),
             // Only authenticated once we actually have a validated Convex token
             isAuthenticated: cachedToken !== null,
             fetchAccessToken,
           }),
-          [cachedToken, fetchAccessToken, isSessionPending, sessionId],
+          [cachedToken, fetchAccessToken, effectivelyPending, sessionId],
         );
       },
     [],
