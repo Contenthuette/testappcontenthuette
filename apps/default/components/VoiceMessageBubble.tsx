@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
+import type { AudioPlayer, AudioSource } from "expo-audio";
 import {
   View,
   Text,
@@ -64,22 +65,13 @@ function stopPoll() {
 
 const IS_WEB = Platform.OS === "web";
 
+type PlayerSource = AudioSource | string;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // NATIVE AUDIO ENGINE (expo-audio) — used on iOS & Android
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type ExpoPlayer = {
-  play(): void;
-  pause(): void;
-  seekTo(s: number): void;
-  replace(src: { uri: string }): void;
-  remove(): void;
-  readonly playing: boolean;
-  readonly currentTime: number;
-  readonly duration: number;
-  readonly isBuffering: boolean;
-};
-let _player: ExpoPlayer | null = null;
+let _player: AudioPlayer | null = null;
 
 // CRITICAL: Always set audio mode before EVERY playback attempt.
 // The VoiceRecorder changes the session to "record" mode. If we only set it once,
@@ -150,6 +142,10 @@ function destroyPlayer() {
   stopPoll();
 }
 
+function toPlayerSource(url: string): PlayerSource {
+  return url.startsWith("http") ? { uri: url } : url;
+}
+
 async function createAndPlayNative(url: string): Promise<void> {
   if (!expoAudio) {
     console.warn("[Voice] expo-audio module not available");
@@ -162,15 +158,21 @@ async function createAndPlayNative(url: string): Promise<void> {
   set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
 
   // Create player — use { uri } format for remote URLs (more reliable)
-  const source = url.startsWith("http") ? { uri: url } : url;
+  const source = toPlayerSource(url);
   try {
-    _player = expoAudio.createAudioPlayer(source) as unknown as ExpoPlayer;
+    _player = expoAudio.createAudioPlayer(source, {
+      keepAudioSessionActive: true,
+      updateInterval: 100,
+    });
   } catch (e) {
     console.warn("[Voice] createAudioPlayer failed:", e);
     // Fallback: try other format
     try {
-      const fallbackSource = typeof source === "string" ? { uri: source } : source.uri;
-      _player = expoAudio.createAudioPlayer(fallbackSource) as unknown as ExpoPlayer;
+      const fallbackSource = typeof source === "string" ? { uri: source } : url;
+      _player = expoAudio.createAudioPlayer(fallbackSource, {
+        keepAudioSessionActive: true,
+        updateInterval: 100,
+      });
     } catch (e2) {
       console.warn("[Voice] createAudioPlayer fallback also failed:", e2);
       set({ loading: false });

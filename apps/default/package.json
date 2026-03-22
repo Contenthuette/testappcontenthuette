@@ -59,7 +59,8 @@
     "react-native-webrtc": "^124.0.7",
     "expo-clipboard": "~55.0.9",
     "@expo/metro-runtime": "^55.0.6",
-    "babel-preset-expo": "^55.0.12"
+    "babel-preset-expo": "^55.0.12",
+    "expo-asset": "~55.0.10"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
