@@ -2,11 +2,36 @@ import { Stack, Redirect } from "expo-router";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useConvexAuth } from "convex/react";
 import { colors } from "@/lib/theme";
+import { useEffect, useRef, useState } from "react";
 
 export default function MainLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  const wasAuthenticatedRef = useRef(false);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (isAuthenticated) {
+      wasAuthenticatedRef.current = true;
+      setShouldRedirect(false);
+      return;
+    }
+
+    // If we were previously authenticated and now we're not loading,
+    // wait before redirecting to avoid flicker during token refreshes
+    if (wasAuthenticatedRef.current && !isLoading) {
+      const timer = setTimeout(() => {
+        setShouldRedirect(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+
+    // Never been authenticated and not loading — redirect immediately
+    if (!isLoading && !wasAuthenticatedRef.current) {
+      setShouldRedirect(true);
+    }
+  }, [isAuthenticated, isLoading]);
+
+  if (isLoading && !wasAuthenticatedRef.current) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={colors.gray400} />
@@ -14,7 +39,7 @@ export default function MainLayout() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (shouldRedirect && !isAuthenticated) {
     return <Redirect href="/(auth)/welcome" />;
   }
 

@@ -28,18 +28,29 @@ interface CrossDomainAuthClient {
 
 /**
  * Module-level hook for Better Auth ↔ Convex integration.
- * Defined at module scope so the function identity is stable (rules of hooks).
- * All mutable state lives INSIDE this hook — no stale closures.
+ * Key design: once authenticated, isAuthenticated stays true during token
+ * refreshes so the UI never flickers back to the loading/welcome screen.
  */
 function useBetterAuth() {
   const [cachedToken, setCachedToken] = useState<string | null>(null);
+  const cachedTokenRef = useRef<string | null>(null);
   const pendingTokenRef = useRef<Promise<string | null> | null>(null);
   const [sessionTimedOut, setSessionTimedOut] = useState(false);
+  const wasAuthenticatedRef = useRef(false);
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const sessionData = session as BetterAuthSession | null;
   const sessionId = sessionData?.session?.id;
   const prevSessionIdRef = useRef<string | undefined>(undefined);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    cachedTokenRef.current = cachedToken;
+    if (cachedToken) {
+      wasAuthenticatedRef.current = true;
+    }
+  }, [cachedToken]);
 
   // Timeout: if session stays pending too long, stop waiting
   useEffect(() => {
@@ -53,10 +64,11 @@ function useBetterAuth() {
 
   const effectivelyPending = isSessionPending && !sessionTimedOut;
 
-  // When session appears or changes, clear cached token to force a fresh fetch
+  // When session ID changes (different user), clear cached token to force fresh fetch
   useEffect(() => {
     if (sessionId !== prevSessionIdRef.current) {
-      if (sessionId && prevSessionIdRef.current !== sessionId) {
+      if (sessionId && prevSessionIdRef.current !== undefined && prevSessionIdRef.current !== sessionId) {
+        // Different session — new user or re-login
         setCachedToken(null);
         pendingTokenRef.current = null;
       }
@@ -64,23 +76,44 @@ function useBetterAuth() {
     }
   }, [sessionId]);
 
-  // Clear token on logout
+  // Debounced logout: only clear token if session stays gone for 3s.
+  // This prevents flickering during background session refreshes.
   useEffect(() => {
-    if (!sessionData?.session && !isSessionPending && cachedToken) {
-      setCachedToken(null);
+    if (!sessionData?.session && !isSessionPending) {
+      // Session appears gone — but wait before clearing
+      if (cachedTokenRef.current && wasAuthenticatedRef.current) {
+        logoutTimerRef.current = setTimeout(() => {
+          // Re-check: if session still gone, it's a real logout
+          setCachedToken(null);
+          wasAuthenticatedRef.current = false;
+        }, 3000);
+        return () => {
+          if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+        };
+      }
+      // Never had a token — nothing to clear
+    } else {
+      // Session is back or pending — cancel any pending logout
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+        logoutTimerRef.current = null;
+      }
     }
-  }, [cachedToken, isSessionPending, sessionData?.session]);
+  }, [isSessionPending, sessionData?.session]);
 
   const fetchAccessToken = useCallback(
     async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
-      if (cachedToken && !forceRefreshToken) {
-        return cachedToken;
+      // Return cached token if not forced to refresh
+      if (cachedTokenRef.current && !forceRefreshToken) {
+        return cachedTokenRef.current;
       }
+      // Deduplicate concurrent fetches
       if (!forceRefreshToken && pendingTokenRef.current) {
         return pendingTokenRef.current;
       }
       pendingTokenRef.current = (async () => {
-        const maxAttempts = sessionId ? 6 : 1;
+        const hasSession = Boolean(sessionId) || wasAuthenticatedRef.current;
+        const maxAttempts = hasSession ? 6 : 1;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
             const { data } = await authClient.convex.token({
@@ -102,26 +135,32 @@ function useBetterAuth() {
             }
           }
         }
-        setCachedToken(null);
-        return null;
+        // All attempts failed — only clear if this wasn't a background refresh
+        // (if we had a token before, keep it to avoid flicker; the debounced
+        // logout effect will handle real logouts)
+        if (!wasAuthenticatedRef.current) {
+          setCachedToken(null);
+        }
+        return cachedTokenRef.current;
       })().finally(() => {
         pendingTokenRef.current = null;
       });
       return pendingTokenRef.current;
     },
-    [cachedToken, sessionId],
+    // Use sessionId only — NOT cachedToken, to avoid callback identity changes on every token update
+    [sessionId],
   );
 
-  // Actively trigger token fetch when a session appears but we have no token
+  // Trigger token fetch when session appears but we have no token yet
   useEffect(() => {
-    if (sessionId && cachedToken === null && !pendingTokenRef.current) {
+    if (sessionId && cachedTokenRef.current === null && !pendingTokenRef.current) {
       void fetchAccessToken({ forceRefreshToken: true });
     }
-  }, [sessionId, cachedToken, fetchAccessToken]);
+  }, [sessionId, fetchAccessToken]);
 
   return useMemo(
     () => ({
-      isLoading: effectivelyPending || (Boolean(sessionId) && cachedToken === null),
+      isLoading: effectivelyPending || (Boolean(sessionId) && cachedToken === null && !wasAuthenticatedRef.current),
       isAuthenticated: cachedToken !== null,
       fetchAccessToken,
     }),
