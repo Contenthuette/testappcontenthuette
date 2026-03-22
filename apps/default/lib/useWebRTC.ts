@@ -44,6 +44,7 @@ export function useWebRTC({
   const [connectionState, setConnectionState] = useState<string>("new");
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(!isVideo);
+  const [setupComplete, setSetupComplete] = useState(false);
 
   const pcRef = useRef<any>(null);
   const localStreamRef = useRef<any>(null);
@@ -138,6 +139,11 @@ export function useWebRTC({
             payload: JSON.stringify(offer),
           });
         }
+
+        // Mark setup as complete so signal processing can begin
+        if (!cancelled) {
+          setSetupComplete(true);
+        }
       } catch (err) {
         console.error("WebRTC setup error:", err);
         setConnectionState("failed");
@@ -148,11 +154,11 @@ export function useWebRTC({
       cancelled = true;
     };
     // These don't change during a call
-  }, [enabled, callId]);
+  }, [enabled, callId, isInitiator, isVideo, sendSignal]);
 
   // Process incoming signals reactively
   useEffect(() => {
-    if (!signals || !pcRef.current) return;
+    if (!signals || !pcRef.current || !setupComplete) return;
     const pc = pcRef.current;
 
     (async () => {
@@ -212,7 +218,7 @@ export function useWebRTC({
         }
       }
     })();
-  }, [signals, isInitiator, callId, sendSignal]);
+  }, [signals, isInitiator, callId, sendSignal, setupComplete]);
 
   const toggleMute = useCallback(() => {
     const track = localStreamRef.current?.getAudioTracks()?.[0];
@@ -248,6 +254,7 @@ export function useWebRTC({
     hasAnswerRef.current = false;
     pendingCandidatesRef.current = [];
     setupDoneRef.current = false;
+    setSetupComplete(false);
   }, []);
 
   // Cleanup on unmount
