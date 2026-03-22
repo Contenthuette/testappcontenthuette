@@ -151,45 +151,61 @@ function destroyPlayer() {
 }
 
 async function createAndPlayNative(url: string): Promise<void> {
-  if (!expoAudio) return;
+  if (!expoAudio) {
+    console.warn("[Voice] expo-audio module not available");
+    return;
+  }
+
+  // Always destroy existing player first for safety
+  destroyPlayer();
 
   set({ url, playing: false, currentTime: 0, duration: 0, loading: true });
 
-  // Create player — try string URI first (most reliable), then object form
+  // Create player — use { uri } format for remote URLs (more reliable)
+  const source = url.startsWith("http") ? { uri: url } : url;
   try {
-    _player = expoAudio.createAudioPlayer(url) as unknown as ExpoPlayer;
-  } catch {
+    _player = expoAudio.createAudioPlayer(source) as unknown as ExpoPlayer;
+  } catch (e) {
+    console.warn("[Voice] createAudioPlayer failed:", e);
+    // Fallback: try other format
     try {
-      _player = expoAudio.createAudioPlayer({ uri: url }) as unknown as ExpoPlayer;
-    } catch {
+      const fallbackSource = typeof source === "string" ? { uri: source } : source.uri;
+      _player = expoAudio.createAudioPlayer(fallbackSource) as unknown as ExpoPlayer;
+    } catch (e2) {
+      console.warn("[Voice] createAudioPlayer fallback also failed:", e2);
       set({ loading: false });
       return;
     }
   }
 
   if (!_player) {
+    console.warn("[Voice] Player is null after creation");
     set({ loading: false });
     return;
   }
 
-  // Call play() exactly ONCE — expo-audio will buffer internally and start
-  // when ready. Calling play() multiple times can cause iOS audio conflicts.
+  // Call play() — expo-audio will buffer internally and start when ready
   try {
     _player.play();
-  } catch { /* poll will detect state */ }
+  } catch (e) {
+    console.warn("[Voice] play() threw:", e);
+    set({ loading: false });
+    destroyPlayer();
+    return;
+  }
 
   // Start state tracking (observe only, no play calls)
   startNativePoll();
 
-  // Safety timeout: if still loading after 8s, give up
+  // Safety timeout: if still loading after 10s, give up
   const savedUrl = url;
   setTimeout(() => {
     if (_snap.url === savedUrl && _snap.loading) {
-      console.warn("[Voice] Loading timed out after 8s");
+      console.warn("[Voice] Loading timed out after 10s");
       set({ loading: false, playing: false });
       destroyPlayer();
     }
-  }, 8000);
+  }, 10000);
 }
 
 async function playNative(url: string): Promise<void> {
@@ -359,11 +375,14 @@ function playWeb(url: string): void {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function togglePlay(url: string): void {
-  if (!url || _busy) return;
+  if (!url || _busy) {
+    if (!url) console.warn("[Voice] togglePlay called with empty URL");
+    return;
+  }
   _busy = true;
 
-  // Safety: auto-release _busy after 10s to prevent permanent lockout
-  const busyTimer = setTimeout(() => { _busy = false; }, 10000);
+  // Safety: auto-release _busy after 5s to prevent permanent lockout
+  const busyTimer = setTimeout(() => { _busy = false; }, 5000);
 
   if (IS_WEB) {
     try {

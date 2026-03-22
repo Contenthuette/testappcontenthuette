@@ -149,21 +149,16 @@ export default function ChatScreen() {
 
     if (item.type === "voice") {
       return (
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onLongPress={() => handleLongPressMessage(item)}
-          delayLongPress={500}
-          disabled={!isMine}
+        <View
+          style={[styles.msgRow, isMine && styles.msgRowMine]}
         >
-          <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
-            <VoiceMessageBubble
-              audioUrl={item.mediaUrl ?? ""}
-              durationMs={item.mediaDuration}
-              isMine={isMine}
-              timestamp={timeStr}
-            />
-          </View>
-        </TouchableOpacity>
+          <VoiceMessageBubble
+            audioUrl={item.mediaUrl ?? ""}
+            durationMs={item.mediaDuration}
+            isMine={isMine}
+            timestamp={timeStr}
+          />
+        </View>
       );
     }
 
