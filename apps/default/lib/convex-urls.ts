@@ -1,4 +1,4 @@
-const fallbackConvexUrl = "https://glad-canary-992.convex.cloud";
+const fallbackConvexUrl = "https://cheery-panther-475.convex.cloud";
 
 function deriveConvexSiteUrl(url: string): string {
   try {

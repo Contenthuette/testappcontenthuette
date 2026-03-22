@@ -5,7 +5,7 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
 
 const convex = new ConvexReactClient(
-  process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://glad-canary-992.convex.cloud",
+  process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://cheery-panther-475.convex.cloud",
   { unsavedChangesWarning: false }
 );
 
