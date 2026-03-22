@@ -2,6 +2,7 @@ import { Migrations } from "@convex-dev/migrations";
 import { DataModel } from "./_generated/dataModel";
 import { components } from "./_generated/api";
 import { buildGroupSearchText, buildUserSearchText } from "./searchText";
+import { getConversationKeyFromParticipants } from "./conversationKey";
 
 const migrations = new Migrations<DataModel>(components.migrations);
 
@@ -74,5 +75,15 @@ export const backfillGroupSearchText = migrations.define({
     if (doc.searchText !== nextSearchText) {
       return { searchText: nextSearchText };
     }
+  },
+});
+
+export const backfillConversationKeys = migrations.define({
+  table: "conversations",
+  migrateOne: async (_ctx, doc) => {
+    if (doc.type !== "direct") return;
+    const conversationKey = getConversationKeyFromParticipants(doc.participantIds);
+    if (!conversationKey || doc.conversationKey === conversationKey) return;
+    return { conversationKey };
   },
 });

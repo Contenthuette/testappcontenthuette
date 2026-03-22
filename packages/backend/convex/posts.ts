@@ -1,8 +1,10 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { paginatedResultValidator } from "./pagination";
 
 export const generateUploadUrl = authMutation({
   args: {},
@@ -56,120 +58,118 @@ function getAuthorAvatarUrl(author: Doc<"users"> | null | undefined, urlCache: U
   return author.avatarUrl;
 }
 
-// Feed - get posts with pagination (optimized with parallel fetches)
+const feedItemValidator = v.object({
+  _id: v.id("posts"),
+  authorId: v.id("users"),
+  authorName: v.string(),
+  authorAvatarUrl: v.optional(v.string()),
+  type: v.union(v.literal("photo"), v.literal("video")),
+  caption: v.optional(v.string()),
+  mediaUrl: v.optional(v.string()),
+  thumbnailUrl: v.optional(v.string()),
+  aspectMode: v.optional(v.union(v.literal("original"), v.literal("cropped"))),
+  cropOffsetY: v.optional(v.number()),
+  cropOffsetX: v.optional(v.number()),
+  cropZoom: v.optional(v.number()),
+  mediaAspectRatio: v.optional(v.number()),
+  likeCount: v.number(),
+  commentCount: v.number(),
+  isLiked: v.boolean(),
+  isSaved: v.boolean(),
+  isPinned: v.boolean(),
+  isAnnouncement: v.boolean(),
+  isOwn: v.boolean(),
+  createdAt: v.number(),
+});
+
+// Feed - get posts with real pagination
 export const feed = authQuery({
-  args: { limit: v.optional(v.number()) },
-  returns: v.array(v.object({
-    _id: v.id("posts"),
-    authorId: v.id("users"),
-    authorName: v.string(),
-    authorAvatarUrl: v.optional(v.string()),
-    type: v.union(v.literal("photo"), v.literal("video")),
-    caption: v.optional(v.string()),
-    mediaUrl: v.optional(v.string()),
-    thumbnailUrl: v.optional(v.string()),
-    aspectMode: v.optional(v.union(v.literal("original"), v.literal("cropped"))),
-    cropOffsetY: v.optional(v.number()),
-    cropOffsetX: v.optional(v.number()),
-    cropZoom: v.optional(v.number()),
-    mediaAspectRatio: v.optional(v.number()),
-    likeCount: v.number(),
-    commentCount: v.number(),
-    isLiked: v.boolean(),
-    isSaved: v.boolean(),
-    isPinned: v.boolean(),
-    isAnnouncement: v.boolean(),
-    isOwn: v.boolean(),
-    createdAt: v.number(),
-  })),
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginatedResultValidator(feedItemValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
-    const limit = args.limit ?? 30;
-    
-    // Fetch pinned + regular in parallel
-    const [pinned, regular] = await Promise.all([
-      ctx.db.query("posts")
-        .withIndex("by_isPinned", q => q.eq("isPinned", true))
-        .order("desc")
-        .take(5),
-      ctx.db.query("posts")
-        .withIndex("by_createdAt")
-        .order("desc")
-        .take(limit),
-    ]);
-    
-    const pinnedIds = new Set(pinned.map(p => p._id));
-    const allPosts = [...pinned, ...regular.filter(p => !pinnedIds.has(p._id))];
-    
-    // 1. Single author fetch (was previously fetched TWICE)
-    const authorIds = allPosts.map(p => p.authorId);
-    const authorCache = await batchGetAuthors(ctx, authorIds);
-    
-    // 2. Single batch: ALL storage IDs (media + thumbnails + avatars)
-    const allStorageIds: Array<Id<"_storage"> | undefined> = [];
-    for (const post of allPosts) {
-      allStorageIds.push(post.mediaStorageId);
-      allStorageIds.push(post.thumbnailStorageId);
+
+    const results = await ctx.db
+      .query("posts")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const posts = results.page;
+    const authorCache = await batchGetAuthors(
+      ctx,
+      posts.map((post) => post.authorId),
+    );
+
+    const storageIds: Array<Id<"_storage"> | undefined> = [];
+    for (const post of posts) {
+      storageIds.push(post.mediaStorageId, post.thumbnailStorageId);
     }
     for (const author of authorCache.values()) {
-      if (author?.avatarStorageId) {
-        allStorageIds.push(author.avatarStorageId);
-      }
+      storageIds.push(author?.avatarStorageId);
     }
-    const urlCache = await batchGetUrls(ctx, allStorageIds);
-    
-    // 3. Parallel like + save checks
+    const urlCache = await batchGetUrls(ctx, storageIds);
+
     const [likeChecks, saveChecks] = await Promise.all([
       myUserId
         ? Promise.all(
-            allPosts.map(p =>
-              ctx.db.query("likes")
-                .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
-                .unique()
+            posts.map((post) =>
+              ctx.db
+                .query("likes")
+                .withIndex("by_postId_and_userId", (q) =>
+                  q.eq("postId", post._id).eq("userId", myUserId),
+                )
+                .unique(),
             ),
           )
-        : Promise.resolve(allPosts.map(() => null)),
+        : Promise.resolve(posts.map(() => null)),
       myUserId
         ? Promise.all(
-            allPosts.map(p =>
-              ctx.db.query("savedPosts")
-                .withIndex("by_postId_and_userId", q => q.eq("postId", p._id).eq("userId", myUserId))
-                .unique()
+            posts.map((post) =>
+              ctx.db
+                .query("savedPosts")
+                .withIndex("by_postId_and_userId", (q) =>
+                  q.eq("postId", post._id).eq("userId", myUserId),
+                )
+                .unique(),
             ),
           )
-        : Promise.resolve(allPosts.map(() => null)),
+        : Promise.resolve(posts.map(() => null)),
     ]);
-    
-    return allPosts.map((post, i) => {
-      const author = authorCache.get(post.authorId);
-      return {
-        _id: post._id,
-        authorId: post.authorId,
-        authorName: author?.name ?? "Unknown",
-        authorAvatarUrl: getAuthorAvatarUrl(author, urlCache),
-        type: post.type,
-        caption: post.caption,
-        mediaUrl: post.mediaStorageId
-          ? (urlCache.get(post.mediaStorageId) ?? undefined)
-          : post.mediaUrl,
-        thumbnailUrl: post.thumbnailStorageId
-          ? (urlCache.get(post.thumbnailStorageId) ?? undefined)
-          : post.thumbnailUrl,
-        aspectMode: post.aspectMode,
-        cropOffsetY: post.cropOffsetY,
-        cropOffsetX: post.cropOffsetX,
-        cropZoom: post.cropZoom,
-        mediaAspectRatio: post.mediaAspectRatio,
-        likeCount: post.likeCount,
-        commentCount: post.commentCount,
-        isLiked: !!likeChecks[i],
-        isSaved: !!saveChecks[i],
-        isPinned: post.isPinned,
-        isAnnouncement: post.isAnnouncement,
-        isOwn: myUserId === post.authorId,
-        createdAt: post.createdAt,
-      };
-    });
+
+    return {
+      ...results,
+      page: posts.map((post, index) => {
+        const author = authorCache.get(post.authorId);
+        return {
+          _id: post._id,
+          authorId: post.authorId,
+          authorName: author?.name ?? "Unknown",
+          authorAvatarUrl: getAuthorAvatarUrl(author, urlCache),
+          type: post.type,
+          caption: post.caption,
+          mediaUrl: post.mediaStorageId
+            ? (urlCache.get(post.mediaStorageId) ?? undefined)
+            : post.mediaUrl,
+          thumbnailUrl: post.thumbnailStorageId
+            ? (urlCache.get(post.thumbnailStorageId) ?? undefined)
+            : post.thumbnailUrl,
+          aspectMode: post.aspectMode,
+          cropOffsetY: post.cropOffsetY,
+          cropOffsetX: post.cropOffsetX,
+          cropZoom: post.cropZoom,
+          mediaAspectRatio: post.mediaAspectRatio,
+          likeCount: post.likeCount,
+          commentCount: post.commentCount,
+          isLiked: !!likeChecks[index],
+          isSaved: !!saveChecks[index],
+          isPinned: post.isPinned,
+          isAnnouncement: post.isAnnouncement,
+          isOwn: myUserId === post.authorId,
+          createdAt: post.createdAt,
+        };
+      }),
+    };
   },
 });
 
@@ -308,37 +308,37 @@ export const deletePost = authMutation({
     if (!post) throw new Error("Beitrag nicht gefunden");
     if (post.authorId !== myUserId) throw new Error("Nur der Autor kann diesen Beitrag löschen");
 
-    // 1. Delete all likes for this post
-    const likes = await ctx.db.query("likes")
-      .withIndex("by_postId", q => q.eq("postId", args.postId))
-      .collect();
-    for (const like of likes) {
-      await ctx.db.delete(like._id);
-    }
+    const [likes, comments, savedPosts] = await Promise.all([
+      ctx.db
+        .query("likes")
+        .withIndex("by_postId", (q) => q.eq("postId", args.postId))
+        .collect(),
+      ctx.db
+        .query("comments")
+        .withIndex("by_postId", (q) => q.eq("postId", args.postId))
+        .collect(),
+      ctx.db
+        .query("savedPosts")
+        .withIndex("by_postId_and_userId", (q) => q.eq("postId", args.postId))
+        .collect(),
+    ]);
 
-    // 2. Delete all comments + their likes
-    const comments = await ctx.db.query("comments")
-      .withIndex("by_postId", q => q.eq("postId", args.postId))
-      .collect();
-    for (const comment of comments) {
-      const commentLikes = await ctx.db.query("commentLikes")
-        .withIndex("by_commentId", q => q.eq("commentId", comment._id))
-        .collect();
-      for (const cl of commentLikes) {
-        await ctx.db.delete(cl._id);
-      }
-      await ctx.db.delete(comment._id);
-    }
+    const commentLikeGroups = await Promise.all(
+      comments.map((comment) =>
+        ctx.db
+          .query("commentLikes")
+          .withIndex("by_commentId", (q) => q.eq("commentId", comment._id))
+          .collect(),
+      ),
+    );
 
-    // 3. Delete all saved entries
-    const saved = await ctx.db.query("savedPosts")
-      .withIndex("by_postId_and_userId", q => q.eq("postId", args.postId))
-      .collect();
-    for (const s of saved) {
-      await ctx.db.delete(s._id);
-    }
+    await Promise.all([
+      ...likes.map((like) => ctx.db.delete(like._id)),
+      ...savedPosts.map((savedPost) => ctx.db.delete(savedPost._id)),
+      ...commentLikeGroups.flat().map((commentLike) => ctx.db.delete(commentLike._id)),
+      ...comments.map((comment) => ctx.db.delete(comment._id)),
+    ]);
 
-    // 4. Delete storage files
     if (post.mediaStorageId) {
       await ctx.storage.delete(post.mediaStorageId);
     }
@@ -346,7 +346,6 @@ export const deletePost = authMutation({
       await ctx.storage.delete(post.thumbnailStorageId);
     }
 
-    // 5. Delete the post itself
     await ctx.db.delete(args.postId);
     return null;
   },

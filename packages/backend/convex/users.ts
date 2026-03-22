@@ -1,10 +1,12 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { buildUserSearchText, normalizeSearchQuery } from "./searchText";
+import { paginatedResultValidator } from "./pagination";
 
 // Helper: get user by authId
 async function getUserByAuthId(ctx: { db: QueryCtx["db"] }, authId: string) {
@@ -362,50 +364,50 @@ export const search = authQuery({
 
 // List all users with optional search by name & interests
 export const listAll = authQuery({
-  args: { searchQuery: v.optional(v.string()) },
-  returns: v.array(v.object({
-    _id: v.id("users"),
-    name: v.string(),
-    avatarUrl: v.optional(v.string()),
-    city: v.optional(v.string()),
-    interests: v.optional(v.array(v.string())),
-  })),
+  args: {
+    paginationOpts: paginationOptsValidator,
+    searchQuery: v.optional(v.string()),
+  },
+  returns: paginatedResultValidator(
+    v.object({
+      _id: v.id("users"),
+      name: v.string(),
+      avatarUrl: v.optional(v.string()),
+      city: v.optional(v.string()),
+      interests: v.optional(v.array(v.string())),
+    }),
+  ),
   handler: async (ctx, args) => {
     const authId = ctx.user._id;
     const me = await getUserByAuthId(ctx, authId);
     const myId = me?._id;
 
-    let users;
-    const searchQuery = args.searchQuery;
-    const normalizedQuery = normalizeSearchQuery(searchQuery ?? "");
-    if (normalizedQuery) {
-      const matched = await ctx.db
-        .query("users")
-        .withSearchIndex("search_text", (q) => q.search("searchText", normalizedQuery))
-        .take(80);
-      users = matched.filter((u) => (myId ? u._id !== myId : true)).slice(0, 50);
-    } else {
-      const allUsers = await ctx.db.query("users").order("desc").take(60);
-      users = myId ? allUsers.filter((u) => u._id !== myId) : allUsers;
-    }
+    const normalizedQuery = normalizeSearchQuery(args.searchQuery ?? "");
+    const results = normalizedQuery
+      ? await ctx.db
+          .query("users")
+          .withSearchIndex("search_text", (q) =>
+            q.search("searchText", normalizedQuery),
+          )
+          .paginate(args.paginationOpts)
+      : await ctx.db.query("users").order("desc").paginate(args.paginationOpts);
 
-    const results: Array<{
-      _id: Id<"users">;
-      name: string;
-      avatarUrl?: string;
-      city?: string;
-      interests?: string[];
-    }> = [];
-    for (const u of users) {
-      results.push({
-        _id: u._id,
-        name: u.name,
-        avatarUrl: u.avatarStorageId ? await ctx.storage.getUrl(u.avatarStorageId) ?? undefined : u.avatarUrl,
-        city: u.city,
-        interests: u.interests,
-      });
-    }
-    return results;
+    return {
+      ...results,
+      page: await Promise.all(
+        results.page
+          .filter((user) => (myId ? user._id !== myId : true))
+          .map(async (user) => ({
+            _id: user._id,
+            name: user.name,
+            avatarUrl: user.avatarStorageId
+              ? ((await ctx.storage.getUrl(user.avatarStorageId)) ?? undefined)
+              : user.avatarUrl,
+            city: user.city,
+            interests: user.interests,
+          })),
+      ),
+    };
   },
 });
 

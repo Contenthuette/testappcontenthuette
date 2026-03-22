@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -37,7 +37,15 @@ export default function ChatScreen() {
     }
   }, [isNewChat, otherUserId, getOrCreateDM]);
 
-  const messages = useQuery(api.messaging.getDirectMessages, isAuthenticated && conversationId ? { conversationId } : "skip");
+  const {
+    results: messages,
+    status: messagesStatus,
+    loadMore,
+  } = usePaginatedQuery(
+    api.messaging.getDirectMessages,
+    isAuthenticated && conversationId ? { conversationId } : "skip",
+    { initialNumItems: 30 },
+  );
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const deleteMessage = useMutation(api.messaging.deleteMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
@@ -205,6 +213,17 @@ export default function ChatScreen() {
           keyExtractor={item => item._id}
           inverted
           contentContainerStyle={styles.messageList}
+          onEndReached={() => {
+            if (messagesStatus === "CanLoadMore") loadMore(30);
+          }}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            messagesStatus === "LoadingMore" ? (
+              <View style={styles.loadingMoreWrap}>
+                <ActivityIndicator color={colors.gray300} />
+              </View>
+            ) : null
+          }
         />
 
         <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} />
@@ -221,6 +240,7 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", gap: spacing.sm },
   headerAction: { padding: spacing.sm },
   messageList: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  loadingMoreWrap: { paddingVertical: spacing.md, alignItems: "center" },
   msgRow: { marginBottom: spacing.md, maxWidth: "80%" },
   msgRowMine: { alignSelf: "flex-end" },
   bubble: { padding: spacing.md, borderRadius: radius.lg },

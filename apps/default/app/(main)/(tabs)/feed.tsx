@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -24,8 +24,29 @@ import * as Haptics from "expo-haptics";
 
 const FEED_ASPECT_RATIO = 3 / 4;
 
-// ── Types ─────────────────────────────────────────
-type FeedItem = NonNullable<ReturnType<typeof useQuery<typeof api.posts.feed>>>[number];
+interface FeedItem {
+  _id: Id<"posts">;
+  authorId: Id<"users">;
+  authorName: string;
+  authorAvatarUrl?: string;
+  type: "photo" | "video";
+  caption?: string;
+  mediaUrl?: string;
+  thumbnailUrl?: string;
+  aspectMode?: "original" | "cropped";
+  cropOffsetY?: number;
+  cropOffsetX?: number;
+  cropZoom?: number;
+  mediaAspectRatio?: number;
+  likeCount: number;
+  commentCount: number;
+  isLiked: boolean;
+  isSaved: boolean;
+  isPinned: boolean;
+  isAnnouncement: boolean;
+  isOwn: boolean;
+  createdAt: number;
+}
 
 // ── Helpers (module-level, zero cost) ─────────────
 function formatTime(ts: number): string {
@@ -254,45 +275,31 @@ const FeedPost = memo(function FeedPost({
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { isAuthenticated } = useConvexAuth();
-  const feed = useQuery(api.posts.feed, isAuthenticated ? {} : "skip");
+  const {
+    results: feed,
+    status: feedStatus,
+    loadMore,
+  } = usePaginatedQuery(api.posts.feed, isAuthenticated ? {} : "skip", {
+    initialNumItems: 10,
+  });
   const isFocused = useIsFocused();
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
 
   // Background thumbnail repair for videos missing thumbnails
-  useThumbnailRepair(feed as Array<{ _id: string; type: "photo" | "video"; mediaUrl?: string; thumbnailUrl?: string }> | undefined);
+  useThumbnailRepair(
+    feed as Array<{ _id: string; type: "photo" | "video"; mediaUrl?: string; thumbnailUrl?: string }>,
+  );
 
   const feedMediaHeight = screenWidth / FEED_ASPECT_RATIO;
 
   // Estimated item height for getItemLayout (header + media + actions + caption)
   const ESTIMATED_ITEM_HEIGHT = 56 + feedMediaHeight + 48 + 60 + 16;
 
-  const toggleLike = useMutation(api.posts.toggleLike).withOptimisticUpdate(
-    (store, { postId }) => {
-      const currentFeed = store.getQuery(api.posts.feed, {});
-      if (!currentFeed) return;
-      store.setQuery(api.posts.feed, {}, currentFeed.map((p: FeedItem) =>
-        p._id === postId ? { ...p, isLiked: !p.isLiked, likeCount: p.isLiked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 } : p,
-      ));
-    },
-  );
-  const toggleSave = useMutation(api.posts.toggleSave).withOptimisticUpdate(
-    (store, { postId }) => {
-      const currentFeed = store.getQuery(api.posts.feed, {});
-      if (!currentFeed) return;
-      store.setQuery(api.posts.feed, {}, currentFeed.map((p: FeedItem) =>
-        p._id === postId ? { ...p, isSaved: !p.isSaved } : p,
-      ));
-    },
-  );
+  const toggleLike = useMutation(api.posts.toggleLike);
+  const toggleSave = useMutation(api.posts.toggleSave);
 
-  const deletePost = useMutation(api.posts.deletePost).withOptimisticUpdate(
-    (store, { postId }) => {
-      const currentFeed = store.getQuery(api.posts.feed, {});
-      if (!currentFeed) return;
-      store.setQuery(api.posts.feed, {}, currentFeed.filter((p: FeedItem) => p._id !== postId));
-    },
-  );
+  const deletePost = useMutation(api.posts.deletePost);
 
   // Stable callbacks that don't depend on feed data
   const handleToggleLike = useCallback((postId: Id<"posts">) => {
@@ -364,11 +371,25 @@ export default function FeedScreen() {
   ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
 
   const listEmpty = useMemo(() => {
-    if (feed === undefined) {
+    if (feedStatus === "LoadingFirstPage") {
       return <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>;
     }
     return <EmptyState icon="photo.on.rectangle" title="Dein Feed ist leer" subtitle="Folge Gruppen und Personen, um hier Beitraege zu sehen." />;
-  }, [feed]);
+  }, [feedStatus]);
+
+  const listFooter = useMemo(() => {
+    if (feedStatus === "LoadingMore") {
+      return <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>;
+    }
+    if (feedStatus === "CanLoadMore") {
+      return (
+        <TouchableOpacity style={styles.loadMoreBtn} onPress={() => loadMore(10)} activeOpacity={0.7}>
+          <Text style={styles.loadMoreText}>Mehr laden</Text>
+        </TouchableOpacity>
+      );
+    }
+    return <View style={styles.footerSpacer} />;
+  }, [feedStatus, loadMore]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -394,12 +415,17 @@ export default function FeedScreen() {
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
         onScrollEndDrag={onScrollEndDrag}
+        onEndReached={() => {
+          if (feedStatus === "CanLoadMore") loadMore(10);
+        }}
+        onEndReachedThreshold={0.6}
         removeClippedSubviews
         maxToRenderPerBatch={4}
         windowSize={5}
         initialNumToRender={3}
         updateCellsBatchingPeriod={30}
         ListEmptyComponent={listEmpty}
+        ListFooterComponent={listFooter}
       />
 
       <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
@@ -421,6 +447,16 @@ const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   list: { paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
+  loadMoreBtn: {
+    alignSelf: "center",
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  loadMoreText: { fontSize: 14, fontWeight: "600", color: colors.black },
+  footerSpacer: { height: 80 },
 
   announcementCard: {
     marginHorizontal: spacing.xl,

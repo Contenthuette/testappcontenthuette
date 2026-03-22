@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
@@ -109,6 +109,15 @@ function EventRow({
     api.admin.getEventDetail,
     expanded ? { eventId: event._id } : "skip",
   );
+  const {
+    results: buyers,
+    status: buyersStatus,
+    loadMore: loadMoreBuyers,
+  } = usePaginatedQuery(
+    api.admin.listEventBuyers,
+    expanded ? { eventId: event._id } : "skip",
+    { initialNumItems: 20 },
+  );
 
   return (
     <View style={styles.eventCard}>
@@ -148,50 +157,59 @@ function EventRow({
             Preis: {event.ticketPrice.toFixed(2)} {event.currency}
           </Text>
 
-          <Text style={styles.buyersTitle}>Käufer ({detail?.buyers?.length ?? 0})</Text>
-          {!detail ? (
+          <Text style={styles.buyersTitle}>Käufer ({buyers.length})</Text>
+          {!detail || buyersStatus === "LoadingFirstPage" ? (
             <ActivityIndicator size="small" color={colors.gray400} style={{ marginTop: 8 }} />
-          ) : detail.buyers.length === 0 ? (
+          ) : buyers.length === 0 ? (
             <Text style={styles.noBuyers}>Noch keine Tickets verkauft</Text>
           ) : (
-            detail.buyers.map((b: Buyer) => (
-              <View key={b.ticketId} style={styles.buyerRow}>
-                <View style={styles.buyerAvatar}>
-                  <Text style={styles.buyerInitial}>
-                    {b.userName.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.buyerName}>{b.userName}</Text>
-                  <Text style={styles.buyerEmail}>{b.userEmail}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.ticketStatus,
-                    b.status === "active" && styles.ticketActive,
-                    b.status === "scanned" && styles.ticketScanned,
-                    b.status === "canceled" && styles.ticketCanceled,
-                  ]}
-                >
-                  <Text
+            <>
+              {buyers.map((buyer: Buyer) => (
+                <View key={buyer.ticketId} style={styles.buyerRow}>
+                  <View style={styles.buyerAvatar}>
+                    <Text style={styles.buyerInitial}>
+                      {buyer.userName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.buyerName}>{buyer.userName}</Text>
+                    <Text style={styles.buyerEmail}>{buyer.userEmail}</Text>
+                  </View>
+                  <View
                     style={[
-                      styles.ticketStatusText,
-                      b.status === "active" && { color: colors.success },
-                      b.status === "scanned" && { color: "#3B82F6" },
-                      b.status === "canceled" && { color: colors.danger },
+                      styles.ticketStatus,
+                      buyer.status === "active" && styles.ticketActive,
+                      buyer.status === "scanned" && styles.ticketScanned,
+                      buyer.status === "canceled" && styles.ticketCanceled,
                     ]}
                   >
-                    {b.status === "active"
-                      ? "Aktiv"
-                      : b.status === "scanned"
-                        ? "Gescannt"
-                        : b.status === "canceled"
-                          ? "Storniert"
-                          : "Abgelaufen"}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.ticketStatusText,
+                        buyer.status === "active" && { color: colors.success },
+                        buyer.status === "scanned" && { color: "#3B82F6" },
+                        buyer.status === "canceled" && { color: colors.danger },
+                      ]}
+                    >
+                      {buyer.status === "active"
+                        ? "Aktiv"
+                        : buyer.status === "scanned"
+                          ? "Gescannt"
+                          : buyer.status === "canceled"
+                            ? "Storniert"
+                            : "Abgelaufen"}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))
+              ))}
+              {buyersStatus === "LoadingMore" ? (
+                <ActivityIndicator size="small" color={colors.gray400} style={{ marginTop: 12 }} />
+              ) : buyersStatus === "CanLoadMore" ? (
+                <TouchableOpacity style={styles.loadMoreInlineBtn} onPress={() => loadMoreBuyers(20)}>
+                  <Text style={styles.loadMoreInlineText}>Mehr Käufer laden</Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
           )}
         </View>
       )}
@@ -205,6 +223,7 @@ export default function AdminDashboard() {
   const stats = useQuery(api.admin.getAdminDashboard, isAuthenticated ? {} : "skip");
   const events = useQuery(api.admin.listEventsAdmin, isAuthenticated ? {} : "skip");
   const deleteEvent = useMutation(api.admin.deleteEvent);
+  const refreshAnalyticsSnapshot = useMutation(api.admin.refreshAnalyticsSnapshot);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
   /* ── Announcements ── */
@@ -215,6 +234,13 @@ export default function AdminDashboard() {
   const [announceDraft, setAnnounceDraft] = useState("");
   const [announceEditing, setAnnounceEditing] = useState(false);
   const [announceSaving, setAnnounceSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    refreshAnalyticsSnapshot({}).catch(() => {
+      // Keep the dashboard usable even if refresh fails.
+    });
+  }, [isAuthenticated, refreshAnalyticsSnapshot]);
 
   const handleAnnounceSave = useCallback(async () => {
     const text = announceDraft.trim();
@@ -867,7 +893,7 @@ const styles = StyleSheet.create({
   },
   buyerInitial: { fontSize: 13, fontWeight: "600", color: colors.gray600 },
   buyerName: { fontSize: 14, fontWeight: "500", color: colors.black },
-  buyerEmail: { fontSize: 12, color: colors.gray500 },
+  buyerEmail: { fontSize: 12, color: colors.gray400 },
   ticketStatus: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -982,5 +1008,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.white,
+  },
+  loadMoreInlineBtn: {
+    alignSelf: "flex-start",
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  loadMoreInlineText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.black,
   },
 });

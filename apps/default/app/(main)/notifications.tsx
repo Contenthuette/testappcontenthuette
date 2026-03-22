@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -33,7 +33,13 @@ const ICON_MAP: Record<string, string> = {
 
 export default function NotificationsScreen() {
   const { isAuthenticated } = useConvexAuth();
-  const notifications = useQuery(api.notifications.list, isAuthenticated ? {} : "skip");
+  const {
+    results: notifications,
+    status: notificationsStatus,
+    loadMore,
+  } = usePaginatedQuery(api.notifications.list, isAuthenticated ? {} : "skip", {
+    initialNumItems: 20,
+  });
   const markRead = useMutation(api.notifications.markRead);
   const acceptFriend = useMutation(api.friends.acceptRequest);
   const rejectFriend = useMutation(api.friends.declineRequest);
@@ -67,7 +73,7 @@ export default function NotificationsScreen() {
     }
   }, [markRead]);
 
-  if (notifications === undefined) {
+  if (notificationsStatus === "LoadingFirstPage") {
     return (
       <View style={{ flex: 1, backgroundColor: colors.white }}>
         <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -102,6 +108,10 @@ export default function NotificationsScreen() {
           keyExtractor={item => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={() => {
+            if (notificationsStatus === "CanLoadMore") loadMore(20);
+          }}
+          onEndReachedThreshold={0.5}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.row, !item.isRead && styles.rowUnread]}
@@ -140,6 +150,15 @@ export default function NotificationsScreen() {
               {!item.isRead && item.type !== "friend_request" && <View style={styles.dot} />}
             </TouchableOpacity>
           )}
+          ListFooterComponent={
+            notificationsStatus === "LoadingMore" ? (
+              <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+            ) : notificationsStatus === "CanLoadMore" ? (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={() => loadMore(20)}>
+                <Text style={styles.loadMoreText}>Mehr laden</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="bell"
@@ -176,6 +195,16 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: "600", color: colors.black },
   list: { paddingBottom: 40 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
+  loadMoreBtn: {
+    alignSelf: "center",
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  loadMoreText: { fontSize: 13, fontWeight: "600", color: colors.black },
 
   row: {
     flexDirection: "row",

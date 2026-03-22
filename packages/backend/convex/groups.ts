@@ -1,9 +1,11 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { buildGroupSearchText, normalizeSearchQuery } from "./searchText";
+import { paginatedResultValidator } from "./pagination";
 
 // Helper to get userId from authId
 async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
@@ -14,76 +16,84 @@ async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): 
 
 export const list = authQuery({
   args: {
+    paginationOpts: paginationOptsValidator,
     county: v.optional(v.string()),
     city: v.optional(v.string()),
     topic: v.optional(v.string()),
     searchQuery: v.optional(v.string()),
   },
-  returns: v.array(v.object({
-    _id: v.id("groups"),
-    name: v.string(),
-    description: v.optional(v.string()),
-    thumbnailUrl: v.optional(v.string()),
-    county: v.optional(v.string()),
-    city: v.optional(v.string()),
-    topic: v.optional(v.string()),
-    interests: v.optional(v.array(v.string())),
-    visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
-    memberCount: v.number(),
-    isMember: v.boolean(),
-    createdAt: v.number(),
-  })),
+  returns: paginatedResultValidator(
+    v.object({
+      _id: v.id("groups"),
+      name: v.string(),
+      description: v.optional(v.string()),
+      thumbnailUrl: v.optional(v.string()),
+      county: v.optional(v.string()),
+      city: v.optional(v.string()),
+      topic: v.optional(v.string()),
+      interests: v.optional(v.array(v.string())),
+      visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
+      memberCount: v.number(),
+      isMember: v.boolean(),
+      createdAt: v.number(),
+    }),
+  ),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
-    let groups;
-    const searchQuery = args.searchQuery;
-    const normalizedQuery = normalizeSearchQuery(searchQuery ?? "");
-    if (normalizedQuery) {
-      groups = await ctx.db
-        .query("groups")
-        .withSearchIndex("search_text", (q) => q.search("searchText", normalizedQuery))
-        .take(50);
-    } else {
-      const county = args.county;
-      const city = args.city;
-      if (county && city) {
-        groups = await ctx.db.query("groups")
-          .withIndex("by_county_and_city", (q) => q.eq("county", county).eq("city", city))
-          .take(50);
-      } else if (county) {
-        groups = await ctx.db.query("groups")
-          .withIndex("by_county_and_city", (q) => q.eq("county", county))
-          .take(50);
-      } else {
-        groups = await ctx.db.query("groups").order("desc").take(50);
-      }
-    }
+    const normalizedQuery = normalizeSearchQuery(args.searchQuery ?? "");
 
-    const results = [];
-    for (const g of groups) {
-      let isMember = false;
-      if (myUserId) {
-        const membership = await ctx.db.query("groupMembers")
-          .withIndex("by_groupId_and_userId", q => q.eq("groupId", g._id).eq("userId", myUserId))
-          .unique();
-        isMember = membership?.status === "active";
-      }
-      results.push({
-        _id: g._id,
-        name: g.name,
-        description: g.description,
-        thumbnailUrl: g.thumbnailStorageId ? await ctx.storage.getUrl(g.thumbnailStorageId) ?? undefined : g.thumbnailUrl,
-        county: g.county,
-        city: g.city,
-        topic: g.topic,
-        interests: g.interests,
-        visibility: g.visibility,
-        memberCount: g.memberCount,
-        isMember,
-        createdAt: g.createdAt,
-      });
-    }
-    return results;
+    const results = normalizedQuery
+      ? await ctx.db
+          .query("groups")
+          .withSearchIndex("search_text", (q) =>
+            q.search("searchText", normalizedQuery),
+          )
+          .paginate(args.paginationOpts)
+      : args.county && args.city
+        ? await ctx.db
+            .query("groups")
+            .withIndex("by_county_and_city", (q) =>
+              q.eq("county", args.county).eq("city", args.city),
+            )
+            .paginate(args.paginationOpts)
+        : args.county
+          ? await ctx.db
+              .query("groups")
+              .withIndex("by_county_and_city", (q) => q.eq("county", args.county))
+              .paginate(args.paginationOpts)
+          : await ctx.db.query("groups").order("desc").paginate(args.paginationOpts);
+
+    return {
+      ...results,
+      page: await Promise.all(
+        results.page.map(async (group) => {
+          const membership = myUserId
+            ? await ctx.db
+                .query("groupMembers")
+                .withIndex("by_groupId_and_userId", (q) =>
+                  q.eq("groupId", group._id).eq("userId", myUserId),
+                )
+                .unique()
+            : null;
+          return {
+            _id: group._id,
+            name: group.name,
+            description: group.description,
+            thumbnailUrl: group.thumbnailStorageId
+              ? ((await ctx.storage.getUrl(group.thumbnailStorageId)) ?? undefined)
+              : group.thumbnailUrl,
+            county: group.county,
+            city: group.city,
+            topic: group.topic,
+            interests: group.interests,
+            visibility: group.visibility,
+            memberCount: group.memberCount,
+            isMember: membership?.status === "active",
+            createdAt: group.createdAt,
+          };
+        }),
+      ),
+    };
   },
 });
 
@@ -194,14 +204,15 @@ export const join = authMutation({
     if (status === "active") {
       await ctx.db.patch(args.groupId, { memberCount: group.memberCount + 1 });
     } else {
-      // Notify group admins about join request
       const me = await ctx.db.get(myUserId);
       const adminMembers = await ctx.db.query("groupMembers")
-        .withIndex("by_groupId", q => q.eq("groupId", args.groupId))
+        .withIndex("by_groupId_and_status_and_role", (q) =>
+          q.eq("groupId", args.groupId).eq("status", "active").eq("role", "admin"),
+        )
         .collect();
-      for (const admin of adminMembers) {
-        if (admin.role === "admin" && admin.status === "active") {
-          await ctx.db.insert("notifications", {
+      await Promise.all(
+        adminMembers.map((admin) =>
+          ctx.db.insert("notifications", {
             userId: admin.userId,
             type: "join_request",
             title: "Beitrittsanfrage",
@@ -209,9 +220,9 @@ export const join = authMutation({
             referenceId: args.groupId,
             isRead: false,
             createdAt: Date.now(),
-          });
-        }
-      }
+          }),
+        ),
+      );
     }
     return null;
   },
@@ -310,29 +321,32 @@ export const getPendingRequests = authQuery({
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) return [];
-    // Verify caller is admin
     const myMembership = await ctx.db.query("groupMembers")
       .withIndex("by_groupId_and_userId", q => q.eq("groupId", args.groupId).eq("userId", myUserId))
       .unique();
     if (!myMembership || myMembership.role !== "admin") return [];
-    const members = await ctx.db.query("groupMembers")
-      .withIndex("by_groupId", q => q.eq("groupId", args.groupId))
+
+    const pendingMembers = await ctx.db.query("groupMembers")
+      .withIndex("by_groupId_and_status_and_role", (q) =>
+        q.eq("groupId", args.groupId).eq("status", "pending"),
+      )
       .collect();
-    const pending = members.filter(m => m.status === "pending");
-    const results = [];
-    for (const m of pending) {
-      const user = await ctx.db.get(m.userId);
-      if (user) {
-        results.push({
-          _id: m._id,
-          userId: m.userId,
+
+    return (await Promise.all(
+      pendingMembers.map(async (member) => {
+        const user = await ctx.db.get(member.userId);
+        if (!user) return null;
+        return {
+          _id: member._id,
+          userId: member.userId,
           name: user.name,
-          avatarUrl: user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) ?? undefined : user.avatarUrl,
-          requestedAt: m.joinedAt,
-        });
-      }
-    }
-    return results;
+          avatarUrl: user.avatarStorageId
+            ? ((await ctx.storage.getUrl(user.avatarStorageId)) ?? undefined)
+            : user.avatarUrl,
+          requestedAt: member.joinedAt,
+        };
+      }),
+    )).flatMap((member) => (member ? [member] : []));
   },
 });
 

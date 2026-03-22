@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -42,8 +42,24 @@ export default function GroupsScreen() {
   const [tab, setTab] = useState<Tab>("groups");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const groups = useQuery(api.groups.list, isAuthenticated && tab === "groups" ? { searchQuery: searchQuery || undefined } : "skip");
-  const people = useQuery(api.users.listAll, isAuthenticated && tab === "people" ? { searchQuery: searchQuery || undefined } : "skip");
+  const {
+    results: groups,
+    status: groupsStatus,
+    loadMore: loadMoreGroups,
+  } = usePaginatedQuery(
+    api.groups.list,
+    isAuthenticated && tab === "groups" ? { searchQuery: searchQuery || undefined } : "skip",
+    { initialNumItems: 16 },
+  );
+  const {
+    results: people,
+    status: peopleStatus,
+    loadMore: loadMorePeople,
+  } = usePaginatedQuery(
+    api.users.listAll,
+    isAuthenticated && tab === "people" ? { searchQuery: searchQuery || undefined } : "skip",
+    { initialNumItems: 16 },
+  );
   const joinGroup = useMutation(api.groups.join);
 
   const handleJoin = async (groupId: Id<"groups">) => {
@@ -198,8 +214,21 @@ export default function GroupsScreen() {
           keyExtractor={item => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={() => {
+            if (groupsStatus === "CanLoadMore") loadMoreGroups(16);
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            groupsStatus === "LoadingMore" ? (
+              <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+            ) : groupsStatus === "CanLoadMore" ? (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={() => loadMoreGroups(16)}>
+                <Text style={styles.loadMoreText}>Mehr laden</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           ListEmptyComponent={
-            groups === undefined ? (
+            groupsStatus === "LoadingFirstPage" ? (
               <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
             ) : (
               <EmptyState
@@ -217,14 +246,27 @@ export default function GroupsScreen() {
           keyExtractor={item => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={() => {
+            if (peopleStatus === "CanLoadMore") loadMorePeople(16);
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            peopleStatus === "LoadingMore" ? (
+              <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
+            ) : peopleStatus === "CanLoadMore" ? (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={() => loadMorePeople(16)}>
+                <Text style={styles.loadMoreText}>Mehr laden</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           ListEmptyComponent={
-            people === undefined ? (
+            peopleStatus === "LoadingFirstPage" ? (
               <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
             ) : (
               <EmptyState
                 icon="person"
                 title="Keine Personen gefunden"
-                subtitle="Alle Z-Mitglieder werden hier angezeigt."
+                subtitle="Probiere einen anderen Namen, Ort oder ein anderes Interesse."
               />
             )
           }
@@ -352,7 +394,16 @@ const styles = StyleSheet.create({
 
   /* List */
   list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
+  loadingWrap: { paddingVertical: 56, alignItems: "center" },
+  loadMoreBtn: {
+    alignSelf: "center",
+    marginBottom: spacing.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  loadMoreText: { fontSize: 13, fontWeight: "600", color: colors.black },
   card: {
     flexDirection: "row",
     alignItems: "center",

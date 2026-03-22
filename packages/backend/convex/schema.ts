@@ -67,17 +67,20 @@ export default defineSchema({
   })
     .index("by_groupId", ["groupId"])
     .index("by_userId", ["userId"])
-    .index("by_groupId_and_userId", ["groupId", "userId"]),
+    .index("by_groupId_and_userId", ["groupId", "userId"])
+    .index("by_groupId_and_status_and_role", ["groupId", "status", "role"]),
 
   // ── Messages (group + DM) ──────────────────────────────────────
   conversations: defineTable({
     type: v.union(v.literal("direct"), v.literal("group")),
     groupId: v.optional(v.id("groups")),
     participantIds: v.optional(v.array(v.id("users"))),
+    conversationKey: v.optional(v.string()),
     lastMessageAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_groupId", ["groupId"])
+    .index("by_conversationKey", ["conversationKey"])
     .index("by_lastMessageAt", ["lastMessageAt"]),
 
   messages: defineTable({
@@ -187,6 +190,7 @@ export default defineSchema({
     scannedAt: v.optional(v.number()),
   })
     .index("by_eventId", ["eventId"])
+    .index("by_eventId_and_purchasedAt", ["eventId", "purchasedAt"])
     .index("by_userId", ["userId"])
     .index("by_qrCode", ["qrCode"])
     .index("by_purchasedAt", ["purchasedAt"]),
@@ -219,7 +223,9 @@ export default defineSchema({
   })
     .index("by_senderId", ["senderId"])
     .index("by_receiverId", ["receiverId"])
-    .index("by_senderId_and_receiverId", ["senderId", "receiverId"]),
+    .index("by_senderId_and_receiverId", ["senderId", "receiverId"])
+    .index("by_senderId_and_status", ["senderId", "status"])
+    .index("by_receiverId_and_status", ["receiverId", "status"]),
 
   // ── Notifications ──────────────────────────────────────────────
   notifications: defineTable({
@@ -277,12 +283,17 @@ export default defineSchema({
     activeUsers30d: v.number(),
     newRegistrations: v.number(),
     activeSubscriptions: v.number(),
+    canceledSubscriptions: v.optional(v.number()),
     newSubscriptions: v.number(),
     cancellations: v.number(),
     totalPosts: v.number(),
     totalMessages: v.number(),
     totalGroups: v.number(),
     totalEvents: v.number(),
+    photosCreated: v.optional(v.number()),
+    videosCreated: v.optional(v.number()),
+    ticketRevenue: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_date", ["date"]),

@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -24,7 +24,13 @@ function calcEndTime(startTime: string, durationMinutes: number): string {
 
 export default function EventsScreen() {
   const { isAuthenticated } = useConvexAuth();
-  const events = useQuery(api.events.list, isAuthenticated ? {} : "skip");
+  const {
+    results: events,
+    status: eventsStatus,
+    loadMore,
+  } = usePaginatedQuery(api.events.list, isAuthenticated ? {} : "skip", {
+    initialNumItems: 12,
+  });
 
   const renderEvent = ({ item }: { item: NonNullable<typeof events>[number] }) => {
     const isSoldOut = item.soldTickets >= item.totalTickets;
@@ -90,8 +96,23 @@ export default function EventsScreen() {
         keyExtractor={item => item._id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        onEndReached={() => {
+          if (eventsStatus === "CanLoadMore") loadMore(12);
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          eventsStatus === "LoadingMore" ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={colors.gray300} />
+            </View>
+          ) : eventsStatus === "CanLoadMore" ? (
+            <TouchableOpacity style={styles.loadMoreBtn} onPress={() => loadMore(12)}>
+              <Text style={styles.loadMoreText}>Mehr laden</Text>
+            </TouchableOpacity>
+          ) : null
+        }
         ListEmptyComponent={
-          events === undefined ? (
+          eventsStatus === "LoadingFirstPage" ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={colors.gray300} />
             </View>
@@ -131,6 +152,15 @@ const styles = StyleSheet.create({
   ticketBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
   list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
+  loadMoreBtn: {
+    alignSelf: "center",
+    marginBottom: spacing.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  loadMoreText: { fontSize: 13, fontWeight: "600", color: colors.black },
 
   card: {
     backgroundColor: colors.white,

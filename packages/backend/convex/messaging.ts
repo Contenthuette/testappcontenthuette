@@ -1,59 +1,53 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
-import type { Id, Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { getConversationKeyFromParticipants, getDirectConversationKey } from "./conversationKey";
+import { paginatedResultValidator } from "./pagination";
+
+type AuthCtx = {
+  db: QueryCtx["db"];
+  storage: QueryCtx["storage"];
+  user: { _id: string };
+};
+
+type UserCache = Map<Id<"users">, Doc<"users"> | null>;
+type UrlCache = Map<Id<"_storage">, string | null>;
 
 async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
   const authId = ctx.user._id;
-  const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_authId", (q) => q.eq("authId", authId))
+    .unique();
   return user?._id ?? null;
 }
 
-const sharedPostPreviewValidator = v.optional(v.object({
-  thumbnailUrl: v.optional(v.string()),
-  mediaUrl: v.optional(v.string()),
-  postType: v.union(v.literal("photo"), v.literal("video")),
-  authorName: v.string(),
-  caption: v.optional(v.string()),
-  deleted: v.optional(v.boolean()),
-}));
-
-async function enrichPostPreview(
-  ctx: { db: QueryCtx["db"]; storage: QueryCtx["storage"] },
-  m: { type: string; sharedPostId?: Id<"posts"> },
-) {
-  if (m.type !== "post_share" || !m.sharedPostId) return undefined;
-  const post = await ctx.db.get(m.sharedPostId);
-  if (!post) {
-    return {
-      deleted: true as const,
-      postType: "photo" as const,
-      authorName: "",
-    };
-  }
-  const author = await ctx.db.get(post.authorId);
-  const thumbUrl = post.thumbnailStorageId
-    ? ((await ctx.storage.getUrl(post.thumbnailStorageId)) ?? undefined)
-    : post.thumbnailUrl;
-  const mediaUrl = post.mediaStorageId
-    ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
-    : post.mediaUrl;
-  return {
-    thumbnailUrl: thumbUrl ?? (post.type === "photo" ? mediaUrl : undefined),
-    mediaUrl: mediaUrl ?? undefined,
-    postType: post.type,
-    authorName: author?.name ?? "Unbekannt",
-    caption: post.caption?.slice(0, 80) ?? undefined,
-  };
-}
+const sharedPostPreviewValidator = v.optional(
+  v.object({
+    thumbnailUrl: v.optional(v.string()),
+    mediaUrl: v.optional(v.string()),
+    postType: v.union(v.literal("photo"), v.literal("video")),
+    authorName: v.string(),
+    caption: v.optional(v.string()),
+    deleted: v.optional(v.boolean()),
+  }),
+);
 
 const messageReturnValidator = v.object({
   _id: v.id("messages"),
   senderId: v.id("users"),
   senderName: v.string(),
   senderAvatarUrl: v.optional(v.string()),
-  type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
+  type: v.union(
+    v.literal("text"),
+    v.literal("image"),
+    v.literal("video"),
+    v.literal("voice"),
+    v.literal("post_share"),
+  ),
   text: v.optional(v.string()),
   mediaUrl: v.optional(v.string()),
   mediaDuration: v.optional(v.number()),
@@ -63,35 +57,69 @@ const messageReturnValidator = v.object({
   createdAt: v.number(),
 });
 
-// ── Performance helpers ───────────────────────────────────────────
-type UserCache = Map<Id<"users">, Doc<"users"> | null>;
-type UrlCache = Map<Id<"_storage">, string | null>;
+async function enrichPostPreview(
+  ctx: { db: QueryCtx["db"]; storage: QueryCtx["storage"] },
+  message: { type: string; sharedPostId?: Id<"posts"> },
+) {
+  if (message.type !== "post_share" || !message.sharedPostId) return undefined;
+
+  const post = await ctx.db.get(message.sharedPostId);
+  if (!post) {
+    return {
+      deleted: true as const,
+      postType: "photo" as const,
+      authorName: "",
+    };
+  }
+
+  const author = await ctx.db.get(post.authorId);
+  const thumbnailUrl = post.thumbnailStorageId
+    ? ((await ctx.storage.getUrl(post.thumbnailStorageId)) ?? undefined)
+    : post.thumbnailUrl;
+  const mediaUrl = post.mediaStorageId
+    ? ((await ctx.storage.getUrl(post.mediaStorageId)) ?? undefined)
+    : post.mediaUrl;
+
+  return {
+    thumbnailUrl: thumbnailUrl ?? (post.type === "photo" ? mediaUrl : undefined),
+    mediaUrl: mediaUrl ?? undefined,
+    postType: post.type,
+    authorName: author?.name ?? "Unbekannt",
+    caption: post.caption?.slice(0, 80) ?? undefined,
+  };
+}
 
 async function batchGetUsers(
   ctx: { db: QueryCtx["db"] },
-  ids: Array<Id<"users">>,
+  userIds: Array<Id<"users">>,
 ): Promise<UserCache> {
-  const unique = [...new Set(ids)];
+  const uniqueUserIds = [...new Set(userIds)];
   const cache: UserCache = new Map();
+
   await Promise.all(
-    unique.map(async (id) => {
-      cache.set(id, await ctx.db.get(id));
+    uniqueUserIds.map(async (userId) => {
+      cache.set(userId, await ctx.db.get(userId));
     }),
   );
+
   return cache;
 }
 
 async function batchGetStorageUrls(
   ctx: { storage: QueryCtx["storage"] },
-  ids: Array<Id<"_storage"> | undefined>,
+  storageIds: Array<Id<"_storage"> | undefined>,
 ): Promise<UrlCache> {
-  const unique = [...new Set(ids.filter((id): id is Id<"_storage"> => !!id))];
+  const uniqueStorageIds = [
+    ...new Set(storageIds.filter((storageId): storageId is Id<"_storage"> => storageId !== undefined)),
+  ];
   const cache: UrlCache = new Map();
+
   await Promise.all(
-    unique.map(async (id) => {
-      cache.set(id, await ctx.storage.getUrl(id));
+    uniqueStorageIds.map(async (storageId) => {
+      cache.set(storageId, await ctx.storage.getUrl(storageId));
     }),
   );
+
   return cache;
 }
 
@@ -107,113 +135,129 @@ async function enrichMessagesOptimized(
   myUserId: Id<"users"> | null,
 ) {
   if (messages.length === 0) return [];
-  
-  // 1. Batch-fetch all senders
-  const senderIds = messages.map(m => m.senderId);
-  const senderCache = await batchGetUsers(ctx, senderIds);
-  
-  // 2. Batch-fetch all storage URLs (media + sender avatars)
-  const mediaStorageIds = messages.map(m => m.mediaStorageId);
-  const avatarStorageIds = [...senderCache.values()]
-    .filter((u): u is Doc<"users"> => !!u?.avatarStorageId)
-    .map(u => u.avatarStorageId!);
-  const urlCache = await batchGetStorageUrls(ctx, [...mediaStorageIds, ...avatarStorageIds]);
-  
-  // 3. Batch-fetch shared post previews in parallel
-  const sharedPostMsgs = messages.filter(m => m.type === "post_share" && m.sharedPostId);
+
+  const senderCache = await batchGetUsers(
+    ctx,
+    messages.map((message) => message.senderId),
+  );
+  const urlCache = await batchGetStorageUrls(ctx, [
+    ...messages.map((message) => message.mediaStorageId),
+    ...[...senderCache.values()].map((sender) => sender?.avatarStorageId),
+  ]);
+
+  const sharedMessages = messages.filter(
+    (message) => message.type === "post_share" && message.sharedPostId,
+  );
   const previewMap = new Map<string, Awaited<ReturnType<typeof enrichPostPreview>>>();
-  if (sharedPostMsgs.length > 0) {
+  if (sharedMessages.length > 0) {
     const previews = await Promise.all(
-      sharedPostMsgs.map(m => enrichPostPreview(ctx, m)),
+      sharedMessages.map((message) => enrichPostPreview(ctx, message)),
     );
-    sharedPostMsgs.forEach((m, i) => {
-      previewMap.set(m._id, previews[i]);
+    sharedMessages.forEach((message, index) => {
+      previewMap.set(message._id, previews[index]);
     });
   }
-  
-  return messages.map(m => {
-    const sender = senderCache.get(m.senderId);
+
+  return messages.map((message) => {
+    const sender = senderCache.get(message.senderId);
     return {
-      _id: m._id,
-      senderId: m.senderId,
+      _id: message._id,
+      senderId: message.senderId,
       senderName: sender?.name ?? "Unknown",
       senderAvatarUrl: getUserAvatarUrl(sender, urlCache),
-      type: m.type,
-      text: m.text,
-      mediaUrl: m.mediaStorageId ? (urlCache.get(m.mediaStorageId) ?? undefined) : m.mediaUrl,
-      mediaDuration: m.mediaDuration,
-      sharedPostId: m.sharedPostId,
-      sharedPostPreview: previewMap.get(m._id),
-      isMe: m.senderId === myUserId,
-      createdAt: m.createdAt,
+      type: message.type,
+      text: message.text,
+      mediaUrl: message.mediaStorageId
+        ? (urlCache.get(message.mediaStorageId) ?? undefined)
+        : message.mediaUrl,
+      mediaDuration: message.mediaDuration,
+      sharedPostId: message.sharedPostId,
+      sharedPostPreview: previewMap.get(message._id),
+      isMe: message.senderId === myUserId,
+      createdAt: message.createdAt,
     };
   });
 }
 
-// Get conversations list (DMs) - optimized
+// Get conversations list (DMs)
 export const listConversations = authQuery({
   args: {},
-  returns: v.array(v.object({
-    _id: v.id("conversations"),
-    type: v.union(v.literal("direct"), v.literal("group")),
-    otherUserId: v.optional(v.id("users")),
-    otherUserName: v.optional(v.string()),
-    otherUserAvatarUrl: v.optional(v.string()),
-    groupId: v.optional(v.id("groups")),
-    groupName: v.optional(v.string()),
-    lastMessage: v.optional(v.string()),
-    lastMessageAt: v.optional(v.number()),
-    unreadCount: v.number(),
-  })),
+  returns: v.array(
+    v.object({
+      _id: v.id("conversations"),
+      type: v.union(v.literal("direct"), v.literal("group")),
+      otherUserId: v.optional(v.id("users")),
+      otherUserName: v.optional(v.string()),
+      otherUserAvatarUrl: v.optional(v.string()),
+      groupId: v.optional(v.id("groups")),
+      groupName: v.optional(v.string()),
+      lastMessage: v.optional(v.string()),
+      lastMessageAt: v.optional(v.number()),
+      unreadCount: v.number(),
+    }),
+  ),
   handler: async (ctx) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) return [];
-    const allConvos = await ctx.db.query("conversations")
+
+    const allConversations = await ctx.db
+      .query("conversations")
       .withIndex("by_lastMessageAt")
       .order("desc")
       .take(100);
-    
-    // Filter to my conversations first
-    const myConvos = allConvos.filter(
-      c => c.type === "direct" && c.participantIds?.includes(myUserId),
+    const myConversations = allConversations.filter(
+      (conversation) =>
+        conversation.type === "direct" &&
+        conversation.participantIds?.includes(myUserId),
     );
-    
-    // Batch-fetch all other users + last messages in parallel
-    const otherUserIds = myConvos.map(c => {
-      const otherId = c.participantIds?.find(id => id !== myUserId);
-      return otherId as Id<"users">;
-    }).filter(Boolean);
-    
+
+    const otherUserIds = myConversations.flatMap((conversation) => {
+      const otherUserId = conversation.participantIds?.find(
+        (participantId) => participantId !== myUserId,
+      );
+      return otherUserId ? [otherUserId] : [];
+    });
+
     const [userCache, lastMessages] = await Promise.all([
       batchGetUsers(ctx, otherUserIds),
       Promise.all(
-        myConvos.map(c =>
-          ctx.db.query("messages")
-            .withIndex("by_conversationId", q => q.eq("conversationId", c._id))
+        myConversations.map((conversation) =>
+          ctx.db
+            .query("messages")
+            .withIndex("by_conversationId", (q) =>
+              q.eq("conversationId", conversation._id),
+            )
             .order("desc")
-            .first()
+            .first(),
         ),
       ),
     ]);
-    
-    // Batch-fetch avatar URLs
-    const avatarStorageIds = [...userCache.values()]
-      .filter((u): u is Doc<"users"> => !!u?.avatarStorageId)
-      .map(u => u.avatarStorageId!);
-    const urlCache = await batchGetStorageUrls(ctx, avatarStorageIds);
-    
-    return myConvos.map((c, i) => {
-      const otherId = c.participantIds?.find(id => id !== myUserId);
-      const other = otherId ? userCache.get(otherId) : null;
-      const lastMsg = lastMessages[i];
+
+    const avatarUrls = await batchGetStorageUrls(
+      ctx,
+      [...userCache.values()].map((user) => user?.avatarStorageId),
+    );
+
+    return myConversations.map((conversation, index) => {
+      const otherUserId = conversation.participantIds?.find(
+        (participantId) => participantId !== myUserId,
+      );
+      const otherUser = otherUserId ? userCache.get(otherUserId) : null;
+      const lastMessage = lastMessages[index];
       return {
-        _id: c._id,
-        type: c.type,
-        otherUserId: otherId,
-        otherUserName: other?.name,
-        otherUserAvatarUrl: getUserAvatarUrl(other, urlCache),
-        lastMessage: lastMsg?.text ?? (lastMsg?.type === "image" ? "🖼 Photo" : lastMsg?.type === "voice" ? "🎙 Voice" : undefined),
-        lastMessageAt: c.lastMessageAt,
+        _id: conversation._id,
+        type: conversation.type,
+        otherUserId,
+        otherUserName: otherUser?.name,
+        otherUserAvatarUrl: getUserAvatarUrl(otherUser, avatarUrls),
+        lastMessage:
+          lastMessage?.text ??
+          (lastMessage?.type === "image"
+            ? "🖼 Foto"
+            : lastMessage?.type === "voice"
+              ? "🎙 Sprachmemo"
+              : undefined),
+        lastMessageAt: conversation.lastMessageAt,
         unreadCount: 0,
       };
     });
@@ -227,21 +271,32 @@ export const getOrCreateDM = authMutation({
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-    
-    // Find existing
-    const allConvos = await ctx.db.query("conversations")
+
+    const conversationKey = getDirectConversationKey(myUserId, args.otherUserId);
+    const indexedConversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_conversationKey", (q) => q.eq("conversationKey", conversationKey))
+      .unique();
+    if (indexedConversation) return indexedConversation._id;
+
+    const recentConversations = await ctx.db
+      .query("conversations")
       .withIndex("by_lastMessageAt")
       .order("desc")
       .take(200);
-    for (const c of allConvos) {
-      if (c.type === "direct" && c.participantIds?.includes(myUserId) && c.participantIds?.includes(args.otherUserId)) {
-        return c._id;
+    for (const conversation of recentConversations) {
+      const existingKey = getConversationKeyFromParticipants(conversation.participantIds);
+      if (conversation.type !== "direct" || existingKey !== conversationKey) continue;
+      if (conversation.conversationKey !== conversationKey) {
+        await ctx.db.patch(conversation._id, { conversationKey });
       }
+      return conversation._id;
     }
-    
+
     return await ctx.db.insert("conversations", {
       type: "direct",
       participantIds: [myUserId, args.otherUserId],
+      conversationKey,
       createdAt: Date.now(),
     });
   },
@@ -252,21 +307,23 @@ export const getGroupConversation = query({
   args: { groupId: v.id("groups") },
   returns: v.union(v.null(), v.id("conversations")),
   handler: async (ctx, args) => {
-    const conv = await ctx.db.query("conversations")
-      .withIndex("by_groupId", q => q.eq("groupId", args.groupId))
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .unique();
-    return conv?._id ?? null;
+    return conversation?._id ?? null;
   },
 });
 
-// Get messages for conversation (optimized)
+// Get messages for conversation
 export const getMessages = authQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.array(messageReturnValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
-    const messages = await ctx.db.query("messages")
-      .withIndex("by_conversationId", q => q.eq("conversationId", args.conversationId))
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
       .order("asc")
       .take(50);
     return enrichMessagesOptimized(ctx, messages, myUserId);
@@ -277,7 +334,13 @@ export const getMessages = authQuery({
 export const sendMessage = authMutation({
   args: {
     conversationId: v.id("conversations"),
-    type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice"), v.literal("post_share")),
+    type: v.union(
+      v.literal("text"),
+      v.literal("image"),
+      v.literal("video"),
+      v.literal("voice"),
+      v.literal("post_share"),
+    ),
     text: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaDuration: v.optional(v.number()),
@@ -287,7 +350,9 @@ export const sendMessage = authMutation({
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-    const msgId = await ctx.db.insert("messages", {
+
+    const createdAt = Date.now();
+    const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: myUserId,
       type: args.type,
@@ -295,28 +360,44 @@ export const sendMessage = authMutation({
       mediaStorageId: args.mediaStorageId,
       mediaDuration: args.mediaDuration,
       sharedPostId: args.sharedPostId,
-      createdAt: Date.now(),
+      createdAt,
     });
-    await ctx.db.patch(args.conversationId, { lastMessageAt: Date.now() });
-    return msgId;
+    await ctx.db.patch(args.conversationId, { lastMessageAt: createdAt });
+    return messageId;
   },
 });
 
-// Group messages (optimized)
+// Group messages
 export const getGroupMessages = authQuery({
-  args: { groupId: v.id("groups") },
-  returns: v.array(messageReturnValidator),
+  args: {
+    groupId: v.id("groups"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginatedResultValidator(messageReturnValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
-    const conv = await ctx.db.query("conversations")
+    const conversation = await ctx.db
+      .query("conversations")
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .unique();
-    if (!conv) return [];
-    const messages = await ctx.db.query("messages")
-      .withIndex("by_conversationId", (q) => q.eq("conversationId", conv._id))
+    if (!conversation) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: args.paginationOpts.cursor ?? "",
+      };
+    }
+
+    const results = await ctx.db
+      .query("messages")
+      .withIndex("by_conversationId", (q) => q.eq("conversationId", conversation._id))
       .order("desc")
-      .take(50);
-    return enrichMessagesOptimized(ctx, messages, myUserId);
+      .paginate(args.paginationOpts);
+
+    return {
+      ...results,
+      page: await enrichMessagesOptimized(ctx, results.page, myUserId),
+    };
   },
 });
 
@@ -325,7 +406,12 @@ export const sendGroupMessage = authMutation({
   args: {
     groupId: v.id("groups"),
     text: v.optional(v.string()),
-    type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice")),
+    type: v.union(
+      v.literal("text"),
+      v.literal("image"),
+      v.literal("video"),
+      v.literal("voice"),
+    ),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaDuration: v.optional(v.number()),
   },
@@ -333,31 +419,33 @@ export const sendGroupMessage = authMutation({
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-    // Find or create group conversation
-    let conv = await ctx.db.query("conversations")
+
+    let conversation = await ctx.db
+      .query("conversations")
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .unique();
-    if (!conv) {
-      const convId = await ctx.db.insert("conversations", {
+    if (!conversation) {
+      const conversationId = await ctx.db.insert("conversations", {
         type: "group",
         groupId: args.groupId,
-        participantIds: [myUserId],
         createdAt: Date.now(),
       });
-      conv = await ctx.db.get(convId);
+      conversation = await ctx.db.get(conversationId);
     }
-    if (!conv) throw new Error("Conversation error");
-    const msgId = await ctx.db.insert("messages", {
-      conversationId: conv._id,
+    if (!conversation) throw new Error("Conversation not found");
+
+    const createdAt = Date.now();
+    const messageId = await ctx.db.insert("messages", {
+      conversationId: conversation._id,
       senderId: myUserId,
       type: args.type,
       text: args.text,
       mediaStorageId: args.mediaStorageId,
       mediaDuration: args.mediaDuration,
-      createdAt: Date.now(),
+      createdAt,
     });
-    await ctx.db.patch(conv._id, { lastMessageAt: Date.now() });
-    return msgId;
+    await ctx.db.patch(conversation._id, { lastMessageAt: createdAt });
+    return messageId;
   },
 });
 
@@ -370,26 +458,39 @@ export const generateUploadUrl = authMutation({
   },
 });
 
-// Get direct messages (optimized)
+// Get direct messages
 export const getDirectMessages = authQuery({
-  args: { conversationId: v.id("conversations") },
-  returns: v.array(messageReturnValidator),
+  args: {
+    conversationId: v.id("conversations"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginatedResultValidator(messageReturnValidator),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
-    const messages = await ctx.db.query("messages")
+    const results = await ctx.db
+      .query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
       .order("desc")
-      .take(50);
-    return enrichMessagesOptimized(ctx, messages, myUserId);
+      .paginate(args.paginationOpts);
+
+    return {
+      ...results,
+      page: await enrichMessagesOptimized(ctx, results.page, myUserId),
+    };
   },
 });
 
-// Send direct message (alias for sendMessage)
+// Send direct message
 export const sendDirectMessage = authMutation({
   args: {
     conversationId: v.id("conversations"),
     text: v.optional(v.string()),
-    type: v.union(v.literal("text"), v.literal("image"), v.literal("video"), v.literal("voice")),
+    type: v.union(
+      v.literal("text"),
+      v.literal("image"),
+      v.literal("video"),
+      v.literal("voice"),
+    ),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaDuration: v.optional(v.number()),
   },
@@ -397,17 +498,19 @@ export const sendDirectMessage = authMutation({
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-    const msgId = await ctx.db.insert("messages", {
+
+    const createdAt = Date.now();
+    const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: myUserId,
       type: args.type,
       text: args.text,
       mediaStorageId: args.mediaStorageId,
       mediaDuration: args.mediaDuration,
-      createdAt: Date.now(),
+      createdAt,
     });
-    await ctx.db.patch(args.conversationId, { lastMessageAt: Date.now() });
-    return msgId;
+    await ctx.db.patch(args.conversationId, { lastMessageAt: createdAt });
+    return messageId;
   },
 });
 
@@ -416,12 +519,13 @@ export const deleteMessage = authMutation({
   args: { messageId: v.id("messages") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const authId = ctx.user._id;
-    const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
-    if (!user) throw new Error("User not found");
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
     const message = await ctx.db.get(args.messageId);
     if (!message) throw new Error("Message not found");
-    if (message.senderId !== user._id) throw new Error("Not your message");
+    if (message.senderId !== myUserId) throw new Error("Not your message");
+
     await ctx.db.delete(args.messageId);
     return null;
   },

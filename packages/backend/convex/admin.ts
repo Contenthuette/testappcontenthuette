@@ -1,8 +1,10 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { paginatedResultValidator } from "./pagination";
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 type AdminCtx = {
@@ -23,6 +25,300 @@ async function requireAdmin(ctx: AdminCtx): Promise<{ _id: Id<"users"> }> {
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
 const MONTH = 30 * DAY;
+const ABO_PRICE = 5.99;
+
+const buyerValidator = v.object({
+  ticketId: v.id("tickets"),
+  userName: v.string(),
+  userEmail: v.string(),
+  status: v.union(
+    v.literal("active"),
+    v.literal("scanned"),
+    v.literal("canceled"),
+    v.literal("expired"),
+  ),
+  purchasedAt: v.number(),
+});
+
+function buildDateKey(timestamp: number): string {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function formatSnapshotLabel(date: string): string {
+  return new Date(`${date}T00:00:00.000Z`).toLocaleDateString("de-DE", {
+    weekday: "short",
+  });
+}
+
+async function countResults<T>(source: AsyncIterable<T>): Promise<number> {
+  let count = 0;
+  for await (const _row of source) {
+    count += 1;
+  }
+  return count;
+}
+
+async function buildAnalyticsSnapshot(ctx: { db: QueryCtx["db"] }, now: number) {
+  const dayStart = now - DAY;
+  const weekStart = now - WEEK;
+  const monthStart = now - MONTH;
+
+  const [
+    activeSubscriptions,
+    canceledSubscriptions,
+    noneSubscriptions,
+    expiredSubscriptions,
+    newRegistrations,
+    activeUsersToday,
+    activeUsers7d,
+    activeUsers30d,
+    totalPosts,
+    totalMessages,
+    totalGroups,
+    totalEvents,
+    postsToday,
+    ticketsToday,
+    events,
+  ] = await Promise.all([
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_subscriptionStatus", (q) =>
+          q.eq("subscriptionStatus", "active"),
+        ),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_subscriptionStatus", (q) =>
+          q.eq("subscriptionStatus", "canceled"),
+        ),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "none")),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_subscriptionStatus", (q) =>
+          q.eq("subscriptionStatus", "expired"),
+        ),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_createdAt", (q) => q.gte("createdAt", dayStart)),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_lastActiveAt", (q) => q.gte("lastActiveAt", dayStart)),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_lastActiveAt", (q) => q.gte("lastActiveAt", weekStart)),
+    ),
+    countResults(
+      ctx.db
+        .query("users")
+        .withIndex("by_lastActiveAt", (q) => q.gte("lastActiveAt", monthStart)),
+    ),
+    countResults(ctx.db.query("posts")),
+    countResults(ctx.db.query("messages")),
+    countResults(ctx.db.query("groups")),
+    countResults(ctx.db.query("events")),
+    ctx.db
+      .query("posts")
+      .withIndex("by_createdAt", (q) => q.gte("createdAt", dayStart))
+      .collect(),
+    ctx.db
+      .query("tickets")
+      .withIndex("by_purchasedAt", (q) => q.gte("purchasedAt", dayStart))
+      .collect(),
+    ctx.db.query("events").take(5000),
+  ]);
+
+  const eventPriceById = new Map(events.map((event) => [event._id, event.ticketPrice] as const));
+  const ticketRevenue = ticketsToday.reduce(
+    (sum, ticket) => sum + (eventPriceById.get(ticket.eventId) ?? 0),
+    0,
+  );
+
+  return {
+    date: buildDateKey(now),
+    totalUsers:
+      activeSubscriptions + canceledSubscriptions + noneSubscriptions + expiredSubscriptions,
+    activeUsersToday,
+    activeUsers7d,
+    activeUsers30d,
+    newRegistrations,
+    activeSubscriptions,
+    canceledSubscriptions,
+    newSubscriptions: 0,
+    cancellations: 0,
+    totalPosts,
+    totalMessages,
+    totalGroups,
+    totalEvents,
+    photosCreated: postsToday.filter((post) => post.type === "photo").length,
+    videosCreated: postsToday.filter((post) => post.type === "video").length,
+    ticketRevenue,
+    updatedAt: now,
+  };
+}
+
+async function upsertAnalyticsSnapshot(ctx: { db: QueryCtx["db"] }, now: number) {
+  const snapshot = await buildAnalyticsSnapshot(ctx, now);
+  const existing = await ctx.db
+    .query("analyticsSnapshots")
+    .withIndex("by_date", (q) => q.eq("date", snapshot.date))
+    .unique();
+
+  if (existing) {
+    await ctx.db.patch(existing._id, snapshot);
+    return null;
+  }
+
+  await ctx.db.insert("analyticsSnapshots", {
+    ...snapshot,
+    createdAt: now,
+  });
+  return null;
+}
+
+async function getDashboardFromSnapshots(ctx: { db: QueryCtx["db"] }) {
+  const snapshots = await ctx.db
+    .query("analyticsSnapshots")
+    .withIndex("by_date")
+    .order("desc")
+    .take(30);
+  const events = await ctx.db.query("events").order("desc").take(500);
+
+  if (snapshots.length === 0) {
+    const liveSnapshot = await buildAnalyticsSnapshot(ctx, Date.now());
+    const ticketRevenuePerEvent = events.map((event) => ({
+      eventName: event.name,
+      revenue: event.soldTickets * event.ticketPrice,
+      soldTickets: event.soldTickets,
+      totalTickets: event.totalTickets,
+      currency: event.currency,
+    }));
+    const ticketRevenueTotal = ticketRevenuePerEvent.reduce(
+      (sum, event) => sum + event.revenue,
+      0,
+    );
+    return {
+      totalMembers: liveSnapshot.totalUsers,
+      activeSubscriptions: liveSnapshot.activeSubscriptions,
+      canceledSubscriptions: liveSnapshot.canceledSubscriptions,
+      newMembersWeek: liveSnapshot.newRegistrations,
+      newMembersMonth: liveSnapshot.newRegistrations,
+      ticketRevenueTotal,
+      ticketRevenueMonth: liveSnapshot.ticketRevenue ?? 0,
+      subscriptionRevenueMonthly: liveSnapshot.activeSubscriptions * ABO_PRICE,
+      subscriptionRevenueTotal:
+        (liveSnapshot.activeSubscriptions + liveSnapshot.canceledSubscriptions) * ABO_PRICE,
+      activeToday: liveSnapshot.activeUsersToday,
+      activeWeek: liveSnapshot.activeUsers7d,
+      photosToday: liveSnapshot.photosCreated ?? 0,
+      videosToday: liveSnapshot.videosCreated ?? 0,
+      photosWeek: liveSnapshot.photosCreated ?? 0,
+      videosWeek: liveSnapshot.videosCreated ?? 0,
+      photosMonth: liveSnapshot.photosCreated ?? 0,
+      videosMonth: liveSnapshot.videosCreated ?? 0,
+      totalGroups: liveSnapshot.totalGroups,
+      totalEvents: liveSnapshot.totalEvents,
+      totalPosts: liveSnapshot.totalPosts,
+      ticketRevenuePerEvent,
+      postsByDay: [
+        {
+          label: formatSnapshotLabel(liveSnapshot.date),
+          photos: liveSnapshot.photosCreated ?? 0,
+          videos: liveSnapshot.videosCreated ?? 0,
+        },
+      ],
+      userGrowthByDay: [
+        {
+          label: formatSnapshotLabel(liveSnapshot.date),
+          count: liveSnapshot.newRegistrations,
+        },
+      ],
+    };
+  }
+
+  const ascendingSnapshots = [...snapshots].reverse();
+  const latestSnapshot = snapshots[0];
+  const last7Snapshots = snapshots.slice(0, 7);
+  const ticketRevenuePerEvent = events.map((event) => ({
+    eventName: event.name,
+    revenue: event.soldTickets * event.ticketPrice,
+    soldTickets: event.soldTickets,
+    totalTickets: event.totalTickets,
+    currency: event.currency,
+  }));
+  const ticketRevenueTotal = ticketRevenuePerEvent.reduce(
+    (sum, event) => sum + event.revenue,
+    0,
+  );
+
+  return {
+    totalMembers: latestSnapshot.totalUsers,
+    activeSubscriptions: latestSnapshot.activeSubscriptions,
+    canceledSubscriptions: latestSnapshot.canceledSubscriptions ?? 0,
+    newMembersWeek: last7Snapshots.reduce(
+      (sum, snapshot) => sum + snapshot.newRegistrations,
+      0,
+    ),
+    newMembersMonth: snapshots.reduce(
+      (sum, snapshot) => sum + snapshot.newRegistrations,
+      0,
+    ),
+    ticketRevenueTotal,
+    ticketRevenueMonth: snapshots.reduce(
+      (sum, snapshot) => sum + (snapshot.ticketRevenue ?? 0),
+      0,
+    ),
+    subscriptionRevenueMonthly: latestSnapshot.activeSubscriptions * ABO_PRICE,
+    subscriptionRevenueTotal:
+      (latestSnapshot.activeSubscriptions + (latestSnapshot.canceledSubscriptions ?? 0)) * ABO_PRICE,
+    activeToday: latestSnapshot.activeUsersToday,
+    activeWeek: latestSnapshot.activeUsers7d,
+    photosToday: latestSnapshot.photosCreated ?? 0,
+    videosToday: latestSnapshot.videosCreated ?? 0,
+    photosWeek: last7Snapshots.reduce(
+      (sum, snapshot) => sum + (snapshot.photosCreated ?? 0),
+      0,
+    ),
+    videosWeek: last7Snapshots.reduce(
+      (sum, snapshot) => sum + (snapshot.videosCreated ?? 0),
+      0,
+    ),
+    photosMonth: snapshots.reduce(
+      (sum, snapshot) => sum + (snapshot.photosCreated ?? 0),
+      0,
+    ),
+    videosMonth: snapshots.reduce(
+      (sum, snapshot) => sum + (snapshot.videosCreated ?? 0),
+      0,
+    ),
+    totalGroups: latestSnapshot.totalGroups,
+    totalEvents: latestSnapshot.totalEvents,
+    totalPosts: latestSnapshot.totalPosts,
+    ticketRevenuePerEvent,
+    postsByDay: ascendingSnapshots.slice(-7).map((snapshot) => ({
+      label: formatSnapshotLabel(snapshot.date),
+      photos: snapshot.photosCreated ?? 0,
+      videos: snapshot.videosCreated ?? 0,
+    })),
+    userGrowthByDay: ascendingSnapshots.slice(-7).map((snapshot) => ({
+      label: formatSnapshotLabel(snapshot.date),
+      count: snapshot.newRegistrations,
+    })),
+  };
+}
 
 /* ─── login ───────────────────────────────────────────────────── */
 export const verifyAdminPassword = mutation({
@@ -35,6 +331,23 @@ export const verifyAdminPassword = mutation({
       args.email.toLowerCase().trim() === "leif@z-social.com" &&
       args.password === adminPassword
     );
+  },
+});
+
+export const refreshAnalyticsSnapshot = authMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return await upsertAnalyticsSnapshot(ctx, Date.now());
+  },
+});
+
+export const refreshAnalyticsSnapshotInternal = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    return await upsertAnalyticsSnapshot(ctx, Date.now());
   },
 });
 
@@ -80,131 +393,7 @@ export const getAdminDashboard = authQuery({
   }),
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const now = Date.now();
-    const monthStart = now - MONTH;
-    const weekStart = now - WEEK;
-    const dayStart = now - DAY;
-
-    const [
-      activeUsers,
-      canceledUsers,
-      noneUsers,
-      expiredUsers,
-      recentUsers,
-      activeUsersThisWeek,
-      recentPosts,
-      allPosts,
-      allGroups,
-      events,
-      recentTickets,
-    ] = await Promise.all([
-      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "active")).collect(),
-      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "canceled")).collect(),
-      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "none")).collect(),
-      ctx.db.query("users").withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "expired")).collect(),
-      ctx.db.query("users").withIndex("by_createdAt", (q) => q.gte("createdAt", monthStart)).collect(),
-      ctx.db.query("users").withIndex("by_lastActiveAt", (q) => q.gte("lastActiveAt", weekStart)).collect(),
-      ctx.db.query("posts").withIndex("by_createdAt", (q) => q.gte("createdAt", monthStart)).collect(),
-      ctx.db.query("posts").take(50000),
-      ctx.db.query("groups").take(50000),
-      ctx.db.query("events").take(10000),
-      ctx.db.query("tickets").withIndex("by_purchasedAt", (q) => q.gte("purchasedAt", monthStart)).collect(),
-    ]);
-
-    const activeSubscriptions = activeUsers.length;
-    const canceledSubscriptions = canceledUsers.length;
-    const totalMembers = activeUsers.length + canceledUsers.length + noneUsers.length + expiredUsers.length;
-
-    const ABO_PRICE = 5.99;
-    const subscriptionRevenueMonthly = activeSubscriptions * ABO_PRICE;
-    const subscriptionRevenueTotal = (activeUsers.length + canceledUsers.length) * ABO_PRICE;
-
-    const eventById = new Map(events.map((event) => [event._id, event] as const));
-    let ticketRevenueMonth = 0;
-    for (const ticket of recentTickets) {
-      const event = eventById.get(ticket.eventId);
-      if (event) {
-        ticketRevenueMonth += event.ticketPrice;
-      }
-    }
-
-    const ticketRevenuePerEvent = events.map((event) => ({
-      eventName: event.name,
-      revenue: event.soldTickets * event.ticketPrice,
-      soldTickets: event.soldTickets,
-      totalTickets: event.totalTickets,
-      currency: event.currency,
-    }));
-    const ticketRevenueTotal = ticketRevenuePerEvent.reduce((sum, event) => sum + event.revenue, 0);
-
-    const newMembersWeek = recentUsers.filter((user) => user.createdAt > weekStart).length;
-    const newMembersMonth = recentUsers.length;
-
-    const activeWeek = activeUsersThisWeek.length;
-    const activeToday = activeUsersThisWeek.filter(
-      (user) => user.lastActiveAt != null && user.lastActiveAt > dayStart,
-    ).length;
-
-    const postsThisWeek = recentPosts.filter((post) => post.createdAt > weekStart);
-    const photosToday = recentPosts.filter((post) => post.type === "photo" && post.createdAt > dayStart).length;
-    const videosToday = recentPosts.filter((post) => post.type === "video" && post.createdAt > dayStart).length;
-    const photosWeek = postsThisWeek.filter((post) => post.type === "photo").length;
-    const videosWeek = postsThisWeek.filter((post) => post.type === "video").length;
-    const photosMonth = recentPosts.filter((post) => post.type === "photo").length;
-    const videosMonth = recentPosts.filter((post) => post.type === "video").length;
-
-    const postsByDay: Array<{ label: string; photos: number; videos: number }> = [];
-    for (let i = 6; i >= 0; i--) {
-      const rangeStart = now - (i + 1) * DAY;
-      const rangeEnd = now - i * DAY;
-      const dayLabel = new Date(rangeStart).toLocaleDateString("de-DE", {
-        weekday: "short",
-      });
-      postsByDay.push({
-        label: dayLabel,
-        photos: postsThisWeek.filter((post) => post.type === "photo" && post.createdAt >= rangeStart && post.createdAt < rangeEnd).length,
-        videos: postsThisWeek.filter((post) => post.type === "video" && post.createdAt >= rangeStart && post.createdAt < rangeEnd).length,
-      });
-    }
-
-    const userGrowthByDay: Array<{ label: string; count: number }> = [];
-    for (let i = 6; i >= 0; i--) {
-      const rangeStart = now - (i + 1) * DAY;
-      const rangeEnd = now - i * DAY;
-      const dayLabel = new Date(rangeStart).toLocaleDateString("de-DE", {
-        weekday: "short",
-      });
-      userGrowthByDay.push({
-        label: dayLabel,
-        count: recentUsers.filter((user) => user.createdAt >= rangeStart && user.createdAt < rangeEnd).length,
-      });
-    }
-
-    return {
-      totalMembers,
-      activeSubscriptions,
-      canceledSubscriptions,
-      newMembersWeek,
-      newMembersMonth,
-      ticketRevenueTotal,
-      ticketRevenueMonth,
-      subscriptionRevenueMonthly,
-      subscriptionRevenueTotal,
-      activeToday,
-      activeWeek,
-      photosToday,
-      videosToday,
-      photosWeek,
-      videosWeek,
-      photosMonth,
-      videosMonth,
-      totalGroups: allGroups.length,
-      totalEvents: events.length,
-      totalPosts: allPosts.length,
-      ticketRevenuePerEvent,
-      postsByDay,
-      userGrowthByDay,
-    };
+    return await getDashboardFromSnapshots(ctx);
   },
 });
 
@@ -233,22 +422,22 @@ export const listEventsAdmin = authQuery({
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const events = await ctx.db.query("events").order("desc").take(200);
-    return events.map((e) => ({
-      _id: e._id,
-      name: e.name,
-      date: e.date,
-      city: e.city,
-      venue: e.venue,
-      totalTickets: e.totalTickets,
-      soldTickets: e.soldTickets,
-      ticketPrice: e.ticketPrice,
-      currency: e.currency,
-      status: e.status,
+    return events.map((event) => ({
+      _id: event._id,
+      name: event.name,
+      date: event.date,
+      city: event.city,
+      venue: event.venue,
+      totalTickets: event.totalTickets,
+      soldTickets: event.soldTickets,
+      ticketPrice: event.ticketPrice,
+      currency: event.currency,
+      status: event.status,
     }));
   },
 });
 
-/* ─── event detail with buyers ────────────────────────────────── */
+/* ─── event detail ────────────────────────────────────────────── */
 export const getEventDetail = authQuery({
   args: { eventId: v.id("events") },
   returns: v.union(
@@ -274,20 +463,6 @@ export const getEventDetail = authQuery({
         v.literal("completed"),
         v.literal("canceled"),
       ),
-      buyers: v.array(
-        v.object({
-          ticketId: v.id("tickets"),
-          userName: v.string(),
-          userEmail: v.string(),
-          status: v.union(
-            v.literal("active"),
-            v.literal("scanned"),
-            v.literal("canceled"),
-            v.literal("expired"),
-          ),
-          purchasedAt: v.number(),
-        }),
-      ),
     }),
     v.null(),
   ),
@@ -296,42 +471,21 @@ export const getEventDetail = authQuery({
     const event = await ctx.db.get(args.eventId);
     if (!event) return null;
 
-    const thumbUrl = event.thumbnailStorageId
-      ? await ctx.storage.getUrl(event.thumbnailStorageId)
-      : null;
-
-    const videoUrl = event.videoStorageId
-      ? await ctx.storage.getUrl(event.videoStorageId)
-      : null;
-
-    const videoThumbUrl = event.videoThumbnailStorageId
-      ? await ctx.storage.getUrl(event.videoThumbnailStorageId)
-      : null;
-
-    const tickets = await ctx.db
-      .query("tickets")
-      .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
-      .collect();
-
-    const buyers = [];
-    for (const t of tickets) {
-      const user = await ctx.db.get(t.userId);
-      buyers.push({
-        ticketId: t._id,
-        userName: user?.name ?? "Unbekannt",
-        userEmail: user?.email ?? "",
-        status: t.status,
-        purchasedAt: t.purchasedAt,
-      });
-    }
+    const [thumbnailUrl, videoUrl, videoThumbnailUrl] = await Promise.all([
+      event.thumbnailStorageId ? ctx.storage.getUrl(event.thumbnailStorageId) : null,
+      event.videoStorageId ? ctx.storage.getUrl(event.videoStorageId) : null,
+      event.videoThumbnailStorageId
+        ? ctx.storage.getUrl(event.videoThumbnailStorageId)
+        : null,
+    ]);
 
     return {
       _id: event._id,
       name: event.name,
       description: event.description ?? null,
-      thumbnailUrl: thumbUrl,
+      thumbnailUrl,
       videoUrl,
-      videoThumbnailUrl: videoThumbUrl,
+      videoThumbnailUrl,
       venue: event.venue,
       city: event.city,
       date: event.date,
@@ -342,7 +496,38 @@ export const getEventDetail = authQuery({
       ticketPrice: event.ticketPrice,
       currency: event.currency,
       status: event.status,
-      buyers,
+    };
+  },
+});
+
+export const listEventBuyers = authQuery({
+  args: {
+    eventId: v.id("events"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginatedResultValidator(buyerValidator),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const results = await ctx.db
+      .query("tickets")
+      .withIndex("by_eventId_and_purchasedAt", (q) => q.eq("eventId", args.eventId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    return {
+      ...results,
+      page: await Promise.all(
+        results.page.map(async (ticket) => {
+          const user = await ctx.db.get(ticket.userId);
+          return {
+            ticketId: ticket._id,
+            userName: user?.name ?? "Unbekannt",
+            userEmail: user?.email ?? "",
+            status: ticket.status,
+            purchasedAt: ticket.purchasedAt,
+          };
+        }),
+      ),
     };
   },
 });
