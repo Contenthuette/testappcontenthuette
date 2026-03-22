@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -17,6 +18,7 @@ import * as Haptics from "expo-haptics";
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated } = useConvexAuth();
   const isNewChat = !!id && id.startsWith("new-");
   const otherUserId = isNewChat ? id.replace("new-", "") : undefined;
   const conversationId = !isNewChat && id ? (id as Id<"conversations">) : undefined;
@@ -35,12 +37,12 @@ export default function ChatScreen() {
     }
   }, [isNewChat, otherUserId, getOrCreateDM]);
 
-  const messages = useQuery(api.messaging.getDirectMessages, conversationId ? { conversationId } : "skip");
+  const messages = useQuery(api.messaging.getDirectMessages, isAuthenticated && conversationId ? { conversationId } : "skip");
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const deleteMessage = useMutation(api.messaging.deleteMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
-  const me = useQuery(api.users.me);
-  const partner = useQuery(api.calls.getConversationPartner, conversationId ? { conversationId } : "skip");
+  const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
+  const partner = useQuery(api.calls.getConversationPartner, isAuthenticated && conversationId ? { conversationId } : "skip");
   const initiateCall = useMutation(api.calls.initiateCall);
 
   const handleCall = useCallback(async (type: "audio" | "video") => {

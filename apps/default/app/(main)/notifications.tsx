@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -31,7 +32,8 @@ const ICON_MAP: Record<string, string> = {
 };
 
 export default function NotificationsScreen() {
-  const notifications = useQuery(api.notifications.list, {});
+  const { isAuthenticated } = useConvexAuth();
+  const notifications = useQuery(api.notifications.list, isAuthenticated ? {} : "skip");
   const markRead = useMutation(api.notifications.markRead);
   const acceptFriend = useMutation(api.friends.acceptRequest);
   const rejectFriend = useMutation(api.friends.declineRequest);

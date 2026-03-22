@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -12,7 +13,8 @@ import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 
 export default function SubscriptionScreen() {
-  const me = useQuery(api.users.me);
+  const { isAuthenticated } = useConvexAuth();
+  const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const updateSubscription = useMutation(api.users.updateSubscription);
   const [showCancel, setShowCancel] = useState(false);
   const [loading, setLoading] = useState(false);

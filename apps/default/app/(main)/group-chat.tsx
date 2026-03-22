@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing } from "@/lib/theme";
@@ -20,11 +21,12 @@ import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
 export default function GroupChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const messages = useQuery(api.messaging.getGroupMessages, id ? { groupId: id as Id<"groups"> } : "skip");
+  const { isAuthenticated } = useConvexAuth();
+  const messages = useQuery(api.messaging.getGroupMessages, isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip");
   const sendMessage = useMutation(api.messaging.sendGroupMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
-  const me = useQuery(api.users.me);
-  const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
+  const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
+  const group = useQuery(api.groups.getById, isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip");
   const initiateGroupCall = useMutation(api.calls.initiateGroupCall);
 
   const handleGroupCall = useCallback(async (type: "audio" | "video") => {

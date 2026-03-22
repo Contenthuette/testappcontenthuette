@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -12,7 +13,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 
 export default function BlockedUsersScreen() {
-  const blocked = useQuery(api.users.getBlockedUsers);
+  const { isAuthenticated } = useConvexAuth();
+  const blocked = useQuery(api.users.getBlockedUsers, isAuthenticated ? undefined : "skip");
   const unblockUser = useMutation(api.users.unblockUser);
 
   return (

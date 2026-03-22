@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -13,7 +14,8 @@ import { SymbolView } from "@/components/Icon";
 
 export default function TicketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const tickets = useQuery(api.events.getMyTickets);
+  const { isAuthenticated } = useConvexAuth();
+  const tickets = useQuery(api.events.getMyTickets, isAuthenticated ? undefined : "skip");
   const ticket = tickets?.find((t: { _id: string }) => t._id === id);
 
   if (!ticket) {

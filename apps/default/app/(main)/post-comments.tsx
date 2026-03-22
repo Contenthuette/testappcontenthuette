@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing } from "@/lib/theme";
@@ -19,8 +20,9 @@ export default function PostCommentsScreen() {
   const insets = useSafeAreaInsets();
   const [text, setText] = useState("");
   const inputRef = useRef<TextInput>(null);
+  const { isAuthenticated } = useConvexAuth();
 
-  const me = useQuery(api.users.me);
+  const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const meId = me?._id;
 
   const comments = useQuery(

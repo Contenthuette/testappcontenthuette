@@ -33,6 +33,7 @@ export default function ProfileScreen() {
   const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
   const myPosts = useQuery(api.posts.getUserPosts, me ? { userId: me._id } : "skip");
   const userGroups = useQuery(api.users.getUserGroups, me ? { userId: me._id } : "skip");
+  const myFriends = useQuery(api.friends.getMyFriends, isAuthenticated && me ? {} : "skip");
 
   // Repair missing thumbnails in background
   useThumbnailRepair(myPosts as Array<{ _id: string; type: "photo" | "video"; mediaUrl?: string; thumbnailUrl?: string }> | undefined);
@@ -74,11 +75,11 @@ export default function ProfileScreen() {
                 <Text style={styles.statLabel}>Beiträge</Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statValue}>{myFriends?.length ?? 0}</Text>
                 <Text style={styles.statLabel}>Freunde</Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statValue}>{userGroups?.length ?? 0}</Text>
                 <Text style={styles.statLabel}>Gruppen</Text>
               </View>
             </View>

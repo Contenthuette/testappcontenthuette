@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -13,7 +14,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 
 export default function ConversationsScreen() {
-  const conversations = useQuery(api.messaging.listConversations, {});
+  const { isAuthenticated } = useConvexAuth();
+  const conversations = useQuery(api.messaging.listConversations, isAuthenticated ? {} : "skip");
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

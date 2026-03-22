@@ -18,6 +18,7 @@ import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
 import { MiniLineChart, MiniBarChart, RevenueRow } from "@/components/admin/MiniChart";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useConvexAuth } from "convex/react";
 
 const ABO_PRICE = "5,99";
 
@@ -200,13 +201,14 @@ function EventRow({
 
 /* ─── Main Dashboard ───────────────────────────────────── */
 export default function AdminDashboard() {
-  const stats = useQuery(api.admin.getAdminDashboard);
-  const events = useQuery(api.admin.listEventsAdmin);
+  const { isAuthenticated } = useConvexAuth();
+  const stats = useQuery(api.admin.getAdminDashboard, isAuthenticated ? {} : "skip");
+  const events = useQuery(api.admin.listEventsAdmin, isAuthenticated ? {} : "skip");
   const deleteEvent = useMutation(api.admin.deleteEvent);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
   /* ── Announcements ── */
-  const currentAnnouncement = useQuery(api.admin.getActiveAnnouncement);
+  const currentAnnouncement = useQuery(api.admin.getActiveAnnouncement, isAuthenticated ? {} : "skip");
   const createAnnouncement = useMutation(api.admin.createAnnouncement);
   const updateAnnouncement = useMutation(api.admin.updateAnnouncement);
   const deleteAnnouncement = useMutation(api.admin.deleteAnnouncement);

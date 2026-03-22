@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -12,7 +13,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 
 export default function MyTicketsScreen() {
-  const tickets = useQuery(api.events.getMyTickets, {});
+  const { isAuthenticated } = useConvexAuth();
+  const tickets = useQuery(api.events.getMyTickets, isAuthenticated ? {} : "skip");
 
   const statusConfig: Record<string, { color: string; label: string }> = {
     active: { color: colors.success, label: "Gültig" },

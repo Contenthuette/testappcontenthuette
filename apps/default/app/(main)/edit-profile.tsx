@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useConvexAuth } from "convex/react";
 import { Image } from "expo-image";
 import Icon from "@/components/Icon";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -23,7 +24,8 @@ import { INTERESTS } from "@/lib/constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function EditProfileScreen() {
-  const me = useQuery(api.users.me);
+  const { isAuthenticated } = useConvexAuth();
+  const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateUploadUrl);
   const insets = useSafeAreaInsets();

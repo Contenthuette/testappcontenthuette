@@ -7,6 +7,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
@@ -252,7 +253,8 @@ const FeedPost = memo(function FeedPost({
 // ── Main Feed Screen ──────────────────────────────
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();
-  const feed = useQuery(api.posts.feed, {});
+  const { isAuthenticated } = useConvexAuth();
+  const feed = useQuery(api.posts.feed, isAuthenticated ? {} : "skip");
   const isFocused = useIsFocused();
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);

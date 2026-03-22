@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -12,7 +13,8 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 
 export default function SavedPostsScreen() {
-  const saved = useQuery(api.posts.getSavedPosts, {});
+  const { isAuthenticated } = useConvexAuth();
+  const saved = useQuery(api.posts.getSavedPosts, isAuthenticated ? {} : "skip");
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

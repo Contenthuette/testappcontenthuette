@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
@@ -22,7 +23,8 @@ function calcEndTime(startTime: string, durationMinutes: number): string {
 }
 
 export default function EventsScreen() {
-  const events = useQuery(api.events.list, {});
+  const { isAuthenticated } = useConvexAuth();
+  const events = useQuery(api.events.list, isAuthenticated ? {} : "skip");
 
   const renderEvent = ({ item }: { item: NonNullable<typeof events>[number] }) => {
     const isSoldOut = item.soldTickets >= item.totalTickets;
