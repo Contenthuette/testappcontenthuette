@@ -1,6 +1,23 @@
-import { Stack } from "expo-router";
+import { Stack, Redirect } from "expo-router";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useConvexAuth } from "convex/react";
+import { colors } from "@/lib/theme";
 
 export default function MainLayout() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={colors.gray400} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/(auth)/welcome" />;
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
@@ -32,3 +49,12 @@ export default function MainLayout() {
     </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

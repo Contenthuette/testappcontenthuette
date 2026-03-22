@@ -70,6 +70,8 @@ export const getById = query({
     name: v.string(),
     description: v.optional(v.string()),
     thumbnailUrl: v.optional(v.string()),
+    videoUrl: v.optional(v.string()),
+    videoThumbnailUrl: v.optional(v.string()),
     venue: v.string(),
     city: v.string(),
     county: v.optional(v.string()),
@@ -90,11 +92,19 @@ export const getById = query({
     const thumbnailUrl = e.thumbnailStorageId
       ? (await ctx.storage.getUrl(e.thumbnailStorageId)) ?? undefined
       : e.thumbnailUrl;
+    const videoUrl = e.videoStorageId
+      ? (await ctx.storage.getUrl(e.videoStorageId)) ?? undefined
+      : undefined;
+    const videoThumbnailUrl = e.videoThumbnailStorageId
+      ? (await ctx.storage.getUrl(e.videoThumbnailStorageId)) ?? undefined
+      : undefined;
     return {
       _id: e._id,
       name: e.name,
       description: e.description,
       thumbnailUrl,
+      videoUrl,
+      videoThumbnailUrl,
       venue: e.venue,
       city: e.city,
       county: e.county,

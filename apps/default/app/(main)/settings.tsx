@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -47,17 +47,21 @@ const sections = [
 ];
 
 export default function SettingsScreen() {
-  const me = useQuery(api.users.me);
+  const { isAuthenticated } = useConvexAuth();
+  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
   const isAdmin = me?.role === "admin" || me?.email === "leif@z-social.com";
 
   const handleSignOut = async () => {
     try {
       await authClient.signOut();
-      router.replace("/");
     } catch (e) {
       console.error("Sign out error:", e);
     }
   };
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

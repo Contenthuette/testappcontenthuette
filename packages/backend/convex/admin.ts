@@ -249,6 +249,8 @@ export const getEventDetail = authQuery({
       name: v.string(),
       description: v.union(v.string(), v.null()),
       thumbnailUrl: v.union(v.string(), v.null()),
+      videoUrl: v.union(v.string(), v.null()),
+      videoThumbnailUrl: v.union(v.string(), v.null()),
       venue: v.string(),
       city: v.string(),
       date: v.string(),
@@ -290,6 +292,14 @@ export const getEventDetail = authQuery({
       ? await ctx.storage.getUrl(event.thumbnailStorageId)
       : null;
 
+    const videoUrl = event.videoStorageId
+      ? await ctx.storage.getUrl(event.videoStorageId)
+      : null;
+
+    const videoThumbUrl = event.videoThumbnailStorageId
+      ? await ctx.storage.getUrl(event.videoThumbnailStorageId)
+      : null;
+
     const tickets = await ctx.db
       .query("tickets")
       .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
@@ -312,6 +322,8 @@ export const getEventDetail = authQuery({
       name: event.name,
       description: event.description ?? null,
       thumbnailUrl: thumbUrl,
+      videoUrl,
+      videoThumbnailUrl: videoThumbUrl,
       venue: event.venue,
       city: event.city,
       date: event.date,
@@ -342,6 +354,8 @@ export const createEvent = authMutation({
     ticketPrice: v.number(),
     currency: v.string(),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    videoStorageId: v.optional(v.id("_storage")),
+    videoThumbnailStorageId: v.optional(v.id("_storage")),
   },
   returns: v.id("events"),
   handler: async (ctx, args) => {
@@ -369,6 +383,8 @@ export const updateEvent = authMutation({
     totalTickets: v.optional(v.number()),
     ticketPrice: v.optional(v.number()),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    videoStorageId: v.optional(v.id("_storage")),
+    videoThumbnailStorageId: v.optional(v.id("_storage")),
     status: v.optional(
       v.union(
         v.literal("upcoming"),

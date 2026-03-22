@@ -12,6 +12,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
+import { EventVideoPlayer } from "@/components/EventVideoPlayer";
 import * as Haptics from "expo-haptics";
 
 function calcEndTime(startTime: string, durationMinutes: number): string {
@@ -111,6 +112,14 @@ export default function EventDetailScreen() {
           </View>
 
           {event.description && <Text style={styles.desc}>{event.description}</Text>}
+
+          {/* Video player */}
+          {event.videoUrl && (
+            <EventVideoPlayer
+              videoUrl={event.videoUrl}
+              thumbnailUrl={event.videoThumbnailUrl}
+            />
+          )}
         </View>
       </ScrollView>
 

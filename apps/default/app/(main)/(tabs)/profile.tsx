@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
@@ -29,14 +29,15 @@ const GRID_SIZE = (screenWidth - GRID_GAP * (GRID_COL - 1)) / GRID_COL;
 const GRID_HEIGHT = Math.round(GRID_SIZE * (4 / 3)); // 3:4 portrait ratio
 
 export default function ProfileScreen() {
-  const me = useQuery(api.users.me);
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
   const myPosts = useQuery(api.posts.getUserPosts, me ? { userId: me._id } : "skip");
   const userGroups = useQuery(api.users.getUserGroups, me ? { userId: me._id } : "skip");
 
   // Repair missing thumbnails in background
   useThumbnailRepair(myPosts as Array<{ _id: string; type: "photo" | "video"; mediaUrl?: string; thumbnailUrl?: string }> | undefined);
 
-  if (me === undefined) {
+  if (isLoading || me === undefined) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>
@@ -44,7 +45,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!me) return null;
+  if (!isAuthenticated || !me) return null;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
