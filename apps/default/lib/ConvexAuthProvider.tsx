@@ -27,6 +27,20 @@ interface CrossDomainAuthClient {
 }
 
 /**
+ * Module-level flag so sign-out can bypass debounce timers.
+ * Set before calling authClient.signOut(), checked by the provider and layout.
+ */
+let _intentionalLogout = false;
+
+export function signalIntentionalLogout() {
+  _intentionalLogout = true;
+}
+
+export function isIntentionalLogout() {
+  return _intentionalLogout;
+}
+
+/**
  * Module-level hook for Better Auth ↔ Convex integration.
  * Key design: once authenticated, isAuthenticated stays true during token
  * refreshes so the UI never flickers back to the loading/welcome screen.
@@ -80,6 +94,13 @@ function useBetterAuth() {
   // This prevents flickering during background session refreshes.
   useEffect(() => {
     if (!sessionData?.session && !isSessionPending) {
+      // Intentional logout — clear immediately, no debounce
+      if (_intentionalLogout) {
+        _intentionalLogout = false;
+        setCachedToken(null);
+        wasAuthenticatedRef.current = false;
+        return;
+      }
       // Session appears gone — but wait before clearing
       if (cachedTokenRef.current && wasAuthenticatedRef.current) {
         logoutTimerRef.current = setTimeout(() => {

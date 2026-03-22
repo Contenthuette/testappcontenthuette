@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useConvexAuth } from "convex/react";
 import { colors } from "@/lib/theme";
 import { useEffect, useRef, useState } from "react";
+import { isIntentionalLogout } from "@/lib/ConvexAuthProvider";
 
 export default function MainLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -13,6 +14,12 @@ export default function MainLayout() {
     if (isAuthenticated) {
       wasAuthenticatedRef.current = true;
       setShouldRedirect(false);
+      return;
+    }
+
+    // Intentional logout — redirect immediately, no debounce
+    if (isIntentionalLogout()) {
+      setShouldRedirect(true);
       return;
     }
 

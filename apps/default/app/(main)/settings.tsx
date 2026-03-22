@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
+import { signalIntentionalLogout } from "@/lib/ConvexAuthProvider";
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -53,6 +54,7 @@ export default function SettingsScreen() {
 
   const handleSignOut = async () => {
     try {
+      signalIntentionalLogout();
       await authClient.signOut();
     } catch (e) {
       console.error("Sign out error:", e);
