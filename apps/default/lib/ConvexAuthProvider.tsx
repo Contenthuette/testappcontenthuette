@@ -26,126 +26,106 @@ interface CrossDomainAuthClient {
   updateSession(): void;
 }
 
-let initialTokenUsed = false;
-
-function useUseAuthFromBetterAuth(initialToken?: string | null) {
-  const [cachedToken, setCachedToken] = useState<string | null>(
-    initialTokenUsed ? null : (initialToken ?? null),
-  );
+/**
+ * Module-level hook for Better Auth ↔ Convex integration.
+ * Defined at module scope so the function identity is stable (rules of hooks).
+ * All mutable state lives INSIDE this hook — no stale closures.
+ */
+function useBetterAuth() {
+  const [cachedToken, setCachedToken] = useState<string | null>(null);
   const pendingTokenRef = useRef<Promise<string | null> | null>(null);
   const [sessionTimedOut, setSessionTimedOut] = useState(false);
 
+  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const sessionData = session as BetterAuthSession | null;
+  const sessionId = sessionData?.session?.id;
+  const prevSessionIdRef = useRef<string | undefined>(undefined);
+
+  // Timeout: if session stays pending too long, stop waiting
   useEffect(() => {
-    if (!initialTokenUsed) {
-      initialTokenUsed = true;
+    if (!isSessionPending) {
+      setSessionTimedOut(false);
+      return;
     }
-  }, []);
+    const timer = setTimeout(() => setSessionTimedOut(true), 6000);
+    return () => clearTimeout(timer);
+  }, [isSessionPending]);
+
+  const effectivelyPending = isSessionPending && !sessionTimedOut;
+
+  // When session appears or changes, clear cached token to force a fresh fetch
+  useEffect(() => {
+    if (sessionId !== prevSessionIdRef.current) {
+      if (sessionId && prevSessionIdRef.current !== sessionId) {
+        setCachedToken(null);
+        pendingTokenRef.current = null;
+      }
+      prevSessionIdRef.current = sessionId;
+    }
+  }, [sessionId]);
+
+  // Clear token on logout
+  useEffect(() => {
+    if (!sessionData?.session && !isSessionPending && cachedToken) {
+      setCachedToken(null);
+    }
+  }, [cachedToken, isSessionPending, sessionData?.session]);
+
+  const fetchAccessToken = useCallback(
+    async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
+      if (cachedToken && !forceRefreshToken) {
+        return cachedToken;
+      }
+      if (!forceRefreshToken && pendingTokenRef.current) {
+        return pendingTokenRef.current;
+      }
+      pendingTokenRef.current = (async () => {
+        const maxAttempts = sessionId ? 6 : 1;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            const { data } = await authClient.convex.token({
+              fetchOptions: { throw: false },
+            });
+            const token = data?.token ?? null;
+            if (token) {
+              setCachedToken(token);
+              return token;
+            }
+            if (attempt < maxAttempts - 1) {
+              await new Promise((r) => setTimeout(r, 400 + attempt * 300));
+              continue;
+            }
+          } catch {
+            if (attempt < maxAttempts - 1) {
+              await new Promise((r) => setTimeout(r, 400 + attempt * 300));
+              continue;
+            }
+          }
+        }
+        setCachedToken(null);
+        return null;
+      })().finally(() => {
+        pendingTokenRef.current = null;
+      });
+      return pendingTokenRef.current;
+    },
+    [cachedToken, sessionId],
+  );
+
+  // Actively trigger token fetch when a session appears but we have no token
+  useEffect(() => {
+    if (sessionId && cachedToken === null && !pendingTokenRef.current) {
+      void fetchAccessToken({ forceRefreshToken: true });
+    }
+  }, [sessionId, cachedToken, fetchAccessToken]);
 
   return useMemo(
-    () =>
-      function useAuthFromBetterAuth() {
-        const { data: session, isPending: isSessionPending } = authClient.useSession();
-        const sessionData = session as BetterAuthSession | null;
-        const sessionId = sessionData?.session?.id;
-        const prevSessionIdRef = useRef<string | undefined>(undefined);
-
-        // Timeout: if session stays pending for too long, stop waiting
-        useEffect(() => {
-          if (!isSessionPending) {
-            // Session resolved — clear any timeout state
-            setSessionTimedOut(false);
-            return;
-          }
-          const timer = setTimeout(() => {
-            setSessionTimedOut(true);
-          }, 6000);
-          return () => clearTimeout(timer);
-        }, [isSessionPending]);
-
-        // Effective pending: actually pending AND not timed out
-        const effectivelyPending = isSessionPending && !sessionTimedOut;
-
-        // When session appears or changes, clear cached token to force a fresh fetch
-        useEffect(() => {
-          if (sessionId !== prevSessionIdRef.current) {
-            if (sessionId && prevSessionIdRef.current !== sessionId) {
-              // New login detected — force token refresh
-              setCachedToken(null);
-              pendingTokenRef.current = null;
-            }
-            prevSessionIdRef.current = sessionId;
-          }
-        }, [sessionId]);
-
-        // Clear token on logout
-        useEffect(() => {
-          if (!sessionData?.session && !isSessionPending && cachedToken) {
-            setCachedToken(null);
-          }
-        }, [cachedToken, isSessionPending, sessionData?.session]);
-
-        const fetchAccessToken = useCallback(
-          async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
-            if (cachedToken && !forceRefreshToken) {
-              return cachedToken;
-            }
-            if (!forceRefreshToken && pendingTokenRef.current) {
-              return pendingTokenRef.current;
-            }
-            pendingTokenRef.current = (async () => {
-              // More retries with progressive backoff for new sessions
-              const maxAttempts = sessionId ? 6 : 1;
-              for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                try {
-                  const { data } = await authClient.convex.token({
-                    fetchOptions: { throw: false },
-                  });
-                  const token = data?.token ?? null;
-                  if (token) {
-                    setCachedToken(token);
-                    return token;
-                  }
-                  // Token null but we have a session — retry with backoff
-                  if (attempt < maxAttempts - 1) {
-                    await new Promise((r) => setTimeout(r, 400 + attempt * 300));
-                    continue;
-                  }
-                } catch {
-                  if (attempt < maxAttempts - 1) {
-                    await new Promise((r) => setTimeout(r, 400 + attempt * 300));
-                    continue;
-                  }
-                }
-              }
-              setCachedToken(null);
-              return null;
-            })().finally(() => {
-              pendingTokenRef.current = null;
-            });
-            return pendingTokenRef.current;
-          },
-          [cachedToken, sessionId],
-        );
-
-        // Actively trigger token fetch when a session appears but we have no token
-        useEffect(() => {
-          if (sessionId && cachedToken === null && !pendingTokenRef.current) {
-            void fetchAccessToken({ forceRefreshToken: true });
-          }
-        }, [sessionId, cachedToken, fetchAccessToken]);
-
-        return useMemo(
-          () => ({
-            // Loading while session is pending (and not timed out) OR while we have a session but are still fetching token
-            isLoading: effectivelyPending || (Boolean(sessionId) && cachedToken === null),
-            // Only authenticated once we actually have a validated Convex token
-            isAuthenticated: cachedToken !== null,
-            fetchAccessToken,
-          }),
-          [cachedToken, fetchAccessToken, effectivelyPending, sessionId],
-        );
-      },
-    [],
+    () => ({
+      isLoading: effectivelyPending || (Boolean(sessionId) && cachedToken === null),
+      isAuthenticated: cachedToken !== null,
+      fetchAccessToken,
+    }),
+    [cachedToken, fetchAccessToken, effectivelyPending, sessionId],
   );
 }
 
@@ -155,8 +135,7 @@ interface ConvexAuthProviderProps {
 }
 
 export function ConvexAuthProvider({ client, children }: ConvexAuthProviderProps) {
-  const useBetterAuth = useUseAuthFromBetterAuth();
-
+  // Handle cross-domain OTT on web
   useEffect(() => {
     void (async () => {
       if (typeof window === "undefined" || !window.location?.href) {
