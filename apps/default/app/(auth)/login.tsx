@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -9,14 +9,35 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
+import { useConvexAuth } from "convex/react";
 
 export default function LoginScreen() {
+  const { isAuthenticated } = useConvexAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [awaitingAuth, setAwaitingAuth] = useState(false);
+
+  // Navigate once Convex confirms authentication
+  useEffect(() => {
+    if (awaitingAuth && isAuthenticated) {
+      router.replace("/");
+    }
+  }, [awaitingAuth, isAuthenticated]);
+
+  // Timeout fallback — if Convex doesn't confirm within 10s, let the user retry
+  useEffect(() => {
+    if (!awaitingAuth) return;
+    const timer = setTimeout(() => {
+      setAwaitingAuth(false);
+      setLoading(false);
+      setError("Anmeldung dauert zu lange. Bitte versuche es erneut.");
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [awaitingAuth]);
 
   const handleEmailLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -34,13 +55,14 @@ export default function LoginScreen() {
         } else {
           setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
         }
+        setLoading(false);
       } else {
-        router.replace("/");
+        // Don't navigate yet — wait for Convex to confirm auth state
+        setAwaitingAuth(true);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
-    } finally {
       setLoading(false);
     }
   };

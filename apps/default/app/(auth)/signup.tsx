@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -9,13 +9,34 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
+import { useConvexAuth } from "convex/react";
 
 export default function SignupScreen() {
+  const { isAuthenticated } = useConvexAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [awaitingAuth, setAwaitingAuth] = useState(false);
+
+  // Navigate once Convex confirms authentication
+  useEffect(() => {
+    if (awaitingAuth && isAuthenticated) {
+      router.replace("/");
+    }
+  }, [awaitingAuth, isAuthenticated]);
+
+  // Timeout fallback — if Convex doesn't confirm within 10s, let the user retry
+  useEffect(() => {
+    if (!awaitingAuth) return;
+    const timer = setTimeout(() => {
+      setAwaitingAuth(false);
+      setLoading(false);
+      setError("Registrierung dauert zu lange. Bitte versuche es erneut.");
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [awaitingAuth]);
 
   const handleSignup = async () => {
     if (!name.trim()) { setError("Bitte gib deinen Namen ein"); return; }
@@ -36,13 +57,14 @@ export default function SignupScreen() {
         } else {
           setError(msg || "Registrierung fehlgeschlagen. Bitte versuche es erneut.");
         }
+        setLoading(false);
       } else {
-        router.replace("/");
+        // Don't navigate yet — wait for Convex to confirm auth state
+        setAwaitingAuth(true);
       }
     } catch (signupError: unknown) {
       const msg = signupError instanceof Error ? signupError.message : String(signupError);
       setError(msg || "Registrierung fehlgeschlagen. Bitte versuche es erneut.");
-    } finally {
       setLoading(false);
     }
   };

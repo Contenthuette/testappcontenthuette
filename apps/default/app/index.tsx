@@ -76,13 +76,24 @@ export default function Index() {
 }
 
 function UnauthenticatedRedirect() {
+  const [ready, setReady] = useState(false);
+
+  // Brief grace period to let auth state settle after navigation
   useEffect(() => {
-    router.replace("/(auth)/welcome");
+    const timer = setTimeout(() => setReady(true), 1500);
+    return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (ready) {
+      router.replace("/(auth)/welcome");
+    }
+  }, [ready]);
 
   return (
     <View style={styles.container}>
       <ZLogo size={56} />
+      <ActivityIndicator style={styles.spinner} color={colors.gray400} />
     </View>
   );
 }
