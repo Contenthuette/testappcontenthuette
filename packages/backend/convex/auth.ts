@@ -40,7 +40,7 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
                     role: isAdminEmail(doc.email) ? "admin" : "user",
                     onboardingComplete: false,
                     subscriptionStatus: "none",
-                    createdAt: doc.createdAt,
+                    createdAt: typeof doc.createdAt === "number" ? doc.createdAt : new Date(doc.createdAt).getTime(),
                 });
             },
             onUpdate: async (ctx, newDoc) => {
