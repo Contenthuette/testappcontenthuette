@@ -27,16 +27,20 @@ export default function SignupScreen() {
     }
   }, [awaitingAuth, isAuthenticated]);
 
-  // Timeout fallback — if Convex doesn't confirm within 10s, let the user retry
+  // Timeout fallback — if Convex doesn't confirm within 15s, let the user retry
   useEffect(() => {
     if (!awaitingAuth) return;
     const timer = setTimeout(() => {
+      if (isAuthenticated) {
+        router.replace("/");
+        return;
+      }
       setAwaitingAuth(false);
       setLoading(false);
       setError("Registrierung dauert zu lange. Bitte versuche es erneut.");
-    }, 10000);
+    }, 15000);
     return () => clearTimeout(timer);
-  }, [awaitingAuth]);
+  }, [awaitingAuth, isAuthenticated]);
 
   const handleSignup = async () => {
     if (!name.trim()) { setError("Bitte gib deinen Namen ein"); return; }
@@ -59,6 +63,12 @@ export default function SignupScreen() {
         }
         setLoading(false);
       } else {
+        // Force session refresh so the auth provider picks up the new session immediately
+        try {
+          await authClient.getSession();
+        } catch {
+          // Ignore — the session may still propagate reactively
+        }
         // Don't navigate yet — wait for Convex to confirm auth state
         setAwaitingAuth(true);
       }

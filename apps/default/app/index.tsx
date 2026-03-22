@@ -76,19 +76,9 @@ export default function Index() {
 }
 
 function UnauthenticatedRedirect() {
-  const [ready, setReady] = useState(false);
-
-  // Brief grace period to let auth state settle after navigation
   useEffect(() => {
-    const timer = setTimeout(() => setReady(true), 1500);
-    return () => clearTimeout(timer);
+    router.replace("/(auth)/welcome");
   }, []);
-
-  useEffect(() => {
-    if (ready) {
-      router.replace("/(auth)/welcome");
-    }
-  }, [ready]);
 
   return (
     <View style={styles.container}>

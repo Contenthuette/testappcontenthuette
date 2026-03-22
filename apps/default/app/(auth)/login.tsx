@@ -28,16 +28,21 @@ export default function LoginScreen() {
     }
   }, [awaitingAuth, isAuthenticated]);
 
-  // Timeout fallback — if Convex doesn't confirm within 10s, let the user retry
+  // Timeout fallback — if Convex doesn't confirm within 15s, let the user retry
   useEffect(() => {
     if (!awaitingAuth) return;
     const timer = setTimeout(() => {
+      // If we're already authenticated by now, just navigate
+      if (isAuthenticated) {
+        router.replace("/");
+        return;
+      }
       setAwaitingAuth(false);
       setLoading(false);
       setError("Anmeldung dauert zu lange. Bitte versuche es erneut.");
-    }, 10000);
+    }, 15000);
     return () => clearTimeout(timer);
-  }, [awaitingAuth]);
+  }, [awaitingAuth, isAuthenticated]);
 
   const handleEmailLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -57,6 +62,12 @@ export default function LoginScreen() {
         }
         setLoading(false);
       } else {
+        // Force session refresh so the auth provider picks up the new session immediately
+        try {
+          await authClient.getSession();
+        } catch {
+          // Ignore — the session may still propagate reactively
+        }
         // Don't navigate yet — wait for Convex to confirm auth state
         setAwaitingAuth(true);
       }

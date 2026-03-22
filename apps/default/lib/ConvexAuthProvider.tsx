@@ -46,7 +46,21 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
         const { data: session, isPending: isSessionPending } = authClient.useSession();
         const sessionData = session as BetterAuthSession | null;
         const sessionId = sessionData?.session?.id;
+        const prevSessionIdRef = useRef<string | undefined>(undefined);
 
+        // When session appears or changes, clear cached token to force a fresh fetch
+        useEffect(() => {
+          if (sessionId !== prevSessionIdRef.current) {
+            if (sessionId && prevSessionIdRef.current !== sessionId) {
+              // New login detected — force token refresh
+              setCachedToken(null);
+              pendingTokenRef.current = null;
+            }
+            prevSessionIdRef.current = sessionId;
+          }
+        }, [sessionId]);
+
+        // Clear token on logout
         useEffect(() => {
           if (!sessionData?.session && !isSessionPending && cachedToken) {
             setCachedToken(null);
@@ -62,7 +76,8 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
               return pendingTokenRef.current;
             }
             pendingTokenRef.current = (async () => {
-              const maxAttempts = sessionId ? 3 : 1;
+              // More retries with progressive backoff for new sessions
+              const maxAttempts = sessionId ? 6 : 1;
               for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
                   const { data } = await authClient.convex.token({
@@ -73,14 +88,14 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
                     setCachedToken(token);
                     return token;
                   }
-                  // Token null but we have a session — retry after delay
+                  // Token null but we have a session — retry with backoff
                   if (attempt < maxAttempts - 1) {
-                    await new Promise((r) => setTimeout(r, 600));
+                    await new Promise((r) => setTimeout(r, 400 + attempt * 300));
                     continue;
                   }
                 } catch {
                   if (attempt < maxAttempts - 1) {
-                    await new Promise((r) => setTimeout(r, 600));
+                    await new Promise((r) => setTimeout(r, 400 + attempt * 300));
                     continue;
                   }
                 }
@@ -95,13 +110,22 @@ function useUseAuthFromBetterAuth(initialToken?: string | null) {
           [cachedToken, sessionId],
         );
 
+        // Actively trigger token fetch when a session appears but we have no token
+        useEffect(() => {
+          if (sessionId && cachedToken === null && !pendingTokenRef.current) {
+            void fetchAccessToken({ forceRefreshToken: true });
+          }
+        }, [sessionId, cachedToken, fetchAccessToken]);
+
         return useMemo(
           () => ({
-            isLoading: isSessionPending && !cachedToken,
-            isAuthenticated: Boolean(sessionData?.session) || cachedToken !== null,
+            // Loading while session is pending OR while we have a session but are still fetching token
+            isLoading: isSessionPending || (Boolean(sessionId) && cachedToken === null),
+            // Only authenticated once we actually have a validated Convex token
+            isAuthenticated: cachedToken !== null,
             fetchAccessToken,
           }),
-          [cachedToken, fetchAccessToken, isSessionPending, sessionData?.session],
+          [cachedToken, fetchAccessToken, isSessionPending, sessionId],
         );
       },
     [],
