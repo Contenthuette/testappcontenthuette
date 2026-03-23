@@ -3,16 +3,24 @@ import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { paginatedResultValidator } from "./pagination";
 
 /* ─── helpers ─────────────────────────────────────────────────── */
-type AdminCtx = {
+type AdminReadCtx = {
   user: { _id: string };
-  db: QueryCtx["db"];
+  db: QueryCtx["db"] | MutationCtx["db"];
 };
 
-async function requireAdmin(ctx: AdminCtx): Promise<{ _id: Id<"users"> }> {
+type SnapshotReadCtx = {
+  db: QueryCtx["db"] | MutationCtx["db"];
+};
+
+type SnapshotWriteCtx = {
+  db: MutationCtx["db"];
+};
+
+async function requireAdmin(ctx: AdminReadCtx): Promise<{ _id: Id<"users"> }> {
   const authId = ctx.user._id;
   const user = await ctx.db
     .query("users")
@@ -58,7 +66,7 @@ async function countResults<T>(source: AsyncIterable<T>): Promise<number> {
   return count;
 }
 
-async function buildAnalyticsSnapshot(ctx: { db: QueryCtx["db"] }, now: number) {
+async function buildAnalyticsSnapshot(ctx: SnapshotReadCtx, now: number) {
   const dayStart = now - DAY;
   const weekStart = now - WEEK;
   const monthStart = now - MONTH;
@@ -170,7 +178,7 @@ async function buildAnalyticsSnapshot(ctx: { db: QueryCtx["db"] }, now: number) 
   };
 }
 
-async function upsertAnalyticsSnapshot(ctx: { db: QueryCtx["db"] }, now: number) {
+async function upsertAnalyticsSnapshot(ctx: SnapshotWriteCtx, now: number) {
   const snapshot = await buildAnalyticsSnapshot(ctx, now);
   const existing = await ctx.db
     .query("analyticsSnapshots")
@@ -189,7 +197,7 @@ async function upsertAnalyticsSnapshot(ctx: { db: QueryCtx["db"] }, now: number)
   return null;
 }
 
-async function getDashboardFromSnapshots(ctx: { db: QueryCtx["db"] }) {
+async function getDashboardFromSnapshots(ctx: SnapshotReadCtx) {
   const snapshots = await ctx.db
     .query("analyticsSnapshots")
     .withIndex("by_date")
