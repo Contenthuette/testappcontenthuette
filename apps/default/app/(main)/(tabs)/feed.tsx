@@ -23,7 +23,7 @@ import { PartnerList } from "@/components/PartnerList";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 
-const Z_LOGO_WHITE = require("../../../assets/images/z-logo-white.png");
+const Z_LOGO_WHITE = require("../../../../../assets/images/z-logo-white.png");
 
 const FEED_ASPECT_RATIO = 3 / 4;
 
