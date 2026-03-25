@@ -24,6 +24,7 @@ import {
   setAudioModeAsync,
   requestRecordingPermissionsAsync,
   createAudioPlayer,
+  type RecordingOptions,
 } from "expo-audio";
 
 interface VoiceRecorderProps {
@@ -39,13 +40,27 @@ function formatTime(seconds: number): string {
 
 type RecorderPhase = "idle" | "recording" | "stopped" | "previewing" | "error";
 
-const BAR_COUNT = 28;
+const BAR_COUNT = 32;
+const MIN_WAVE_HEIGHT = 4;
+const MAX_WAVE_HEIGHT = 24;
+const METERING_FLOOR = -60;
+const METERING_CEILING = -6;
+const VOICE_RECORDING_PRESET = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+} satisfies RecordingOptions;
 
 function meteringToHeight(metering: number | undefined): number {
-  if (metering === undefined || metering === null) return 4;
-  const clamped = Math.max(-50, Math.min(0, metering));
-  const normalised = (clamped + 50) / 50;
-  return 4 + normalised * 18;
+  if (metering === undefined || metering === null) return MIN_WAVE_HEIGHT;
+  const clamped = Math.max(METERING_FLOOR, Math.min(METERING_CEILING, metering));
+  const normalized = (clamped - METERING_FLOOR) / (METERING_CEILING - METERING_FLOOR);
+  const eased = Math.pow(normalized, 1.6);
+  return MIN_WAVE_HEIGHT + eased * (MAX_WAVE_HEIGHT - MIN_WAVE_HEIGHT);
+}
+
+function smoothWaveHeight(nextHeight: number, previousHeight: number): number {
+  const factor = nextHeight > previousHeight ? 0.6 : 0.22;
+  return previousHeight + (nextHeight - previousHeight) * factor;
 }
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
@@ -55,8 +70,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const hasStartedRef = useRef(false);
 
   // ── Official expo-audio hooks for recording ──
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder, 100);
+  const recorder = useAudioRecorder(VOICE_RECORDING_PRESET);
+  const recorderState = useAudioRecorderState(recorder, 80);
 
   // Imperative ref for preview player only
   const playerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
@@ -65,7 +80,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   // Live metering bars
   const levelsRef = useRef<number[]>([]);
   const frozenBarsRef = useRef<number[]>([]);
-  const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(4));
+  const [liveBars, setLiveBars] = useState<number[]>(Array(BAR_COUNT).fill(MIN_WAVE_HEIGHT));
 
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -94,15 +109,17 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   // Update live bars from metering
   useEffect(() => {
     if (phase !== "recording") return;
-    const h = meteringToHeight(recorderState.metering);
-    levelsRef.current.push(h);
+    const rawHeight = meteringToHeight(recorderState.metering);
+    const previousHeight = levelsRef.current[levelsRef.current.length - 1] ?? MIN_WAVE_HEIGHT;
+    const smoothedHeight = smoothWaveHeight(rawHeight, previousHeight);
+    levelsRef.current.push(smoothedHeight);
     if (levelsRef.current.length > BAR_COUNT * 10) {
       levelsRef.current = levelsRef.current.slice(-BAR_COUNT * 2);
     }
     const recent = levelsRef.current.slice(-BAR_COUNT);
     const padCount = Math.max(0, BAR_COUNT - recent.length);
     const padded = padCount > 0
-      ? [...Array<number>(padCount).fill(4), ...recent]
+      ? [...Array<number>(padCount).fill(MIN_WAVE_HEIGHT), ...recent]
       : recent;
     setLiveBars(padded);
   }, [phase, recorderState.metering]);
@@ -134,8 +151,9 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       recorder.record();
 
       setPhase("recording");
+      frozenBarsRef.current = [];
       levelsRef.current = [];
-      setLiveBars(Array(BAR_COUNT).fill(4));
+      setLiveBars(Array(BAR_COUNT).fill(MIN_WAVE_HEIGHT));
 
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
