@@ -1,7 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
-import { Platform, Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
-// expo-image-manipulator types
 interface ManipulateResult {
   uri: string;
   width: number;
@@ -32,17 +31,24 @@ interface PickerOptions {
   aspect?: [number, number];
 }
 
-interface PickerResult {
+export interface PickerResult {
   uri: string;
   mimeType: string;
   fileName: string;
   width: number;
   height: number;
-  duration?: number; // milliseconds for videos
+  duration?: number;
+  fileSize?: number;
 }
 
-function getMediaType(t: MediaType): ImagePicker.MediaType[] {
-  switch (t) {
+export const MEDIA_UPLOAD_LIMITS = {
+  maxImageDimension: 1_920,
+  maxVideoDurationMs: 90_000,
+  maxVideoFileSizeBytes: 40 * 1024 * 1024,
+} as const;
+
+function getMediaType(mediaType: MediaType): ImagePicker.MediaType[] {
+  switch (mediaType) {
     case "images":
       return ["images"];
     case "videos":
@@ -52,37 +58,85 @@ function getMediaType(t: MediaType): ImagePicker.MediaType[] {
   }
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+interface PickerAssetWithFileSize {
+  uri: string;
+  mimeType?: string;
+  fileName?: string | null;
+  width: number;
+  height: number;
+  duration?: number | null;
+  fileSize?: number;
+}
+
 async function ensurePermission(): Promise<boolean> {
   if (Platform.OS === "web") return true;
+
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== "granted") {
     Alert.alert(
       "Zugriff verweigert",
-      "Bitte erlaube den Zugriff auf deine Mediathek in den Einstellungen."
+      "Bitte erlaube den Zugriff auf deine Mediathek in den Einstellungen.",
     );
     return false;
   }
+
   return true;
 }
 
-/** Compress image: resize down to max 1920px on longest side, quality 0.8 */
-async function compressImage(uri: string, maxDimension = 1920): Promise<{ uri: string; width: number; height: number }> {
+async function compressImage(
+  uri: string,
+  maxDimension = MEDIA_UPLOAD_LIMITS.maxImageDimension,
+): Promise<{ uri: string; width: number; height: number }> {
   if (!ImageManipulator) return { uri, width: 0, height: 0 };
+
   try {
     const result = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: maxDimension } }],
       { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
     );
-    return { uri: result.uri, width: result.width, height: result.height };
+
+    return {
+      uri: result.uri,
+      width: result.width,
+      height: result.height,
+    };
   } catch {
     return { uri, width: 0, height: 0 };
   }
 }
 
+function getVideoValidationError(asset: {
+  duration?: number | null;
+  fileSize?: number;
+}): string | null {
+  if (
+    asset.duration !== undefined &&
+    asset.duration !== null &&
+    asset.duration > MEDIA_UPLOAD_LIMITS.maxVideoDurationMs
+  ) {
+    return "Videos dürfen aktuell maximal 90 Sekunden lang sein.";
+  }
+
+  if (
+    asset.fileSize !== undefined &&
+    asset.fileSize > MEDIA_UPLOAD_LIMITS.maxVideoFileSizeBytes
+  ) {
+    return `Dieses Video ist zu groß (${formatBytes(asset.fileSize)}). Bitte bleib unter 40 MB.`;
+  }
+
+  return null;
+}
+
 export async function pickImage(opts?: PickerOptions): Promise<PickerResult | null> {
-  const ok = await ensurePermission();
-  if (!ok) return null;
+  const hasPermission = await ensurePermission();
+  if (!hasPermission) return null;
+
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: getMediaType(opts?.mediaType ?? "images"),
     allowsEditing: opts?.allowsEditing ?? false,
@@ -90,12 +144,15 @@ export async function pickImage(opts?: PickerOptions): Promise<PickerResult | nu
     ...(opts?.aspect ? { aspect: opts.aspect } : {}),
   });
   if (result.canceled || !result.assets?.[0]) return null;
-  const asset = result.assets[0];
 
-  // Compress large images
-  const needsCompress = asset.width > 1920 || asset.height > 1920;
-  if (needsCompress) {
-    const compressed = await compressImage(asset.uri, 1920);
+  const asset = result.assets[0] as PickerAssetWithFileSize;
+  const fileSize = asset.fileSize;
+  const needsCompression =
+    asset.width > MEDIA_UPLOAD_LIMITS.maxImageDimension ||
+    asset.height > MEDIA_UPLOAD_LIMITS.maxImageDimension;
+
+  if (needsCompression) {
+    const compressed = await compressImage(asset.uri);
     if (compressed.width > 0) {
       return {
         uri: compressed.uri,
@@ -103,6 +160,7 @@ export async function pickImage(opts?: PickerOptions): Promise<PickerResult | nu
         fileName: asset.fileName ?? "photo.jpg",
         width: compressed.width,
         height: compressed.height,
+        fileSize,
       };
     }
   }
@@ -113,19 +171,32 @@ export async function pickImage(opts?: PickerOptions): Promise<PickerResult | nu
     fileName: asset.fileName ?? "photo.jpg",
     width: asset.width,
     height: asset.height,
+    fileSize,
   };
 }
 
 export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | null> {
-  const ok = await ensurePermission();
-  if (!ok) return null;
+  const hasPermission = await ensurePermission();
+  if (!hasPermission) return null;
+
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["videos"],
     allowsEditing: opts?.allowsEditing ?? false,
     quality: opts?.quality ?? 0.7,
   });
   if (result.canceled || !result.assets?.[0]) return null;
-  const asset = result.assets[0];
+
+  const asset = result.assets[0] as PickerAssetWithFileSize;
+  const fileSize = asset.fileSize;
+  const validationError = getVideoValidationError({
+    duration: asset.duration,
+    fileSize,
+  });
+  if (validationError) {
+    Alert.alert("Video zu groß", validationError);
+    return null;
+  }
+
   return {
     uri: asset.uri,
     mimeType: asset.mimeType ?? "video/mp4",
@@ -133,24 +204,28 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     width: asset.width,
     height: asset.height,
     duration: asset.duration ?? undefined,
+    fileSize,
   };
 }
 
 export async function uploadToConvex(
   uploadUrl: string,
   fileUri: string,
-  mimeType: string
+  mimeType: string,
 ): Promise<string> {
-  const resp = await fetch(fileUri);
-  const blob = await resp.blob();
-  const uploadResp = await fetch(uploadUrl, {
+  const response = await fetch(fileUri);
+  const blob = await response.blob();
+
+  const uploadResponse = await fetch(uploadUrl, {
     method: "POST",
     headers: { "Content-Type": mimeType },
     body: blob,
   });
-  if (!uploadResp.ok) {
+
+  if (!uploadResponse.ok) {
     throw new Error("Upload fehlgeschlagen");
   }
-  const json = (await uploadResp.json()) as { storageId: string };
+
+  const json = (await uploadResponse.json()) as { storageId: string };
   return json.storageId;
 }

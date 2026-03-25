@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { authQuery, authMutation } from "./functions";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
+import { getDirectConversationKey } from "./conversationKey";
+import { touchConversationActivity } from "./conversationActivity";
+import { rateLimiter } from "./rateLimit";
 
 /* ── helpers ───────────────────────────────────────────────────── */
 async function getMyUserId(
@@ -217,6 +220,7 @@ export const sharePost = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "sharePost", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
@@ -231,24 +235,12 @@ export const sharePost = authMutation({
     if (args.targetType === "user") {
       /* ── Share to DM ───────────────────────────────────────── */
       const targetUserId = args.targetId as Id<"users">;
+      const conversationKey = getDirectConversationKey(myUserId, targetUserId);
 
-      // Find or create DM conversation
-      const allConvos = await ctx.db
+      const existing = await ctx.db
         .query("conversations")
-        .withIndex("by_lastMessageAt")
-        .order("desc")
-        .take(200);
-      let existing: Doc<"conversations"> | null = null;
-      for (const c of allConvos) {
-        if (
-          c.type === "direct" &&
-          c.participantIds?.includes(myUserId) &&
-          c.participantIds?.includes(targetUserId)
-        ) {
-          existing = c;
-          break;
-        }
-      }
+        .withIndex("by_conversationKey", (q) => q.eq("conversationKey", conversationKey))
+        .unique();
 
       if (existing) {
         conversationId = existing._id;
@@ -256,6 +248,7 @@ export const sharePost = authMutation({
         conversationId = await ctx.db.insert("conversations", {
           type: "direct",
           participantIds: [myUserId, targetUserId],
+          conversationKey,
           createdAt: Date.now(),
         });
       }
@@ -329,7 +322,7 @@ export const sharePost = authMutation({
       sharedPostId: args.postId,
       createdAt: Date.now(),
     });
-    await ctx.db.patch(conversationId, { lastMessageAt: Date.now() });
+    await touchConversationActivity(ctx, conversationId, Date.now());
 
     return null;
   },

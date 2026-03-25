@@ -6,6 +6,8 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { getConversationKeyFromParticipants, getDirectConversationKey } from "./conversationKey";
 import { paginatedResultValidator } from "./pagination";
+import { touchConversationActivity } from "./conversationActivity";
+import { rateLimiter } from "./rateLimit";
 
 type AuthCtx = {
   db: QueryCtx["db"];
@@ -348,6 +350,7 @@ export const sendMessage = authMutation({
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "sendDirectMessage", { key: `${ctx.user._id}:${args.conversationId}` });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
@@ -362,7 +365,7 @@ export const sendMessage = authMutation({
       sharedPostId: args.sharedPostId,
       createdAt,
     });
-    await ctx.db.patch(args.conversationId, { lastMessageAt: createdAt });
+    await touchConversationActivity(ctx, args.conversationId, createdAt);
     return messageId;
   },
 });
@@ -417,6 +420,7 @@ export const sendGroupMessage = authMutation({
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "sendGroupMessage", { key: `${ctx.user._id}:${args.groupId}` });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
@@ -444,7 +448,7 @@ export const sendGroupMessage = authMutation({
       mediaDuration: args.mediaDuration,
       createdAt,
     });
-    await ctx.db.patch(conversation._id, { lastMessageAt: createdAt });
+    await touchConversationActivity(ctx, conversation._id, createdAt);
     return messageId;
   },
 });
@@ -454,6 +458,7 @@ export const generateUploadUrl = authMutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
+    await rateLimiter.limit(ctx, "messageUploadUrl", { key: ctx.user._id });
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -496,6 +501,7 @@ export const sendDirectMessage = authMutation({
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "sendDirectMessage", { key: `${ctx.user._id}:${args.conversationId}` });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
@@ -509,7 +515,7 @@ export const sendDirectMessage = authMutation({
       mediaDuration: args.mediaDuration,
       createdAt,
     });
-    await ctx.db.patch(args.conversationId, { lastMessageAt: createdAt });
+    await touchConversationActivity(ctx, args.conversationId, createdAt);
     return messageId;
   },
 });

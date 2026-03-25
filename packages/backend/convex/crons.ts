@@ -10,4 +10,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "cleanup stale calls",
+  { minutes: 2 },
+  internal.calls.cleanupStaleCalls,
+  {},
+);
+
 export default crons;

@@ -5,11 +5,13 @@ import { authQuery, authMutation } from "./functions";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { paginatedResultValidator } from "./pagination";
+import { rateLimiter } from "./rateLimit";
 
 export const generateUploadUrl = authMutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
+    await rateLimiter.limit(ctx, "postUploadUrl", { key: ctx.user._id });
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -271,8 +273,13 @@ export const create = authMutation({
   },
   returns: v.id("posts"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "createPost", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+    if (!args.mediaStorageId) throw new Error("Media upload is required");
+    if (args.caption && args.caption.length > 2_000) {
+      throw new Error("Caption is too long");
+    }
     const user = await ctx.db.get(myUserId);
     const isAdmin = user?.role === "admin";
     const isAnnouncement = args.isAnnouncement && isAdmin;

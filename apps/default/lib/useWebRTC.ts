@@ -1,21 +1,69 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
+import type { ComponentType } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-// Conditional native-only import
 let RTC: {
-  RTCPeerConnection: any;
-  RTCSessionDescription: any;
-  RTCIceCandidate: any;
-  mediaDevices: any;
-  RTCView: any;
+  RTCPeerConnection: new (config: unknown) => RTCPeerConnectionLike;
+  RTCSessionDescription: new (description: unknown) => RTCSessionDescriptionLike;
+  RTCIceCandidate: new (candidate: unknown) => RTCIceCandidateLike;
+  mediaDevices: {
+    getUserMedia: (constraints: unknown) => Promise<MediaStreamLike>;
+  };
+  RTCView: unknown;
 } | null = null;
+
+interface RTCPeerConnectionLike {
+  addTrack: (track: MediaTrackLike, stream: MediaStreamLike) => void;
+  close: () => void;
+  createAnswer: () => Promise<unknown>;
+  createOffer: (options?: unknown) => Promise<unknown>;
+  setLocalDescription: (description: unknown) => Promise<void>;
+  setRemoteDescription: (description: unknown) => Promise<void>;
+  addIceCandidate: (candidate: unknown) => Promise<void>;
+  localDescription?: unknown;
+  remoteDescription?: unknown;
+  currentTime?: number;
+  duration?: number;
+  connectionState?: string;
+  iceConnectionState?: string;
+  ontrack: ((event: { streams?: Array<MediaStreamLike> }) => void) | null;
+  onicecandidate: ((event: { candidate?: unknown }) => void) | null;
+  onconnectionstatechange: (() => void) | null;
+  oniceconnectionstatechange: (() => void) | null;
+}
+
+interface RTCSessionDescriptionLike {}
+interface RTCIceCandidateLike {}
+
+interface MediaTrackLike {
+  enabled: boolean;
+  stop: () => void;
+  _switchCamera?: () => void;
+}
+
+interface MediaStreamLike {
+  getTracks: () => Array<MediaTrackLike>;
+  getAudioTracks: () => Array<MediaTrackLike>;
+  getVideoTracks: () => Array<MediaTrackLike>;
+  toURL: () => string;
+}
+
+interface RTCViewProps {
+  streamURL: string;
+  style?: unknown;
+  objectFit?: "contain" | "cover";
+  mirror?: boolean;
+  zOrder?: number;
+}
+
+type RTCViewComponent = ComponentType<RTCViewProps>;
 
 if (Platform.OS !== "web") {
   try {
-    RTC = require("react-native-webrtc");
+    RTC = require("react-native-webrtc") as typeof RTC;
   } catch {
     // react-native-webrtc not available
   }
@@ -24,7 +72,9 @@ if (Platform.OS !== "web") {
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-];
+] as const;
+
+const HEARTBEAT_INTERVAL_MS = 10_000;
 
 interface UseWebRTCOptions {
   callId: Id<"calls"> | null;
@@ -41,26 +91,36 @@ export function useWebRTC({
 }: UseWebRTCOptions) {
   const [localStreamUrl, setLocalStreamUrl] = useState<string | null>(null);
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
-  const [connectionState, setConnectionState] = useState<string>("new");
+  const [connectionState, setConnectionState] = useState("new");
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(!isVideo);
   const [setupComplete, setSetupComplete] = useState(false);
 
-  const pcRef = useRef<any>(null);
-  const localStreamRef = useRef<any>(null);
-  const processedRef = useRef<Set<string>>(new Set());
-  const hasOfferRef = useRef(false);
-  const hasAnswerRef = useRef(false);
-  const pendingCandidatesRef = useRef<any[]>([]);
+  const peerConnectionRef = useRef<RTCPeerConnectionLike | null>(null);
+  const localStreamRef = useRef<MediaStreamLike | null>(null);
+  const processedSignalIdsRef = useRef<Set<string>>(new Set());
+  const hasHandledOfferRef = useRef(false);
+  const pendingCandidatesRef = useRef<Array<unknown>>([]);
   const setupDoneRef = useRef(false);
 
   const sendSignal = useMutation(api.calls.sendSignal);
+  const heartbeat = useMutation(api.calls.heartbeat);
   const signals = useQuery(
     api.calls.getSignals,
-    callId && enabled ? { callId } : "skip"
+    callId && enabled ? { callId } : "skip",
   );
 
-  // Setup WebRTC peer connection & local media
+  useEffect(() => {
+    if (!enabled || !callId) return;
+
+    heartbeat({ callId }).catch(() => {});
+    const interval = setInterval(() => {
+      heartbeat({ callId }).catch(() => {});
+    }, HEARTBEAT_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [callId, enabled, heartbeat]);
+
   useEffect(() => {
     if (!enabled || !callId || !RTC || setupDoneRef.current) return;
     setupDoneRef.current = true;
@@ -69,83 +129,82 @@ export function useWebRTC({
 
     (async () => {
       try {
-        // Get local media
-        const stream = await RTC!.mediaDevices.getUserMedia({
+        const stream = await RTC.mediaDevices.getUserMedia({
           audio: true,
           video: isVideo
-            ? { facingMode: "user", width: 640, height: 480 }
+            ? {
+                facingMode: "user",
+                width: 480,
+                height: 360,
+                frameRate: 20,
+              }
             : false,
         });
 
         if (cancelled) {
-          stream.getTracks().forEach((t: any) => t.stop());
+          stream.getTracks().forEach((track) => track.stop());
           return;
         }
 
         localStreamRef.current = stream;
         setLocalStreamUrl(stream.toURL());
 
-        // Create peer connection
-        const pc = new RTC!.RTCPeerConnection({ iceServers: ICE_SERVERS });
-        pcRef.current = pc;
+        const peerConnection = new RTC.RTCPeerConnection({
+          iceServers: ICE_SERVERS,
+        });
+        peerConnectionRef.current = peerConnection;
 
-        // Add local tracks
-        stream
-          .getTracks()
-          .forEach((track: any) => pc.addTrack(track, stream));
+        stream.getTracks().forEach((track) => {
+          peerConnection.addTrack(track, stream);
+        });
 
-        // Handle remote tracks
-        pc.ontrack = (e: any) => {
-          if (e.streams?.[0]) {
-            setRemoteStreamUrl(e.streams[0].toURL());
+        peerConnection.ontrack = (event) => {
+          if (event.streams?.[0]) {
+            setRemoteStreamUrl(event.streams[0].toURL());
           }
         };
 
-        // Handle ICE candidates
-        pc.onicecandidate = (e: any) => {
-          if (e.candidate && callId) {
-            sendSignal({
-              callId,
-              type: "ice-candidate" as const,
-              payload: JSON.stringify(e.candidate),
-            }).catch(() => {});
-          }
+        peerConnection.onicecandidate = (event) => {
+          if (!event.candidate || !callId) return;
+
+          sendSignal({
+            callId,
+            type: "ice-candidate",
+            payload: JSON.stringify(event.candidate),
+          }).catch(() => {});
         };
 
-        // Connection state changes
-        pc.onconnectionstatechange = () =>
-          setConnectionState(pc.connectionState);
+        peerConnection.onconnectionstatechange = () => {
+          setConnectionState(peerConnection.connectionState ?? "new");
+        };
 
-        pc.oniceconnectionstatechange = () => {
+        peerConnection.oniceconnectionstatechange = () => {
           if (
-            pc.iceConnectionState === "connected" ||
-            pc.iceConnectionState === "completed"
+            peerConnection.iceConnectionState === "connected" ||
+            peerConnection.iceConnectionState === "completed"
           ) {
             setConnectionState("connected");
           }
         };
 
-        // Caller creates offer immediately
         if (isInitiator) {
-          hasOfferRef.current = true;
-          const offer = await pc.createOffer({
+          const offer = await peerConnection.createOffer({
             offerToReceiveAudio: true,
             offerToReceiveVideo: isVideo,
           });
-          await pc.setLocalDescription(offer);
+          await peerConnection.setLocalDescription(offer);
           await sendSignal({
             callId,
-            type: "offer" as const,
+            type: "offer",
             payload: JSON.stringify(offer),
           });
         }
 
-        // Mark setup as complete so signal processing can begin
         if (!cancelled) {
           setSetupComplete(true);
         }
-      } catch (err) {
-        console.error("WebRTC setup error:", err);
+      } catch (error) {
+        console.error("WebRTC setup error:", error);
         setConnectionState("failed");
       }
     })();
@@ -153,111 +212,105 @@ export function useWebRTC({
     return () => {
       cancelled = true;
     };
-    // These don't change during a call
-  }, [enabled, callId, isInitiator, isVideo, sendSignal]);
+  }, [callId, enabled, isInitiator, isVideo, sendSignal]);
 
-  // Process incoming signals reactively
   useEffect(() => {
-    if (!signals || !pcRef.current || !setupComplete) return;
-    const pc = pcRef.current;
+    if (!signals || !peerConnectionRef.current || !setupComplete || !RTC) return;
+
+    const peerConnection = peerConnectionRef.current;
 
     (async () => {
-      for (const sig of signals) {
-        if (processedRef.current.has(sig._id)) continue;
-        processedRef.current.add(sig._id);
+      for (const signal of signals) {
+        if (processedSignalIdsRef.current.has(signal._id)) continue;
+        processedSignalIdsRef.current.add(signal._id);
 
         try {
-          if (
-            sig.type === "offer" &&
-            !isInitiator &&
-            !hasAnswerRef.current
-          ) {
-            hasAnswerRef.current = true;
-            const offer = JSON.parse(sig.payload);
-            await pc.setRemoteDescription(
-              new RTC!.RTCSessionDescription(offer)
+          if (signal.type === "offer" && !isInitiator && !hasHandledOfferRef.current) {
+            hasHandledOfferRef.current = true;
+            const offer = JSON.parse(signal.payload);
+            await peerConnection.setRemoteDescription(
+              new RTC.RTCSessionDescription(offer),
             );
 
-            // Flush buffered candidates
-            for (const c of pendingCandidatesRef.current) {
-              await pc.addIceCandidate(new RTC!.RTCIceCandidate(c));
+            for (const candidate of pendingCandidatesRef.current) {
+              await peerConnection.addIceCandidate(new RTC.RTCIceCandidate(candidate));
             }
             pendingCandidatesRef.current = [];
 
-            // Create and send answer
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
             if (callId) {
               await sendSignal({
                 callId,
-                type: "answer" as const,
+                type: "answer",
                 payload: JSON.stringify(answer),
               });
             }
-          } else if (sig.type === "answer" && isInitiator) {
-            const answer = JSON.parse(sig.payload);
-            await pc.setRemoteDescription(
-              new RTC!.RTCSessionDescription(answer)
+          }
+
+          if (signal.type === "answer" && isInitiator) {
+            const answer = JSON.parse(signal.payload);
+            await peerConnection.setRemoteDescription(
+              new RTC.RTCSessionDescription(answer),
             );
 
-            // Flush buffered candidates
-            for (const c of pendingCandidatesRef.current) {
-              await pc.addIceCandidate(new RTC!.RTCIceCandidate(c));
+            for (const candidate of pendingCandidatesRef.current) {
+              await peerConnection.addIceCandidate(new RTC.RTCIceCandidate(candidate));
             }
             pendingCandidatesRef.current = [];
-          } else if (sig.type === "ice-candidate") {
-            const candidate = JSON.parse(sig.payload);
-            if (pc.remoteDescription) {
-              await pc.addIceCandidate(new RTC!.RTCIceCandidate(candidate));
+          }
+
+          if (signal.type === "ice-candidate") {
+            const candidate = JSON.parse(signal.payload);
+            if (peerConnection.remoteDescription) {
+              await peerConnection.addIceCandidate(new RTC.RTCIceCandidate(candidate));
             } else {
               pendingCandidatesRef.current.push(candidate);
             }
           }
-        } catch (err) {
-          console.error("Signal processing error:", sig.type, err);
+        } catch (error) {
+          console.error("Signal processing error:", signal.type, error);
         }
       }
     })();
-  }, [signals, isInitiator, callId, sendSignal, setupComplete]);
+  }, [callId, isInitiator, sendSignal, setupComplete, signals]);
 
   const toggleMute = useCallback(() => {
-    const track = localStreamRef.current?.getAudioTracks()?.[0];
-    if (track) {
-      track.enabled = !track.enabled;
-      setIsMuted(!track.enabled);
-    }
+    const audioTrack = localStreamRef.current?.getAudioTracks()?.[0];
+    if (!audioTrack) return;
+
+    audioTrack.enabled = !audioTrack.enabled;
+    setIsMuted(!audioTrack.enabled);
   }, []);
 
   const toggleVideo = useCallback(() => {
-    const track = localStreamRef.current?.getVideoTracks()?.[0];
-    if (track) {
-      track.enabled = !track.enabled;
-      setIsVideoOff(!track.enabled);
-    }
+    const videoTrack = localStreamRef.current?.getVideoTracks()?.[0];
+    if (!videoTrack) return;
+
+    videoTrack.enabled = !videoTrack.enabled;
+    setIsVideoOff(!videoTrack.enabled);
   }, []);
 
   const flipCamera = useCallback(() => {
-    const track = localStreamRef.current?.getVideoTracks()?.[0];
-    if (track?._switchCamera) track._switchCamera();
+    const videoTrack = localStreamRef.current?.getVideoTracks()?.[0];
+    videoTrack?._switchCamera?.();
   }, []);
 
   const cleanup = useCallback(() => {
-    localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
-    pcRef.current?.close();
-    pcRef.current = null;
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
     setLocalStreamUrl(null);
     setRemoteStreamUrl(null);
     setConnectionState("closed");
-    processedRef.current.clear();
-    hasOfferRef.current = false;
-    hasAnswerRef.current = false;
+    processedSignalIdsRef.current.clear();
+    hasHandledOfferRef.current = false;
     pendingCandidatesRef.current = [];
     setupDoneRef.current = false;
     setSetupComplete(false);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => () => cleanup(), [cleanup]);
 
   return {
@@ -271,6 +324,6 @@ export function useWebRTC({
     flipCamera,
     cleanup,
     isSupported: !!RTC,
-    RTCView: RTC?.RTCView ?? null,
+    RTCView: (RTC?.RTCView as RTCViewComponent | null) ?? null,
   };
 }

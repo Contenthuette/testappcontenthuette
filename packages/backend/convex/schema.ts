@@ -321,7 +321,8 @@ export default defineSchema({
   })
     .index("by_receiverId_and_status", ["receiverId", "status"])
     .index("by_groupId_and_status", ["groupId", "status"])
-    .index("by_callerId_and_status", ["callerId", "status"]),
+    .index("by_callerId_and_status", ["callerId", "status"])
+    .index("by_status_and_startedAt", ["status", "startedAt"]),
 
   callParticipants: defineTable({
     callId: v.id("calls"),
@@ -338,6 +339,7 @@ export default defineSchema({
     isVideoOff: v.boolean(),
     joinedAt: v.optional(v.number()),
     leftAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
   })
     .index("by_callId", ["callId"])
     .index("by_userId_and_status", ["userId", "status"])
@@ -346,13 +348,16 @@ export default defineSchema({
   callSignaling: defineTable({
     callId: v.id("calls"),
     senderId: v.id("users"),
+    recipientId: v.optional(v.id("users")),
     type: v.union(
       v.literal("offer"),
       v.literal("answer"),
       v.literal("ice-candidate")
     ),
     payload: v.string(),
-  }).index("by_callId", ["callId"]),
+  })
+    .index("by_callId", ["callId"])
+    .index("by_callId_and_recipientId", ["callId", "recipientId"]),
 
   // ── Announcements ──────────────────────────────────────────────
   announcements: defineTable({

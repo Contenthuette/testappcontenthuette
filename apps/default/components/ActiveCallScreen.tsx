@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import type { ComponentType } from "react";
 import {
   View,
   Text,
@@ -20,6 +21,14 @@ import { useSound } from "@/lib/sounds";
 import { useWebRTC } from "@/lib/useWebRTC";
 
 interface CallParticipant { _id: string; userId: string; userName: string; userAvatarUrl?: string }
+
+interface RTCViewProps {
+  streamURL: string;
+  style?: unknown;
+  objectFit?: "contain" | "cover";
+  mirror?: boolean;
+  zOrder?: number;
+}
 
 interface ActiveCallScreenProps {
   callId: Id<"calls">;
@@ -60,6 +69,8 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     isVideo: isVideoCall ?? false,
     enabled: webrtcEnabled,
   });
+
+  const RTCViewComponent = RTCView as ComponentType<RTCViewProps> | null;
 
   // Derive phase from call status + WebRTC state
   const phase = useMemo(() => {
@@ -288,8 +299,8 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   return (
     <View style={styles.container}>
       {/* Remote video (full screen) or audio avatar */}
-      {isVideoCall && RTCView && remoteStreamUrl ? (
-        <RTCView
+      {isVideoCall && RTCViewComponent && remoteStreamUrl ? (
+        <RTCViewComponent
           streamURL={remoteStreamUrl}
           style={styles.remoteVideo}
           objectFit="cover"
@@ -308,9 +319,9 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
       )}
 
       {/* Local video PiP */}
-      {isVideoCall && RTCView && localStreamUrl && (
+      {isVideoCall && RTCViewComponent && localStreamUrl && (
         <View style={styles.localVideoContainer}>
-          <RTCView
+          <RTCViewComponent
             streamURL={localStreamUrl}
             style={styles.localVideo}
             objectFit="cover"
