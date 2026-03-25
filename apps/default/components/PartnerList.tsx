@@ -49,6 +49,7 @@ export function PartnerList() {
           </View>
         )}
         <View style={styles.partnerBadge}>
+          <Text style={styles.partnerBadgeZ}>Z</Text>
           <Text style={styles.partnerBadgeText}>PARTNER</Text>
         </View>
       </View>
@@ -71,7 +72,7 @@ export function PartnerList() {
             activeOpacity={0.7}
           >
             <Text style={styles.websiteBtnText}>Webseite besuchen</Text>
-            <SymbolView name="arrow.up.right" size={11} tintColor={colors.white} />
+            <Text style={styles.websiteArrow}>↗</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -124,7 +125,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
   },
+  partnerBadgeZ: { fontSize: 12, fontWeight: "900", color: colors.white, letterSpacing: -0.5 },
   partnerBadgeText: { fontSize: 11, fontWeight: "700", color: colors.white, letterSpacing: 0.5 },
   cardBody: { padding: spacing.lg },
   cardName: {
@@ -156,4 +161,5 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
   },
   websiteBtnText: { fontSize: 13, fontWeight: "600", color: colors.white },
+  websiteArrow: { fontSize: 13, color: colors.white, marginLeft: 2 },
 });
