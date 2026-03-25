@@ -22,8 +22,8 @@ import { useConvexAuth } from "convex/react";
 
 const ABO_PRICE = "5,99";
 
-/* ─── Local types for dashboard data ─────────────────────── */
-interface Buyer { ticketId: string; userName: string; userEmail: string; status: string }
+/* ─── Local types for dashboard data ─────────────────── */
+interface Buyer { ticketId: string; userName: string; userEmail: string; status: string; paid: boolean; checkedIn: boolean; checkedInAt?: number }
 interface DayStats { label: string; photos: number; videos: number }
 interface GrowthDay { label: string; count: number }
 interface EventRevenue { eventName: string; soldTickets: number; totalTickets: number; revenue: number; currency: string }
@@ -81,7 +81,7 @@ function Card({
   );
 }
 
-/* ─── Event Row ────────────────────────────────────────── */
+/* ─── Event Row ──────────────────────────────────────── */
 function EventRow({
   event,
   expanded,
@@ -105,8 +105,8 @@ function EventRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const detail = useQuery(
-    api.admin.getEventDetail,
+  const stats = useQuery(
+    api.admin.getEventCheckInStats,
     expanded ? { eventId: event._id } : "skip",
   );
   const {
@@ -116,7 +116,7 @@ function EventRow({
   } = usePaginatedQuery(
     api.admin.listEventBuyers,
     expanded ? { eventId: event._id } : "skip",
-    { initialNumItems: 20 },
+    { initialNumItems: 10 },
   );
 
   return (
@@ -125,7 +125,7 @@ function EventRow({
         <View style={{ flex: 1 }}>
           <Text style={styles.eventName}>{event.name}</Text>
           <Text style={styles.eventMeta}>
-            {event.date} · {event.city}
+            {event.date} \u00b7 {event.city}
           </Text>
         </View>
         <View style={styles.eventBadge}>
@@ -143,13 +143,21 @@ function EventRow({
       {expanded && (
         <View style={styles.eventExpanded}>
           <View style={styles.eventActions}>
+            {/* Einlass button */}
+            <TouchableOpacity
+              onPress={() => router.push(`/(main)/admin-event-checkin?eventId=${event._id}` as "/")}
+              style={[styles.eventActionBtn, { backgroundColor: "#3B82F6" }]}
+            >
+              <SymbolView name="person.badge.shield.checkmark" size={13} tintColor={colors.white} />
+              <Text style={[styles.eventActionText, { color: colors.white }]}>Einlass</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={onEdit} style={styles.eventActionBtn}>
               <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
               <Text style={styles.eventActionText}>Bearbeiten</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onDelete} style={[styles.eventActionBtn, styles.eventDeleteBtn]}>
               <SymbolView name="trash" size={13} tintColor={colors.danger} />
-              <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
+              <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
             </TouchableOpacity>
           </View>
 
@@ -157,8 +165,17 @@ function EventRow({
             Preis: {event.ticketPrice.toFixed(2)} {event.currency}
           </Text>
 
-          <Text style={styles.buyersTitle}>Käufer ({buyers.length})</Text>
-          {!detail || buyersStatus === "LoadingFirstPage" ? (
+          {/* Live stats mini row */}
+          {stats && (
+            <View style={styles.miniStatsRow}>
+              <Text style={styles.miniStat}>\ud83c\udfab {stats.totalTickets} Tickets</Text>
+              <Text style={styles.miniStat}>\u2705 {stats.checkedIn} drin</Text>
+              <Text style={styles.miniStat}>\u23f3 {stats.notCheckedIn} drau\u00dfen</Text>
+            </View>
+          )}
+
+          <Text style={styles.buyersTitle}>K\u00e4ufer ({buyers.length})</Text>
+          {buyersStatus === "LoadingFirstPage" ? (
             <ActivityIndicator size="small" color={colors.gray400} style={{ marginTop: 8 }} />
           ) : buyers.length === 0 ? (
             <Text style={styles.noBuyers}>Noch keine Tickets verkauft</Text>
@@ -175,30 +192,27 @@ function EventRow({
                     <Text style={styles.buyerName}>{buyer.userName}</Text>
                     <Text style={styles.buyerEmail}>{buyer.userEmail}</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.ticketStatus,
-                      buyer.status === "active" && styles.ticketActive,
-                      buyer.status === "scanned" && styles.ticketScanned,
-                      buyer.status === "canceled" && styles.ticketCanceled,
-                    ]}
-                  >
-                    <Text
+                  <View style={styles.buyerBadges}>
+                    <View
                       style={[
-                        styles.ticketStatusText,
-                        buyer.status === "active" && { color: colors.success },
-                        buyer.status === "scanned" && { color: "#3B82F6" },
-                        buyer.status === "canceled" && { color: colors.danger },
+                        styles.ticketStatus,
+                        buyer.paid ? styles.ticketActive : styles.ticketCanceled,
                       ]}
                     >
-                      {buyer.status === "active"
-                        ? "Aktiv"
-                        : buyer.status === "scanned"
-                          ? "Gescannt"
-                          : buyer.status === "canceled"
-                            ? "Storniert"
-                            : "Abgelaufen"}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.ticketStatusText,
+                          { color: buyer.paid ? colors.success : "#F59E0B" },
+                        ]}
+                      >
+                        {buyer.paid ? "Bezahlt" : "Offen"}
+                      </Text>
+                    </View>
+                    {buyer.checkedIn && (
+                      <View style={[styles.ticketStatus, styles.ticketScanned]}>
+                        <Text style={[styles.ticketStatusText, { color: "#3B82F6" }]}>Drin</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               ))}
@@ -206,7 +220,7 @@ function EventRow({
                 <ActivityIndicator size="small" color={colors.gray400} style={{ marginTop: 12 }} />
               ) : buyersStatus === "CanLoadMore" ? (
                 <TouchableOpacity style={styles.loadMoreInlineBtn} onPress={() => loadMoreBuyers(20)}>
-                  <Text style={styles.loadMoreInlineText}>Mehr Käufer laden</Text>
+                  <Text style={styles.loadMoreInlineText}>Mehr K\u00e4ufer laden</Text>
                 </TouchableOpacity>
               ) : null}
             </>
@@ -1106,5 +1120,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.black,
+  },
+  miniStatsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    paddingHorizontal: 4,
+  },
+  miniStat: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.gray500,
+  },
+  buyerBadges: {
+    flexDirection: "row",
+    gap: 4,
   },
 });

@@ -45,6 +45,9 @@ const buyerValidator = v.object({
     v.literal("canceled"),
     v.literal("expired"),
   ),
+  paid: v.boolean(),
+  checkedIn: v.boolean(),
+  checkedInAt: v.optional(v.number()),
   purchasedAt: v.number(),
 });
 
@@ -529,13 +532,72 @@ export const listEventBuyers = authQuery({
           const user = await ctx.db.get(ticket.userId);
           return {
             ticketId: ticket._id,
-            userName: user?.name ?? "Unbekannt",
-            userEmail: user?.email ?? "",
+            userName: ticket.buyerName ?? user?.name ?? "Unbekannt",
+            userEmail: ticket.buyerEmail ?? user?.email ?? "",
             status: ticket.status,
+            paid: ticket.paid ?? false,
+            checkedIn: ticket.checkedIn ?? false,
+            checkedInAt: ticket.checkedInAt,
             purchasedAt: ticket.purchasedAt,
           };
         }),
       ),
+    };
+  },
+});
+
+/* ─── check-in system ─────────────────────────────────────────── */
+export const toggleCheckIn = authMutation({
+  args: { ticketId: v.id("tickets"), checkedIn: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new Error("Ticket nicht gefunden");
+    await ctx.db.patch(args.ticketId, {
+      checkedIn: args.checkedIn,
+      checkedInAt: args.checkedIn ? Date.now() : undefined,
+    });
+    return null;
+  },
+});
+
+export const togglePaid = authMutation({
+  args: { ticketId: v.id("tickets"), paid: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new Error("Ticket nicht gefunden");
+    await ctx.db.patch(args.ticketId, { paid: args.paid });
+    return null;
+  },
+});
+
+export const getEventCheckInStats = authQuery({
+  args: { eventId: v.id("events") },
+  returns: v.object({
+    totalTickets: v.number(),
+    checkedIn: v.number(),
+    notCheckedIn: v.number(),
+    paid: v.number(),
+    unpaid: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const tickets = await ctx.db
+      .query("tickets")
+      .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
+      .collect();
+    const activeTickets = tickets.filter((t) => t.status !== "canceled");
+    const checkedIn = activeTickets.filter((t) => t.checkedIn).length;
+    const paidCount = activeTickets.filter((t) => t.paid).length;
+    return {
+      totalTickets: activeTickets.length,
+      checkedIn,
+      notCheckedIn: activeTickets.length - checkedIn,
+      paid: paidCount,
+      unpaid: activeTickets.length - paidCount,
     };
   },
 });

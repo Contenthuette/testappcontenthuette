@@ -184,13 +184,19 @@ export default defineSchema({
   tickets: defineTable({
     eventId: v.id("events"),
     userId: v.id("users"),
-    qrCode: v.string(),
+    buyerName: v.optional(v.string()),
+    buyerEmail: v.optional(v.string()),
+    qrCode: v.optional(v.string()),
     status: v.union(v.literal("active"), v.literal("scanned"), v.literal("canceled"), v.literal("expired")),
+    paid: v.optional(v.boolean()),
+    checkedIn: v.optional(v.boolean()),
+    checkedInAt: v.optional(v.number()),
     purchasedAt: v.number(),
     scannedAt: v.optional(v.number()),
   })
     .index("by_eventId", ["eventId"])
     .index("by_eventId_and_purchasedAt", ["eventId", "purchasedAt"])
+    .index("by_eventId_and_checkedIn", ["eventId", "checkedIn"])
     .index("by_userId", ["userId"])
     .index("by_qrCode", ["qrCode"])
     .index("by_purchasedAt", ["purchasedAt"]),

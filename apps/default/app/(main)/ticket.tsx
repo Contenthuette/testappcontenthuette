@@ -27,8 +27,8 @@ export default function TicketScreen() {
   }
 
   const statusConfig: Record<string, { color: string; label: string }> = {
-    active: { color: colors.success, label: "Gültig" },
-    scanned: { color: colors.gray500, label: "Eingelöst" },
+    active: { color: colors.success, label: "G\u00fcltig" },
+    scanned: { color: colors.gray500, label: "Eingel\u00f6st" },
     canceled: { color: colors.danger, label: "Storniert" },
     expired: { color: colors.gray400, label: "Abgelaufen" },
   };
@@ -64,12 +64,39 @@ export default function TicketScreen() {
             <View style={styles.tearCircle} />
           </View>
 
-          {/* QR */}
-          <View style={styles.qrSection}>
-            <View style={styles.qrBox}>
-              <SymbolView name="qrcode" size={100} tintColor={colors.black} />
+          {/* Buyer info instead of QR */}
+          <View style={styles.buyerSection}>
+            <View style={styles.buyerIconCircle}>
+              <SymbolView name="person.fill" size={28} tintColor={colors.black} />
             </View>
-            <Text style={styles.qrCode}>{ticket.qrCode}</Text>
+
+            <View style={styles.buyerField}>
+              <Text style={styles.buyerLabel}>Name</Text>
+              <Text style={styles.buyerValue}>{ticket.buyerName}</Text>
+            </View>
+
+            <View style={styles.buyerField}>
+              <Text style={styles.buyerLabel}>E-Mail</Text>
+              <Text style={styles.buyerValue} selectable>{ticket.buyerEmail}</Text>
+            </View>
+
+            {/* Payment status */}
+            <View style={[
+              styles.paymentPill,
+              ticket.paid ? styles.paymentPaid : styles.paymentUnpaid,
+            ]}>
+              <SymbolView
+                name={ticket.paid ? "checkmark.circle.fill" : "clock"}
+                size={14}
+                tintColor={ticket.paid ? colors.success : "#F59E0B"}
+              />
+              <Text style={[
+                styles.paymentText,
+                { color: ticket.paid ? colors.success : "#F59E0B" },
+              ]}>
+                {ticket.paid ? "Bezahlt" : "Nicht bezahlt"}
+              </Text>
+            </View>
           </View>
 
           <Text style={styles.ticketId}>Ticket #{ticket._id.slice(-8).toUpperCase()}</Text>
@@ -132,23 +159,42 @@ const styles = StyleSheet.create({
     borderColor: colors.gray200,
   },
 
-  qrSection: { alignItems: "center", paddingVertical: spacing.md },
-  qrBox: {
-    width: 140,
-    height: 140,
-    borderRadius: radius.md,
-    backgroundColor: colors.gray50,
+  buyerSection: { alignItems: "center", paddingVertical: spacing.md, gap: spacing.lg },
+  buyerIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
-    borderCurve: "continuous",
+    marginBottom: spacing.sm,
   },
-  qrCode: {
+  buyerField: { alignItems: "center" },
+  buyerLabel: {
     fontSize: 11,
+    fontWeight: "600",
     color: colors.gray400,
-    marginTop: spacing.md,
-    fontVariant: ["tabular-nums"],
+    textTransform: "uppercase",
     letterSpacing: 1,
+    marginBottom: 2,
   },
+  buyerValue: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  paymentPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    marginTop: spacing.sm,
+  },
+  paymentPaid: { backgroundColor: "rgba(34,197,94,0.1)" },
+  paymentUnpaid: { backgroundColor: "rgba(245,158,11,0.1)" },
+  paymentText: { fontSize: 13, fontWeight: "600" },
 
   ticketId: {
     fontSize: 12,

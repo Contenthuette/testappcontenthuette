@@ -8,6 +8,22 @@ const migrations = new Migrations<DataModel>(components.migrations);
 
 export const run = migrations.runner();
 
+// Backfill tickets with new fields (buyerName, buyerEmail, paid, checkedIn)
+export const backfillTicketFields = migrations.define({
+  table: "tickets",
+  migrateOne: async (ctx, doc) => {
+    const patch: Record<string, unknown> = {};
+    if (doc.buyerName === undefined || doc.buyerEmail === undefined) {
+      const user = await ctx.db.get(doc.userId);
+      if (doc.buyerName === undefined) patch.buyerName = user?.name ?? "Unbekannt";
+      if (doc.buyerEmail === undefined) patch.buyerEmail = user?.email ?? "";
+    }
+    if (doc.paid === undefined) patch.paid = false;
+    if (doc.checkedIn === undefined) patch.checkedIn = false;
+    if (Object.keys(patch).length > 0) return patch;
+  },
+});
+
 // =============================================================================
 // DEFINING MIGRATIONS
 // =============================================================================

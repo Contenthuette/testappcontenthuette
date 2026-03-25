@@ -169,11 +169,14 @@ export const buyTicket = authMutation({
   args: { eventId: v.id("events") },
   returns: v.union(
     v.null(),
-    v.object({ ticketId: v.id("tickets"), qrCode: v.string() }),
+    v.object({ ticketId: v.id("tickets") }),
   ),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+
+    const user = await ctx.db.get(myUserId);
+    if (!user) throw new Error("User not found");
 
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new Error("Event not found");
@@ -184,19 +187,29 @@ export const buyTicket = authMutation({
       throw new Error("Event is sold out");
     }
 
-    const purchasedAt = Date.now();
-    const qrCode = `Z-${args.eventId.slice(-6)}-${myUserId.slice(-6)}-${purchasedAt.toString(36)}`.toUpperCase();
+    // Check if user already has an active ticket for this event
+    const existing = await ctx.db
+      .query("tickets")
+      .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
+      .collect();
+    const alreadyHas = existing.find(
+      (t) => t.userId === myUserId && (t.status === "active" || t.status === "scanned"),
+    );
+    if (alreadyHas) throw new Error("Du hast bereits ein Ticket");
 
     const ticketId = await ctx.db.insert("tickets", {
       eventId: args.eventId,
       userId: myUserId,
-      qrCode,
+      buyerName: user.name,
+      buyerEmail: user.email,
       status: "active",
-      purchasedAt,
+      paid: false,
+      checkedIn: false,
+      purchasedAt: Date.now(),
     });
 
     await ctx.db.patch(args.eventId, { soldTickets: event.soldTickets + 1 });
-    return { ticketId, qrCode };
+    return { ticketId };
   },
 });
 
@@ -211,13 +224,16 @@ export const getMyTickets = authQuery({
       eventDate: v.string(),
       eventCity: v.string(),
       eventVenue: v.string(),
-      qrCode: v.string(),
+      buyerName: v.string(),
+      buyerEmail: v.string(),
       status: v.union(
         v.literal("active"),
         v.literal("scanned"),
         v.literal("canceled"),
         v.literal("expired"),
       ),
+      paid: v.boolean(),
+      checkedIn: v.boolean(),
       purchasedAt: v.number(),
     }),
   ),
@@ -242,50 +258,14 @@ export const getMyTickets = authQuery({
           eventDate: event.date,
           eventCity: event.city,
           eventVenue: event.venue,
-          qrCode: ticket.qrCode,
+          buyerName: ticket.buyerName ?? "Unbekannt",
+          buyerEmail: ticket.buyerEmail ?? "",
           status: ticket.status,
+          paid: ticket.paid ?? false,
+          checkedIn: ticket.checkedIn ?? false,
           purchasedAt: ticket.purchasedAt,
         };
       }),
     )).flatMap((ticket) => (ticket ? [ticket] : []));
-  },
-});
-
-// Scan/validate ticket (admin)
-export const scanTicket = authMutation({
-  args: { qrCode: v.string() },
-  returns: v.object({
-    valid: v.boolean(),
-    message: v.string(),
-    ticketId: v.optional(v.id("tickets")),
-  }),
-  handler: async (ctx, args) => {
-    const authId = ctx.user._id;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", authId))
-      .unique();
-    if (!user || user.role !== "admin") {
-      return { valid: false, message: "Unauthorized" };
-    }
-
-    const ticket = await ctx.db
-      .query("tickets")
-      .withIndex("by_qrCode", (q) => q.eq("qrCode", args.qrCode))
-      .unique();
-    if (!ticket) return { valid: false, message: "Ticket not found" };
-    if (ticket.status === "scanned") return { valid: false, message: "Ticket already scanned" };
-    if (ticket.status === "canceled") return { valid: false, message: "Ticket canceled" };
-    if (ticket.status === "expired") return { valid: false, message: "Ticket expired" };
-
-    await ctx.db.patch(ticket._id, {
-      status: "scanned",
-      scannedAt: Date.now(),
-    });
-    return {
-      valid: true,
-      message: "Ticket validated successfully",
-      ticketId: ticket._id,
-    };
   },
 });
