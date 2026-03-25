@@ -434,7 +434,7 @@ export default function FeedScreen() {
           }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabZLogo, activeTab === "partners" && styles.tabZLogoActive]}>Z</Text>
+          <ZLogo size={16} tint={activeTab === "partners" ? colors.white : colors.gray500} />
           <Text style={[styles.tabText, activeTab === "partners" && styles.tabTextActive]}>Partner</Text>
         </TouchableOpacity>
       </View>
@@ -514,15 +514,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   tabTextActive: {
-    color: colors.white,
-  },
-  tabZLogo: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: colors.gray500,
-    letterSpacing: -0.5,
-  },
-  tabZLogoActive: {
     color: colors.white,
   },
 

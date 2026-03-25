@@ -7,16 +7,17 @@ const Z_LOGO = require("../../../assets/images/chatgpt-image-17.-jan.-2026-21-56
 
 interface ZLogoProps {
   size?: number;
+  tint?: string;
 }
 
 /**
  * Z logo — renders the PNG directly (black Z on transparent bg).
  * Falls back to a styled "Z" text if the image ever fails to load.
  *
- * IMPORTANT: Do NOT add tintColor — the image is already black.
- * Adding tintColor causes intermittent rendering glitches across platforms.
+ * Pass `tint` to recolor the logo (e.g. white on dark backgrounds).
+ * The default (no tint) keeps the original black image untouched.
  */
-export function ZLogo({ size = 32 }: ZLogoProps) {
+export function ZLogo({ size = 32, tint }: ZLogoProps) {
   const [imgFailed, setImgFailed] = useState(false);
 
   if (imgFailed) {
@@ -28,7 +29,11 @@ export function ZLogo({ size = 32 }: ZLogoProps) {
         ]}
       >
         <Text
-          style={[styles.fallbackText, { fontSize: size * 0.55, lineHeight: size }]}
+          style={[
+            styles.fallbackText,
+            tint ? { color: tint } : undefined,
+            { fontSize: size * 0.55, lineHeight: size },
+          ]}
           allowFontScaling={false}
         >
           Z
@@ -40,7 +45,10 @@ export function ZLogo({ size = 32 }: ZLogoProps) {
   return (
     <Image
       source={Z_LOGO}
-      style={{ width: size, height: size }}
+      style={[
+        { width: size, height: size },
+        tint ? { tintColor: tint } : undefined,
+      ]}
       contentFit="contain"
       cachePolicy="memory-disk"
       transition={0}

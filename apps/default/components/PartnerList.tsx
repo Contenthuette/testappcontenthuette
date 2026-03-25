@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
+import { ZLogo } from "@/components/ZLogo";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -49,7 +50,7 @@ export function PartnerList() {
           </View>
         )}
         <View style={styles.partnerBadge}>
-          <Text style={styles.partnerBadgeZ}>Z</Text>
+          <ZLogo size={13} tint={colors.white} />
           <Text style={styles.partnerBadgeText}>PARTNER</Text>
         </View>
       </View>
@@ -129,7 +130,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
   },
-  partnerBadgeZ: { fontSize: 12, fontWeight: "900", color: colors.white, letterSpacing: -0.5 },
   partnerBadgeText: { fontSize: 11, fontWeight: "700", color: colors.white, letterSpacing: 0.5 },
   cardBody: { padding: spacing.lg },
   cardName: {
