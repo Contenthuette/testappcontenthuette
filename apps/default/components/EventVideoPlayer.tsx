@@ -133,9 +133,7 @@ export function EventVideoPlayer({ videoUrl, thumbnailUrl }: EventVideoPlayerPro
         const ratio = Math.max(0, Math.min(1, x / barWidth.current));
         setSeekTime(ratio * duration);
       },
-      onPanResponderMove: (evt, gestureState) => {
-        const x = Math.max(0, evt.nativeEvent.locationX + (gestureState.dx - gestureState.dx));
-        // Use pageX relative to bar position
+      onPanResponderMove: (evt) => {
         const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / barWidth.current));
         setSeekTime(ratio * duration);
       },
