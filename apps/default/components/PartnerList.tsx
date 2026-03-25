@@ -10,10 +10,11 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
-import { ZLogo } from "@/components/ZLogo";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
+
+const Z_LOGO_WHITE = require("../../../assets/images/z-logo-white.png");
 
 interface PartnerItem {
   _id: Id<"partners">;
@@ -50,7 +51,13 @@ export function PartnerList() {
           </View>
         )}
         <View style={styles.partnerBadge}>
-          <ZLogo size={13} tint={colors.white} />
+          <Image
+            source={Z_LOGO_WHITE}
+            style={{ width: 13, height: 13 }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            transition={0}
+          />
           <Text style={styles.partnerBadgeText}>PARTNER</Text>
         </View>
       </View>
