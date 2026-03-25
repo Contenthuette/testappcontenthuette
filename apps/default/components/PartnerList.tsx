@@ -14,8 +14,6 @@ import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
 
-const Z_LOGO_WHITE = require("../../../assets/images/z-logo-white.png");
-
 interface PartnerItem {
   _id: Id<"partners">;
   businessName: string;
@@ -51,13 +49,7 @@ export function PartnerList() {
           </View>
         )}
         <View style={styles.partnerBadge}>
-          <Image
-            source={Z_LOGO_WHITE}
-            style={{ width: 13, height: 13 }}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            transition={0}
-          />
+          <SymbolView name="handshake" size={13} tintColor={colors.white} />
           <Text style={styles.partnerBadgeText}>PARTNER</Text>
         </View>
       </View>
