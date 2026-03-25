@@ -174,7 +174,6 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     mediaTypes: ["videos"],
     allowsEditing: opts?.allowsEditing ?? false,
     quality: opts?.quality ?? 0.5,
-    videoMaxDuration: MEDIA_UPLOAD_LIMITS.maxVideoDurationMs / 1000,
   });
   if (result.canceled || !result.assets?.[0]) return null;
 
