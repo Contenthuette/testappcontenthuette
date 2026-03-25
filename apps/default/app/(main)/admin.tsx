@@ -226,6 +226,10 @@ export default function AdminDashboard() {
   const refreshAnalyticsSnapshot = useMutation(api.admin.refreshAnalyticsSnapshot);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
+  /* ── Partners ── */
+  const partners = useQuery(api.admin.listPartners, isAuthenticated ? {} : "skip");
+  const deletePartnerMut = useMutation(api.admin.deletePartner);
+
   /* ── Announcements ── */
   const currentAnnouncement = useQuery(api.admin.getActiveAnnouncement, isAuthenticated ? {} : "skip");
   const createAnnouncement = useMutation(api.admin.createAnnouncement);
@@ -301,6 +305,27 @@ export default function AdminDashboard() {
       }
     },
     [deleteEvent],
+  );
+
+  const handleDeletePartner = useCallback(
+    (partnerId: Id<"partners">, name: string) => {
+      const doDelete = async () => {
+        try {
+          await deletePartnerMut({ partnerId });
+        } catch {
+          if (Platform.OS !== "web") Alert.alert("Fehler", "Partner konnte nicht gel\u00f6scht werden");
+        }
+      };
+      if (Platform.OS !== "web") {
+        Alert.alert("Partner l\u00f6schen", `"${name}" wirklich l\u00f6schen?`, [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "L\u00f6schen", style: "destructive", onPress: doDelete },
+        ]);
+      } else {
+        doDelete();
+      }
+    },
+    [deletePartnerMut],
   );
 
   if (!stats) {
@@ -603,6 +628,66 @@ export default function AdminDashboard() {
                 onEdit={() => router.push(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
               />
+            ))
+          )}
+        </Card>
+
+        {/* ── Z Partner ────────────────────────────────── */}
+        <Card
+          title="Z Partner"
+          icon="building.2"
+          action={
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => router.push("/(main)/admin-partner-form" as "/")}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="plus" size={14} tintColor={colors.white} />
+            </TouchableOpacity>
+          }
+        >
+          {!partners ? (
+            <ActivityIndicator size="small" color={colors.gray400} />
+          ) : partners.length === 0 ? (
+            <View style={styles.emptyEvents}>
+              <SymbolView name="building.2" size={28} tintColor={colors.gray300} />
+              <Text style={styles.emptyText}>Noch keine Partner</Text>
+            </View>
+          ) : (
+            partners.map((p) => (
+              <View key={p._id} style={styles.eventCard}>
+                <View style={styles.eventHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.eventName}>{p.businessName}</Text>
+                    <Text style={styles.eventMeta}>
+                      {p.city || "Kein Ort"} \u00b7 {p.status === "active" ? "Aktiv" : "Inaktiv"}
+                    </Text>
+                  </View>
+                  <View style={[styles.eventBadge, p.status !== "active" && { backgroundColor: colors.gray100 }]}>
+                    <Text style={[styles.eventBadgeText, p.status !== "active" && { color: colors.gray400 }]}>
+                      {p.status === "active" ? "\u2713 Live" : "Inaktiv"}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.eventExpanded, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray200 }]}>
+                  <View style={styles.eventActions}>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/(main)/admin-partner-form?partnerId=${p._id}` as "/")}
+                      style={styles.eventActionBtn}
+                    >
+                      <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
+                      <Text style={styles.eventActionText}>Bearbeiten</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeletePartner(p._id, p.businessName)}
+                      style={[styles.eventActionBtn, styles.eventDeleteBtn]}
+                    >
+                      <SymbolView name="trash" size={13} tintColor={colors.danger} />
+                      <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
             ))
           )}
         </Card>

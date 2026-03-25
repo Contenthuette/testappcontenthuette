@@ -19,6 +19,7 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import { useIsFocused } from "@react-navigation/native";
 import { ShareSheet } from "@/components/ShareSheet";
 import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
+import { PartnerList } from "@/components/PartnerList";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 
@@ -47,6 +48,8 @@ interface FeedItem {
   isOwn: boolean;
   createdAt: number;
 }
+
+type FeedTab = "feed" | "partners";
 
 // ── Helpers (module-level, zero cost) ─────────────
 function formatTime(ts: number): string {
@@ -271,10 +274,11 @@ const FeedPost = memo(function FeedPost({
   );
 });
 
-// ── Main Feed Screen ──────────────────────────────
+// ── Main Feed Screen ────────────────────────────────────────
 export default function FeedScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { isAuthenticated } = useConvexAuth();
+  const [activeTab, setActiveTab] = useState<FeedTab>("feed");
   const {
     results: feed,
     status: feedStatus,
@@ -405,30 +409,66 @@ export default function FeedScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={feed}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        getItemLayout={getItemLayout}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        viewabilityConfig={viewabilityConfig}
-        onViewableItemsChanged={onViewableItemsChanged}
-        onScrollEndDrag={onScrollEndDrag}
-        onEndReached={() => {
-          if (feedStatus === "CanLoadMore") loadMore(10);
-        }}
-        onEndReachedThreshold={0.6}
-        removeClippedSubviews
-        maxToRenderPerBatch={4}
-        windowSize={5}
-        initialNumToRender={3}
-        updateCellsBatchingPeriod={30}
-        ListEmptyComponent={listEmpty}
-        ListFooterComponent={listFooter}
-      />
+      {/* Tab Toggle */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === "feed" && styles.tabBtnActive]}
+          onPress={() => {
+            if (activeTab !== "feed") {
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+              setActiveTab("feed");
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <SymbolView name="rectangle.stack" size={16} tintColor={activeTab === "feed" ? colors.white : colors.gray500} />
+          <Text style={[styles.tabText, activeTab === "feed" && styles.tabTextActive]}>Feed</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === "partners" && styles.tabBtnActive]}
+          onPress={() => {
+            if (activeTab !== "partners") {
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+              setActiveTab("partners");
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabZLogo, activeTab === "partners" && styles.tabZLogoActive]}>Z</Text>
+          <Text style={[styles.tabText, activeTab === "partners" && styles.tabTextActive]}>Partner</Text>
+        </TouchableOpacity>
+      </View>
 
-      <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
+      {activeTab === "partners" ? (
+        <PartnerList />
+      ) : (
+        <>
+          <FlatList
+            data={feed}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            getItemLayout={getItemLayout}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            viewabilityConfig={viewabilityConfig}
+            onViewableItemsChanged={onViewableItemsChanged}
+            onScrollEndDrag={onScrollEndDrag}
+            onEndReached={() => {
+              if (feedStatus === "CanLoadMore") loadMore(10);
+            }}
+            onEndReachedThreshold={0.6}
+            removeClippedSubviews
+            maxToRenderPerBatch={4}
+            windowSize={5}
+            initialNumToRender={3}
+            updateCellsBatchingPeriod={30}
+            ListEmptyComponent={listEmpty}
+            ListFooterComponent={listFooter}
+          />
+
+          <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -445,6 +485,47 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 26, fontWeight: "800", color: colors.black, letterSpacing: -0.5 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+
+  /* Tab Toggle */
+  tabRow: {
+    flexDirection: "row",
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    padding: 3,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 9,
+    borderRadius: radius.full,
+    gap: 6,
+  },
+  tabBtnActive: {
+    backgroundColor: colors.black,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray500,
+    letterSpacing: -0.2,
+  },
+  tabTextActive: {
+    color: colors.white,
+  },
+  tabZLogo: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: colors.gray500,
+    letterSpacing: -0.5,
+  },
+  tabZLogoActive: {
+    color: colors.white,
+  },
+
   list: { paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
   loadMoreBtn: {

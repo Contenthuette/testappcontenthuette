@@ -781,6 +781,103 @@ export const listPartners = authQuery({
   },
 });
 
+export const getPartnerDetail = authQuery({
+  args: { partnerId: v.id("partners") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("partners"),
+      businessName: v.string(),
+      shortText: v.string(),
+      description: v.optional(v.string()),
+      thumbnailUrl: v.optional(v.string()),
+      website: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      address: v.optional(v.string()),
+      city: v.optional(v.string()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const p = await ctx.db.get(args.partnerId);
+    if (!p) return null;
+    return {
+      _id: p._id,
+      businessName: p.businessName,
+      shortText: p.shortText,
+      description: p.description,
+      thumbnailUrl: p.thumbnailStorageId
+        ? (await ctx.storage.getUrl(p.thumbnailStorageId)) ?? undefined
+        : p.thumbnailUrl,
+      website: p.website,
+      phone: p.phone,
+      address: p.address,
+      city: p.city,
+      isActive: p.isActive,
+      createdAt: p.createdAt,
+    };
+  },
+});
+
+export const updatePartner = authMutation({
+  args: {
+    partnerId: v.id("partners"),
+    businessName: v.optional(v.string()),
+    shortText: v.optional(v.string()),
+    description: v.optional(v.string()),
+    website: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    city: v.optional(v.string()),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+    isActive: v.optional(v.boolean()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const { partnerId, ...updates } = args;
+    const partner = await ctx.db.get(partnerId);
+    if (!partner) throw new Error("Partner not found");
+    const patch: Record<string, unknown> = {};
+    if (updates.businessName !== undefined) patch.businessName = updates.businessName;
+    if (updates.shortText !== undefined) patch.shortText = updates.shortText;
+    if (updates.description !== undefined) patch.description = updates.description;
+    if (updates.website !== undefined) patch.website = updates.website;
+    if (updates.phone !== undefined) patch.phone = updates.phone;
+    if (updates.address !== undefined) patch.address = updates.address;
+    if (updates.city !== undefined) patch.city = updates.city;
+    if (updates.isActive !== undefined) patch.isActive = updates.isActive;
+    if (updates.thumbnailStorageId !== undefined) {
+      patch.thumbnailStorageId = updates.thumbnailStorageId;
+      patch.thumbnailUrl = undefined;
+    }
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(partnerId, patch);
+    }
+    return null;
+  },
+});
+
+export const deletePartner = authMutation({
+  args: { partnerId: v.id("partners") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const partner = await ctx.db.get(args.partnerId);
+    if (!partner) throw new Error("Partner not found");
+    if (partner.thumbnailStorageId) {
+      await ctx.storage.delete(partner.thumbnailStorageId);
+    }
+    if (partner.mediaStorageId) {
+      await ctx.storage.delete(partner.mediaStorageId);
+    }
+    await ctx.db.delete(args.partnerId);
+    return null;
+  },
+});
+
 /* ─── moderation ──────────────────────────────────────────────── */
 export const suspendUser = authMutation({
   args: { userId: v.id("users") },
