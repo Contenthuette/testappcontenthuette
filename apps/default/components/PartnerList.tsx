@@ -70,8 +70,7 @@ export function PartnerList() {
             }}
             activeOpacity={0.7}
           >
-            <SymbolView name="globe" size={14} tintColor={colors.white} />
-            <Text style={styles.websiteBtnText}>Website besuchen</Text>
+            <Text style={styles.websiteBtnText}>Webseite besuchen</Text>
             <SymbolView name="arrow.up.right" size={11} tintColor={colors.white} />
           </TouchableOpacity>
         )}
