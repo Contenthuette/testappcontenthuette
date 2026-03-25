@@ -654,7 +654,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Partner</Text>
             </View>
           ) : (
-            partners.map((p) => (
+            partners.map((p: { _id: Id<"partners">; businessName: string; city?: string; status: string }) => (
               <View key={p._id} style={styles.eventCard}>
                 <View style={styles.eventHeader}>
                   <View style={{ flex: 1 }}>
