@@ -3,7 +3,15 @@ import { View, Platform } from "react-native";
 import { WebView } from "react-native-webview";
 import type { WebView as WebViewType } from "react-native-webview";
 
-export type SoundType = "tap" | "success" | "error" | "send" | "receive" | "ringtone" | "hangup";
+export type SoundType =
+  | "tap"
+  | "success"
+  | "error"
+  | "send"
+  | "receive"
+  | "ringtone"
+  | "ringback"
+  | "hangup";
 
 interface SoundContextValue {
   playSound: (type: SoundType) => void;
@@ -30,7 +38,9 @@ function C(){
   if(ctx.state==='suspended') ctx.resume();
   return ctx;
 }
-var ri=null;
+var ringtoneInterval=null;
+var ringbackInterval=null;
+var ringbackTimeout=null;
 
 function osc(f,t0,dur,vol,type){
   var c=C();
@@ -48,7 +58,6 @@ function osc(f,t0,dur,vol,type){
 function tap(){
   var c=C(),t=c.currentTime;
   osc(1200,t,0.035,0.12);
-  // add a subtle harmonic for richness
   osc(2400,t,0.02,0.04);
 }
 
@@ -84,32 +93,54 @@ function hangup(){
   osc([400,260],t+0.3,0.3,0.12,'sine');
 }
 
-function ringOnce(){
+function ringtoneOnce(){
   var c=C(),t=c.currentTime;
-  // Modern two-tone chime
   osc(523,t,0.18,0.22);
   osc(659,t+0.15,0.18,0.25);
-  // Subtle overtones
   osc(1046,t,0.12,0.06);
   osc(1318,t+0.15,0.12,0.06);
 }
 
-function startRing(){
-  stopRing();
-  ringOnce();
-  ri=setInterval(ringOnce,1500);
-}
-function stopRing(){
-  if(ri){clearInterval(ri);ri=null;}
+function ringbackPulse(){
+  var c=C(),t=c.currentTime;
+  osc(440,t,0.16,0.08,'sine');
+  osc(554,t+0.18,0.16,0.06,'sine');
 }
 
-var H={tap:tap,success:success,error:error,send:send,receive:receive,ringtone:startRing,hangup:hangup};
+function startRingtone(){
+  stopRingtone();
+  ringtoneOnce();
+  ringtoneInterval=setInterval(ringtoneOnce,1500);
+}
+
+function stopRingtone(){
+  if(ringtoneInterval){clearInterval(ringtoneInterval);ringtoneInterval=null;}
+}
+
+function ringbackBurst(){
+  ringbackPulse();
+  ringbackTimeout=setTimeout(ringbackPulse,380);
+}
+
+function startRingback(){
+  stopRingback();
+  ringbackBurst();
+  ringbackInterval=setInterval(ringbackBurst,1800);
+}
+
+function stopRingback(){
+  if(ringbackInterval){clearInterval(ringbackInterval);ringbackInterval=null;}
+  if(ringbackTimeout){clearTimeout(ringbackTimeout);ringbackTimeout=null;}
+}
+
+var PLAY={tap:tap,success:success,error:error,send:send,receive:receive,ringtone:startRingtone,ringback:startRingback,hangup:hangup};
+var STOP={ringtone:stopRingtone,ringback:stopRingback};
 
 function onMsg(e){
   try{
     var d=JSON.parse(e.data);
-    if(d.a==='p'&&H[d.t]) H[d.t]();
-    else if(d.a==='s'&&d.t==='ringtone') stopRing();
+    if(d.a==='p'&&PLAY[d.t]) PLAY[d.t]();
+    else if(d.a==='s'&&STOP[d.t]) STOP[d.t]();
   }catch(x){}
 }
 window.addEventListener('message',onMsg);
@@ -125,10 +156,10 @@ if(window.ReactNativeWebView){
 export function SoundProvider({ children }: { children: React.ReactNode }) {
   const webViewRef = useRef<WebViewType>(null);
   const [isReady, setIsReady] = useState(false);
-  const queueRef = useRef<Array<{ a: string; t: string }>>([]);
+  const queueRef = useRef<Array<{ a: string; t: SoundType }>>([]);
 
   const sendMessage = useCallback(
-    (msg: { a: string; t: string }) => {
+    (msg: { a: string; t: SoundType }) => {
       if (isReady && webViewRef.current) {
         webViewRef.current.postMessage(JSON.stringify(msg));
       } else {

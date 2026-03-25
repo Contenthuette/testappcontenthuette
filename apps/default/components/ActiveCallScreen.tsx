@@ -30,7 +30,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const endCallMutation = useMutation(api.calls.endCall);
   const me = useQuery(api.users.me);
   const { minimizeCall } = useCallContext();
-  const { playSound } = useSound();
+  const { playSound, stopSound } = useSound();
 
   const hangingUpRef = useRef(false);
   const [callDuration, setCallDuration] = useState(0);
@@ -77,6 +77,16 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     return "ringing" as const;
   }, [call, connectionState, isSupported]);
 
+  useEffect(() => {
+    if (!isInitiator || phase !== "ringing") {
+      stopSound("ringback");
+      return;
+    }
+
+    playSound("ringback");
+    return () => stopSound("ringback");
+  }, [isInitiator, phase, playSound, stopSound]);
+
   // Call duration timer
   useEffect(() => {
     if (phase !== "live") return;
@@ -87,13 +97,14 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   // Auto-dismiss when call ends
   useEffect(() => {
     if (phase === "ended") {
+      stopSound("ringback");
       cleanupWebRTC();
       const timeout = setTimeout(() => {
         if (router.canGoBack()) router.back();
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [phase, cleanupWebRTC]);
+  }, [phase, cleanupWebRTC, stopSound]);
 
   function formatTime(secs: number) {
     const m = Math.floor(secs / 60);
@@ -106,6 +117,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const handleHangUp = useCallback(() => {
     if (hangingUpRef.current) return;
     hangingUpRef.current = true;
+    stopSound("ringback");
     playSound("hangup");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -114,7 +126,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     setTimeout(() => {
       if (router.canGoBack()) router.back();
     }, 400);
-  }, [callId, endCallMutation, playSound, cleanupWebRTC]);
+  }, [callId, endCallMutation, playSound, cleanupWebRTC, stopSound]);
 
   const handleToggleMute = useCallback(() => {
     playSound("tap");
@@ -242,6 +254,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 pressed && { opacity: 0.7 },
               ]}
               onPress={() => {
+                stopSound("ringback");
                 cleanupWebRTC();
                 endCallMutation({ callId }).catch(() => {});
                 if (router.canGoBack()) router.back();
