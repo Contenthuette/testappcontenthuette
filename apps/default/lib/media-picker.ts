@@ -44,7 +44,6 @@ export interface PickerResult {
 export const MEDIA_UPLOAD_LIMITS = {
   maxImageDimension: 1_920,
   maxVideoDurationMs: 90_000,
-  maxVideoFileSizeBytes: 40 * 1024 * 1024,
 } as const;
 
 function getMediaType(mediaType: MediaType): ImagePicker.MediaType[] {
@@ -113,7 +112,6 @@ async function compressImage(
 
 function getVideoValidationError(asset: {
   duration?: number | null;
-  fileSize?: number;
 }): string | null {
   if (
     asset.duration !== undefined &&
@@ -121,13 +119,6 @@ function getVideoValidationError(asset: {
     asset.duration > MEDIA_UPLOAD_LIMITS.maxVideoDurationMs
   ) {
     return "Videos dürfen aktuell maximal 90 Sekunden lang sein.";
-  }
-
-  if (
-    asset.fileSize !== undefined &&
-    asset.fileSize > MEDIA_UPLOAD_LIMITS.maxVideoFileSizeBytes
-  ) {
-    return `Dieses Video ist zu groß (${formatBytes(asset.fileSize)}). Bitte bleib unter 40 MB.`;
   }
 
   return null;
@@ -182,18 +173,17 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["videos"],
     allowsEditing: opts?.allowsEditing ?? false,
-    quality: opts?.quality ?? 0.7,
+    quality: opts?.quality ?? 0.5,
+    videoMaxDuration: MEDIA_UPLOAD_LIMITS.maxVideoDurationMs / 1000,
   });
   if (result.canceled || !result.assets?.[0]) return null;
 
   const asset = result.assets[0] as PickerAssetWithFileSize;
-  const fileSize = asset.fileSize;
   const validationError = getVideoValidationError({
     duration: asset.duration,
-    fileSize,
   });
   if (validationError) {
-    Alert.alert("Video zu groß", validationError);
+    Alert.alert("Video zu lang", validationError);
     return null;
   }
 
@@ -204,7 +194,7 @@ export async function pickVideo(opts?: PickerOptions): Promise<PickerResult | nu
     width: asset.width,
     height: asset.height,
     duration: asset.duration ?? undefined,
-    fileSize,
+    fileSize: asset.fileSize,
   };
 }
 
