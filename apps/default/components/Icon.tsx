@@ -83,6 +83,7 @@ import {
   FileSearch,
   Crown,
   CircleAlert,
+  Handshake,
   type LucideProps,
 } from "lucide-react-native";
 
@@ -229,6 +230,8 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "pencil.circle": PencilLine,
   crown: Crown,
   "crown.fill": Crown,
+  handshake: Handshake,
+  "handshake.fill": Handshake,
 };
 
 interface SymbolViewProps {
