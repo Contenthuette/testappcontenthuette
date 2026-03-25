@@ -6,14 +6,16 @@ import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
 
 const convex = new ConvexReactClient(
   process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://cheery-panther-475.convex.cloud",
-  { unsavedChangesWarning: false }
+  { unsavedChangesWarning: false },
 );
 
 export default function RootLayout() {
   return (
     <ConvexAuthProvider client={convex}>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+      <Stack
+        screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+      >
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(main)" />
