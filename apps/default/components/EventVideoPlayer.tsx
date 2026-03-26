@@ -96,6 +96,8 @@ export function EventVideoPlayer({ videoUrl, thumbnailUrl }: EventVideoPlayerPro
       setHasEnded(true);
       setIsPlaying(false);
       setShowControls(true);
+      setShowPlayer(false);
+      setCurrentTime(0);
       clearHideTimer();
     });
 
