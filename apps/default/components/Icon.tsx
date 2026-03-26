@@ -150,6 +150,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "camera.rotate": RefreshCcw,
   "camera.rotate.fill": RefreshCcw,
   "arrow.triangle.2.circlepath": RefreshCcw,
+  "arrow.counterclockwise": RefreshCcw,
   photo: ImageIcon,
   "photo.fill": ImageIcon,
   "photo.on.rectangle.angled": ImageIcon,
