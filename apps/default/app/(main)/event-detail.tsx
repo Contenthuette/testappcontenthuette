@@ -113,8 +113,6 @@ export default function EventDetailScreen() {
             </View>
           </View>
 
-          {event.description && <Text style={styles.desc}>{event.description}</Text>}
-
           {/* Video player */}
           {event.videoUrl && (
             <EventVideoPlayer
@@ -122,6 +120,8 @@ export default function EventDetailScreen() {
               thumbnailUrl={event.videoThumbnailUrl}
             />
           )}
+
+          {event.description && <Text style={styles.desc}>{event.description}</Text>}
         </View>
       </ScrollView>
 
