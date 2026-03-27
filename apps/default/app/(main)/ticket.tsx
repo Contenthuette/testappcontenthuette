@@ -79,24 +79,6 @@ export default function TicketScreen() {
               <Text style={styles.buyerLabel}>E-Mail</Text>
               <Text style={styles.buyerValue} selectable>{ticket.buyerEmail}</Text>
             </View>
-
-            {/* Payment status */}
-            <View style={[
-              styles.paymentPill,
-              ticket.paid ? styles.paymentPaid : styles.paymentUnpaid,
-            ]}>
-              <SymbolView
-                name={ticket.paid ? "checkmark.circle.fill" : "clock"}
-                size={14}
-                tintColor={ticket.paid ? colors.success : "#F59E0B"}
-              />
-              <Text style={[
-                styles.paymentText,
-                { color: ticket.paid ? colors.success : "#F59E0B" },
-              ]}>
-                {ticket.paid ? "Bezahlt" : "Nicht bezahlt"}
-              </Text>
-            </View>
           </View>
 
           <Text style={styles.ticketId}>Ticket #{ticket._id.slice(-8).toUpperCase()}</Text>
@@ -183,18 +165,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.black,
   },
-  paymentPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    marginTop: spacing.sm,
-  },
-  paymentPaid: { backgroundColor: "rgba(34,197,94,0.1)" },
-  paymentUnpaid: { backgroundColor: "rgba(245,158,11,0.1)" },
-  paymentText: { fontSize: 13, fontWeight: "600" },
 
   ticketId: {
     fontSize: 12,
