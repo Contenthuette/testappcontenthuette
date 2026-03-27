@@ -242,7 +242,7 @@ export default function EventAdminCheckin() {
                 {eventAdmins && eventAdmins.length > 0 && (
                   <View style={styles.currentAdmins}>
                     <Text style={styles.sectionLabel}>Aktuelle Helfer</Text>
-                    {eventAdmins.map((a) => (
+                    {eventAdmins.map((a: { _id: Id<"eventAdmins">; userName: string; status: string }) => (
                       <View key={a._id} style={styles.adminRow}>
                         <View style={styles.adminAvatar}><Text style={styles.adminInitial}>{a.userName.charAt(0).toUpperCase()}</Text></View>
                         <View style={{ flex: 1 }}>
@@ -263,7 +263,7 @@ export default function EventAdminCheckin() {
                   <SymbolView name="magnifyingglass" size={14} tintColor={colors.gray400} />
                   <TextInput style={styles.inviteSearchInput} value={inviteSearch} onChangeText={setInviteSearch} placeholder="Name suchen..." placeholderTextColor={colors.gray300} autoCorrect={false} autoCapitalize="none" />
                 </View>
-                {searchResults && searchResults.map((u) => (
+                {searchResults && searchResults.map((u: { _id: Id<"users">; name: string; email: string; alreadyInvited: boolean }) => (
                   <View key={u._id} style={styles.searchResultRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.searchResultName}>{u.name}</Text>

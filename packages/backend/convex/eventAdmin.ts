@@ -34,7 +34,7 @@ async function requireEventAccess(
 
 async function isGlobalAdmin(ctx: { user: { _id: string }; db: QueryCtx["db"] }): Promise<boolean> {
   const user = await getAppUser(ctx);
-  return user?.role === "admin" ?? false;
+  return (user?.role === "admin") === true;
 }
 
 const buyerValidator = v.object({

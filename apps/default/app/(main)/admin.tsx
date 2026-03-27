@@ -638,7 +638,7 @@ export default function AdminDashboard() {
                 key={ev._id}
                 event={ev}
                 expanded={expandedId === ev._id}
-                onToggle={() => setExpandedId((prev) => (prev === ev._id ? null : ev._id))}
+                onToggle={() => setExpandedId((prev: Id<"events"> | null) => (prev === ev._id ? null : ev._id))}
                 onEdit={() => router.push(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
               />
