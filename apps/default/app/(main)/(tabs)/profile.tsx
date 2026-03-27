@@ -180,14 +180,24 @@ export default function ProfileScreen() {
 
         {/* Admin shortcut */}
         {me.role === "admin" && (
-          <TouchableOpacity
-            style={styles.adminBtn}
-            onPress={() => router.push("/(main)/admin-login" as "/")}
-            activeOpacity={0.7}
-          >
-            <SymbolView name="shield.checkered" size={18} tintColor={colors.white} />
-            <Text style={styles.adminBtnText}>Admin Dashboard</Text>
-          </TouchableOpacity>
+          <View style={styles.adminSection}>
+            <TouchableOpacity
+              style={styles.adminBtn}
+              onPress={() => router.push("/(main)/admin-login" as "/")}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="shield.checkered" size={18} tintColor={colors.white} />
+              <Text style={styles.adminBtnText}>Admin Dashboard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eventAdminBtn}
+              onPress={() => router.push("/(main)/event-admin" as "/")}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="ticket" size={18} tintColor={colors.black} />
+              <Text style={styles.eventAdminBtnText}>Event Einlass</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -301,17 +311,35 @@ const styles = StyleSheet.create({
   emptyGridText: { fontSize: 14, color: colors.gray400 },
 
   adminBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.xxl,
     padding: spacing.lg,
     backgroundColor: colors.black,
     borderRadius: radius.md,
   },
   adminBtnText: { fontSize: 15, fontWeight: "600", color: colors.white },
+  adminSection: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xxl,
+  },
+  eventAdminBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    padding: spacing.lg,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  eventAdminBtnText: { fontSize: 15, fontWeight: "600", color: colors.black },
 
   videoCell: {
     width: "100%",
