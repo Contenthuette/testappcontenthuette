@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { authQuery, authMutation } from "./functions";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -217,6 +218,14 @@ export const initiateCall = authMutation({
       }),
     ]);
 
+    // Push notification for incoming call
+    await ctx.scheduler.runAfter(0, internal.pushNotifications.sendToUser, {
+      userId: args.receiverId,
+      title: args.type === "video" ? "Videoanruf" : "Eingehender Anruf",
+      body: `${me.name} ruft dich an`,
+      data: { type: "call", callId: String(callId) },
+    });
+
     return callId;
   },
 });
@@ -332,6 +341,13 @@ export const initiateGroupCall = authMutation({
             referenceId: callId,
             isRead: false,
             createdAt: now,
+          }),
+          // Push notification for each group member
+          ctx.scheduler.runAfter(0, internal.pushNotifications.sendToUser, {
+            userId: recipientId,
+            title: args.type === "video" ? "Gruppen-Videoanruf" : "Gruppenanruf",
+            body: `${me.name} ruft in ${group.name} an`,
+            data: { type: "call", callId: String(callId) },
           }),
         ]);
       }),
@@ -743,6 +759,30 @@ export const getSignals = authQuery({
       type: signal.type,
       payload: signal.payload,
     }));
+  },
+});
+
+// ── acknowledge (delete) processed signals ───────────────────────────────────
+export const ackSignals = authMutation({
+  args: {
+    signalIds: v.array(v.id("callSignaling")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myId = await resolveUserId(ctx);
+    if (!myId) return null;
+
+    // Delete each signal if it belongs to this user
+    await Promise.all(
+      args.signalIds.map(async (signalId) => {
+        const signal = await ctx.db.get(signalId);
+        if (signal && signal.recipientId === myId) {
+          await ctx.db.delete(signalId);
+        }
+      }),
+    );
+
+    return null;
   },
 });
 

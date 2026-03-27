@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import type { ComponentType } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -69,12 +69,19 @@ if (Platform.OS !== "web") {
   }
 }
 
-const ICE_SERVERS = [
+const DEFAULT_ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-] as const;
+];
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
+const SIGNAL_ACK_DEBOUNCE_MS = 1_500;
+
+interface IceServerConfig {
+  urls: string;
+  username?: string;
+  credential?: string;
+}
 
 interface UseWebRTCOptions {
   callId: Id<"calls"> | null;
@@ -95,6 +102,7 @@ export function useWebRTC({
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(!isVideo);
   const [setupComplete, setSetupComplete] = useState(false);
+  const [iceServers, setIceServers] = useState<Array<IceServerConfig>>(DEFAULT_ICE_SERVERS);
 
   const peerConnectionRef = useRef<RTCPeerConnectionLike | null>(null);
   const localStreamRef = useRef<MediaStreamLike | null>(null);
@@ -102,14 +110,54 @@ export function useWebRTC({
   const hasHandledOfferRef = useRef(false);
   const pendingCandidatesRef = useRef<Array<unknown>>([]);
   const setupDoneRef = useRef(false);
+  const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAckIdsRef = useRef<Array<Id<"callSignaling">>>([]);
 
   const sendSignal = useMutation(api.calls.sendSignal);
   const heartbeat = useMutation(api.calls.heartbeat);
+  const ackSignals = useMutation(api.calls.ackSignals);
+  const getIceServers = useAction(api.callActions.getIceServers);
   const signals = useQuery(
     api.calls.getSignals,
     callId && enabled ? { callId } : "skip",
   );
 
+  // Fetch TURN/STUN config from server on mount
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+
+    getIceServers({})
+      .then((servers) => {
+        if (!cancelled && servers.length > 0) {
+          setIceServers(servers);
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch ICE servers, using defaults:", error);
+      });
+
+    return () => { cancelled = true; };
+  }, [enabled, getIceServers]);
+
+  // Debounced signal acknowledgment — batches deletes to reduce mutations
+  const flushAcks = useCallback(() => {
+    if (pendingAckIdsRef.current.length === 0) return;
+    const ids = [...pendingAckIdsRef.current];
+    pendingAckIdsRef.current = [];
+    ackSignals({ signalIds: ids }).catch(() => {});
+  }, [ackSignals]);
+
+  const scheduleAck = useCallback(
+    (signalId: Id<"callSignaling">) => {
+      pendingAckIdsRef.current.push(signalId);
+      if (ackTimerRef.current) clearTimeout(ackTimerRef.current);
+      ackTimerRef.current = setTimeout(flushAcks, SIGNAL_ACK_DEBOUNCE_MS);
+    },
+    [flushAcks],
+  );
+
+  // Heartbeat
   useEffect(() => {
     if (!enabled || !callId) return;
 
@@ -121,6 +169,7 @@ export function useWebRTC({
     return () => clearInterval(interval);
   }, [callId, enabled, heartbeat]);
 
+  // Setup peer connection with ICE servers
   useEffect(() => {
     if (!enabled || !callId || !RTC || setupDoneRef.current) return;
     setupDoneRef.current = true;
@@ -150,7 +199,7 @@ export function useWebRTC({
         setLocalStreamUrl(stream.toURL());
 
         const peerConnection = new RTC.RTCPeerConnection({
-          iceServers: ICE_SERVERS,
+          iceServers,
         });
         peerConnectionRef.current = peerConnection;
 
@@ -212,8 +261,9 @@ export function useWebRTC({
     return () => {
       cancelled = true;
     };
-  }, [callId, enabled, isInitiator, isVideo, sendSignal]);
+  }, [callId, enabled, isInitiator, isVideo, sendSignal, iceServers]);
 
+  // Process incoming signals & acknowledge them
   useEffect(() => {
     if (!signals || !peerConnectionRef.current || !setupComplete || !RTC) return;
 
@@ -268,12 +318,17 @@ export function useWebRTC({
               pendingCandidatesRef.current.push(candidate);
             }
           }
+
+          // Acknowledge this signal for deletion from the DB
+          scheduleAck(signal._id);
         } catch (error) {
           console.error("Signal processing error:", signal.type, error);
+          // Still ack failed signals to avoid re-processing them forever
+          scheduleAck(signal._id);
         }
       }
     })();
-  }, [callId, isInitiator, sendSignal, setupComplete, signals]);
+  }, [callId, isInitiator, sendSignal, setupComplete, signals, scheduleAck]);
 
   const toggleMute = useCallback(() => {
     const audioTrack = localStreamRef.current?.getAudioTracks()?.[0];
@@ -297,6 +352,13 @@ export function useWebRTC({
   }, []);
 
   const cleanup = useCallback(() => {
+    // Flush any pending signal acks before cleanup
+    if (ackTimerRef.current) {
+      clearTimeout(ackTimerRef.current);
+      ackTimerRef.current = null;
+    }
+    flushAcks();
+
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     peerConnectionRef.current?.close();
@@ -309,7 +371,7 @@ export function useWebRTC({
     pendingCandidatesRef.current = [];
     setupDoneRef.current = false;
     setSetupComplete(false);
-  }, []);
+  }, [flushAcks]);
 
   useEffect(() => () => cleanup(), [cleanup]);
 
