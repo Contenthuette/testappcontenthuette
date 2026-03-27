@@ -145,7 +145,7 @@ function EventRow({
           <View style={styles.eventActions}>
             {/* Einlass button */}
             <TouchableOpacity
-              onPress={() => router.push(`/(main)/admin-event-checkin?eventId=${event._id}` as "/")}
+              onPress={() => router.push(`/(main)/event-admin-checkin?eventId=${event._id}` as "/")}
               style={[styles.eventActionBtn, { backgroundColor: "#3B82F6" }]}
             >
               <SymbolView name="person.badge.shield.checkmark" size={13} tintColor={colors.white} />
@@ -168,9 +168,9 @@ function EventRow({
           {/* Live stats mini row */}
           {stats && (
             <View style={styles.miniStatsRow}>
-              <Text style={styles.miniStat}>\ud83c\udfab {stats.totalTickets} Tickets</Text>
-              <Text style={styles.miniStat}>\u2705 {stats.checkedIn} drin</Text>
-              <Text style={styles.miniStat}>\u23f3 {stats.notCheckedIn} drau\u00dfen</Text>
+              <Text style={styles.miniStat}>{"\ud83c\udfab"} {stats.totalTickets} Tickets</Text>
+              <Text style={styles.miniStat}>{"\u2705"} {stats.checkedIn} drin</Text>
+              <Text style={styles.miniStat}>{"\u23f3"} {stats.notCheckedIn} {"drau\u00dfen"}</Text>
             </View>
           )}
 

@@ -60,7 +60,9 @@
     "expo-clipboard": "~55.0.9",
     "@expo/metro-runtime": "^55.0.6",
     "babel-preset-expo": "^55.0.12",
-    "expo-asset": "~55.0.10"
+    "expo-asset": "~55.0.10",
+    "expo-print": "^55.0.9",
+    "expo-sharing": "^55.0.14"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

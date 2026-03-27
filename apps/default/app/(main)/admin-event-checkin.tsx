@@ -253,7 +253,7 @@ export default function AdminEventCheckIn() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow} contentContainerStyle={styles.statsContent}>
           <StatPill label="Gesamt" value={stats.totalTickets} />
           <StatPill label="Drin" value={stats.checkedIn} accent="#3B82F6" />
-          <StatPill label="Drau\u00dfen" value={stats.notCheckedIn} accent={colors.black} />
+          <StatPill label={"Drau\u00dfen"} value={stats.notCheckedIn} accent={colors.black} />
           <StatPill label="Bezahlt" value={stats.paid} accent={colors.success} />
           <StatPill label="Offen" value={stats.unpaid} accent="#F59E0B" />
         </ScrollView>

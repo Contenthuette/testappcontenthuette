@@ -201,6 +201,19 @@ export default defineSchema({
     .index("by_qrCode", ["qrCode"])
     .index("by_purchasedAt", ["purchasedAt"]),
 
+  // ── Event Admins (Einlass-Helfer) ────────────────────────────
+  eventAdmins: defineTable({
+    eventId: v.id("events"),
+    userId: v.id("users"),
+    invitedBy: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("declined")),
+    createdAt: v.number(),
+  })
+    .index("by_eventId", ["eventId"])
+    .index("by_userId", ["userId"])
+    .index("by_eventId_and_userId", ["eventId", "userId"])
+    .index("by_userId_and_status", ["userId", "status"]),
+
   // ── Partners ───────────────────────────────────────────────────
   partners: defineTable({
     businessName: v.string(),
