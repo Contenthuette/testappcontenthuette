@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Linking, Platform,
 } from "react-native";
-import { router } from "expo-router";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -35,10 +34,8 @@ export function PartnerList() {
   };
 
   const renderPartner = ({ item }: { item: PartnerItem }) => (
-    <TouchableOpacity
+    <View
       style={styles.card}
-      onPress={() => router.push({ pathname: "/(main)/partner-detail", params: { id: item._id } })}
-      activeOpacity={0.65}
     >
       <View style={styles.cardImageWrap}>
         {item.thumbnailUrl ? (
@@ -76,7 +73,7 @@ export function PartnerList() {
           </TouchableOpacity>
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   if (partners === undefined) {
