@@ -9,7 +9,7 @@ import { usePaginatedQuery, useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { colors, spacing, radius, shadows } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
@@ -272,17 +272,6 @@ export default function GroupsScreen() {
           }
         />
       )}
-
-      {/* FAB for groups */}
-      {tab === "groups" && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push("/(main)/create-group")}
-          activeOpacity={0.8}
-        >
-          <SymbolView name="plus" size={22} tintColor={colors.white} />
-        </TouchableOpacity>
-      )}
     </SafeAreaView>
   );
 }
@@ -471,17 +460,5 @@ const styles = StyleSheet.create({
     width: 30,
     alignItems: "center",
     justifyContent: "center",
-  },
-  fab: {
-    position: "absolute",
-    bottom: 110,
-    right: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-    ...shadows.lg,
   },
 });
