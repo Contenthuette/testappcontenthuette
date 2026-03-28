@@ -143,10 +143,11 @@ export const sendToUser = internalMutation({
             data: args.data ?? {},
             sound: "default",
           },
-          logLevel: "WARN",
+          logLevel: "ERROR",
         }
       );
     } catch (e: unknown) {
+      // Silently ignore missing push tokens — expected when users haven't opened the app on-device
       const isNoPushToken =
         e instanceof Error &&
         (e.message.includes("NoPushToken") || e.message.includes("No push token"));

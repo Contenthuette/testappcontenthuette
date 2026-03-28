@@ -113,7 +113,13 @@ export default function NotificationSettingsScreen() {
     setPrefs(newPrefs);
     setSaving(true);
     try {
-      await updatePreferences(newPrefs);
+      await updatePreferences({
+        calls: newPrefs.calls,
+        groupCalls: newPrefs.groupCalls,
+        directMessages: newPrefs.directMessages,
+        groupMessages: newPrefs.groupMessages,
+        announcements: newPrefs.announcements,
+      });
     } catch (_e) {
       setPrefs(prefs);
     } finally {

@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
@@ -38,9 +38,11 @@ export default function GroupChatScreen() {
   const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const group = useQuery(api.groups.getById, isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip");
   const initiateGroupCall = useMutation(api.calls.initiateGroupCall);
+  const [isCallStarting, setIsCallStarting] = useState(false);
 
   const handleGroupCall = useCallback(async (type: "audio" | "video") => {
-    if (!id) return;
+    if (!id || isCallStarting) return;
+    setIsCallStarting(true);
     try {
       const callId = await initiateGroupCall({
         groupId: id as Id<"groups">,
@@ -49,8 +51,10 @@ export default function GroupChatScreen() {
       router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
     } catch (e) {
       console.error("Failed to initiate group call", e);
+    } finally {
+      setIsCallStarting(false);
     }
-  }, [id, initiateGroupCall]);
+  }, [id, initiateGroupCall, isCallStarting]);
 
   const handleSend = async (msg: string) => {
     if (!id) return;
@@ -197,11 +201,11 @@ export default function GroupChatScreen() {
             {group?.memberCount ?? 0} Mitglieder
           </Text>
         </View>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("audio")}>
-          <SymbolView name="phone" size={20} tintColor={colors.black} />
+        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("audio")} disabled={isCallStarting}>
+          <SymbolView name="phone" size={20} tintColor={isCallStarting ? "#999" : colors.black} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("video")}>
-          <SymbolView name="video" size={20} tintColor={colors.black} />
+        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("video")} disabled={isCallStarting}>
+          <SymbolView name="video" size={20} tintColor={isCallStarting ? "#999" : colors.black} />
         </TouchableOpacity>
       </View>
 
