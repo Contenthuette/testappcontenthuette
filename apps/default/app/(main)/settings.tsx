@@ -36,9 +36,7 @@ const sections = [
   {
     title: "Rechtliches",
     items: [
-      { icon: "doc.text" as const, label: "Impressum", route: "/(main)/legal?type=imprint" },
-      { icon: "doc.plaintext" as const, label: "Datenschutzerklärung", route: "/(main)/legal?type=privacy" },
-      { icon: "doc.text.magnifyingglass" as const, label: "AGB", route: "/(main)/legal?type=terms" },
+      { icon: "shield.lefthalf.filled" as const, label: "Privacy Center", route: "/(main)/privacy-center" },
     ],
   },
 ];
