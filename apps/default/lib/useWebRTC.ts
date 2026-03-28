@@ -106,6 +106,7 @@ export function useWebRTC({
   const [isVideoOff, setIsVideoOff] = useState(!isVideo);
   const [setupComplete, setSetupComplete] = useState(false);
   const [iceServers, setIceServers] = useState<Array<IceServerConfig>>(DEFAULT_ICE_SERVERS);
+  const [iceServersLoaded, setIceServersLoaded] = useState(false);
 
   const peerConnectionRef = useRef<RTCPeerConnectionLike | null>(null);
   const localStreamRef = useRef<MediaStreamLike | null>(null);
@@ -132,12 +133,25 @@ export function useWebRTC({
 
     getIceServers({})
       .then((servers) => {
-        if (!cancelled && servers.length > 0) {
-          setIceServers(servers);
+        if (cancelled) return;
+        // Filter out servers with invalid URLs (e.g. placeholder env vars)
+        const valid = servers.filter(
+          (s) =>
+            s.urls.startsWith("stun:") ||
+            s.urls.startsWith("turn:") ||
+            s.urls.startsWith("turns:"),
+        );
+        if (valid.length > 0) {
+          console.log(`[WebRTC] Loaded ${valid.length} valid ICE servers from backend`);
+          setIceServers(valid);
+        } else {
+          console.warn("[WebRTC] No valid ICE servers from backend, using defaults");
         }
+        setIceServersLoaded(true);
       })
       .catch((error) => {
         console.warn("Failed to fetch ICE servers, using defaults:", error);
+        if (!cancelled) setIceServersLoaded(true);
       });
 
     return () => { cancelled = true; };
@@ -180,9 +194,9 @@ export function useWebRTC({
     pendingCandidatesRef.current = [];
   }, [callId]);
 
-  // Setup peer connection with ICE servers
+  // Setup peer connection — wait for ICE servers to be ready
   useEffect(() => {
-    if (!enabled || !callId || !RTC || setupDoneRef.current) return;
+    if (!enabled || !callId || !RTC || setupDoneRef.current || !iceServersLoaded) return;
     setupDoneRef.current = true;
 
     let cancelled = false;
@@ -235,15 +249,22 @@ export function useWebRTC({
         };
 
         peerConnection.onconnectionstatechange = () => {
-          setConnectionState(peerConnection.connectionState ?? "new");
+          const state = peerConnection.connectionState ?? "new";
+          console.log("[WebRTC] connectionState:", state);
+          setConnectionState(state);
         };
 
         peerConnection.oniceconnectionstatechange = () => {
+          const iceState = peerConnection.iceConnectionState;
+          console.log("[WebRTC] iceConnectionState:", iceState);
           if (
-            peerConnection.iceConnectionState === "connected" ||
-            peerConnection.iceConnectionState === "completed"
+            iceState === "connected" ||
+            iceState === "completed"
           ) {
             setConnectionState("connected");
+          } else if (iceState === "failed") {
+            console.error("[WebRTC] ICE connection failed — TURN servers may be unreachable");
+            setConnectionState("failed");
           }
         };
 
@@ -272,7 +293,7 @@ export function useWebRTC({
     return () => {
       cancelled = true;
     };
-  }, [callId, enabled, isInitiator, isVideo, sendSignal, iceServers]);
+  }, [callId, enabled, isInitiator, isVideo, sendSignal, iceServers, iceServersLoaded]);
 
   // Process incoming signals & acknowledge them
   useEffect(() => {

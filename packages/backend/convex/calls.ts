@@ -58,36 +58,38 @@ async function getParticipantsForCall(
 }
 
 async function assertUserAvailableForCall(
-  ctx: { db: DbReader },
+  ctx: { db: MutationCtx["db"] },
   userId: Id<"users">,
   currentCallId?: Id<"calls">,
 ): Promise<void> {
-  const [ringingParticipant, connectedParticipant] = await Promise.all([
+  const [ringingParticipants, connectedParticipants] = await Promise.all([
     ctx.db
       .query("callParticipants")
       .withIndex("by_userId_and_status", (q) =>
         q.eq("userId", userId).eq("status", "ringing"),
       )
-      .first(),
+      .take(5),
     ctx.db
       .query("callParticipants")
       .withIndex("by_userId_and_status", (q) =>
         q.eq("userId", userId).eq("status", "connected"),
       )
-      .first(),
+      .take(5),
   ]);
 
-  const activeParticipant = ringingParticipant ?? connectedParticipant;
-  if (!activeParticipant) return;
-  if (currentCallId && activeParticipant.callId === currentCallId) return;
+  for (const participant of [...ringingParticipants, ...connectedParticipants]) {
+    if (currentCallId && participant.callId === currentCallId) continue;
 
-  // Check if the call is actually still active — if not, this is a stale participant
-  const call = await ctx.db.get(activeParticipant.callId);
-  if (!call || call.status === "ended" || call.status === "declined" || call.status === "missed") {
-    return;
+    // Check if the call is actually still active
+    const call = await ctx.db.get(participant.callId);
+    if (!call || call.status === "ended" || call.status === "declined" || call.status === "missed") {
+      // Auto-clean stale participant so it doesn't block future calls
+      await ctx.db.patch(participant._id, { status: "left", leftAt: Date.now() });
+      continue;
+    }
+
+    throw new Error("User is already in another call");
   }
-
-  throw new Error("User is already in another call");
 }
 
 function getParticipantLastSeenAt(
