@@ -131,7 +131,15 @@ export default function WelcomeScreen() {
       </ScrollView>
 
       <View style={styles.ctaWrap}>
-        {/* AGB Checkbox */}
+        <Button
+          title={isWaiting ? "Zahlung wird verarbeitet..." : "Join the Movement"}
+          onPress={handleSubscribe}
+          loading={loading || isWaiting}
+          disabled={!canSubscribe}
+          fullWidth
+        />
+
+        {/* AGB Checkbox — below button */}
         <TouchableOpacity
           style={styles.agbRow}
           onPress={() => setAgbAccepted(!agbAccepted)}
@@ -139,7 +147,7 @@ export default function WelcomeScreen() {
         >
           <View style={[styles.checkbox, agbAccepted && styles.checkboxChecked]}>
             {agbAccepted && (
-              <SymbolView name="checkmark" size={12} tintColor={colors.white} />
+              <SymbolView name="checkmark" size={10} tintColor={colors.white} />
             )}
           </View>
           <Text style={styles.agbText}>
@@ -161,19 +169,12 @@ export default function WelcomeScreen() {
                 router.push("/(main)/privacy-center");
               }}
             >
-              Datenschutzerkl\u00e4rung
+              Datenschutzerklärung
             </Text>
             {" "}gelesen und akzeptiere diese.
           </Text>
         </TouchableOpacity>
 
-        <Button
-          title={isWaiting ? "Zahlung wird verarbeitet..." : "Join the Movement"}
-          onPress={handleSubscribe}
-          loading={loading || isWaiting}
-          disabled={!canSubscribe}
-          fullWidth
-        />
         <TouchableOpacity
           onPress={() => router.push("/(auth)/login")}
           style={styles.loginLink}
@@ -287,14 +288,14 @@ const styles = StyleSheet.create({
   agbRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: spacing.md,
-    paddingRight: spacing.sm,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
     borderColor: colors.gray300,
     alignItems: "center",
     justifyContent: "center",
@@ -307,12 +308,12 @@ const styles = StyleSheet.create({
   },
   agbText: {
     flex: 1,
-    fontSize: 13,
-    color: colors.gray500,
-    lineHeight: 19,
+    fontSize: 11,
+    color: colors.gray400,
+    lineHeight: 16,
   },
   agbLink: {
-    color: colors.black,
+    color: colors.gray600,
     fontWeight: "600",
     textDecorationLine: "underline",
   },

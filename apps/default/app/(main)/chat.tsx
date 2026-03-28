@@ -50,6 +50,7 @@ export default function ChatScreen() {
   const sendMessage = useMutation(api.messaging.sendDirectMessage);
   const deleteMessage = useMutation(api.messaging.deleteMessage);
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
+  const markAsRead = useMutation(api.messaging.markConversationAsRead);
   const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const partner = useQuery(api.calls.getConversationPartner, isAuthenticated && conversationId ? { conversationId } : "skip");
   const initiateCall = useMutation(api.calls.initiateCall);
@@ -67,6 +68,13 @@ export default function ChatScreen() {
       console.error("Failed to initiate call", e);
     }
   }, [conversationId, partner, initiateCall]);
+
+  // Mark conversation as read when opening
+  useEffect(() => {
+    if (conversationId && isAuthenticated) {
+      markAsRead({ conversationId }).catch(() => {});
+    }
+  }, [conversationId, isAuthenticated, markAsRead]);
 
   const handleSend = async (msg: string) => {
     if (!conversationId) return;

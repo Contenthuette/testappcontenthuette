@@ -9,6 +9,7 @@ import { paginatedResultValidator } from "./pagination";
 import { touchConversationActivity } from "./conversationActivity";
 import { rateLimiter } from "./rateLimit";
 import { isBlockedBetween } from "./users";
+import { internal } from "./_generated/api";
 
 type AuthCtx = {
   db: QueryCtx["db"];
@@ -221,7 +222,19 @@ export const listConversations = authQuery({
       return otherUserId ? [otherUserId] : [];
     });
 
-    const [userCache, lastMessages] = await Promise.all([
+    // Fetch read statuses for all conversations
+    const readStatuses = await Promise.all(
+      myConversations.map((conversation) =>
+        ctx.db
+          .query("conversationReadStatus")
+          .withIndex("by_conversationId_and_userId", (q) =>
+            q.eq("conversationId", conversation._id).eq("userId", myUserId),
+          )
+          .unique(),
+      ),
+    );
+
+    const [userCache, lastMessages, unreadCounts] = await Promise.all([
       batchGetUsers(ctx, otherUserIds),
       Promise.all(
         myConversations.map((conversation) =>
@@ -233,6 +246,20 @@ export const listConversations = authQuery({
             .order("desc")
             .first(),
         ),
+      ),
+      Promise.all(
+        myConversations.map(async (conversation, index) => {
+          const readStatus = readStatuses[index];
+          const lastReadAt = readStatus?.lastReadAt ?? 0;
+          // Count messages after lastReadAt that are NOT from me
+          const unreadMessages = await ctx.db
+            .query("messages")
+            .withIndex("by_conversationId_and_createdAt", (q) =>
+              q.eq("conversationId", conversation._id).gt("createdAt", lastReadAt),
+            )
+            .take(100);
+          return unreadMessages.filter((m) => m.senderId !== myUserId).length;
+        }),
       ),
     ]);
 
@@ -261,9 +288,37 @@ export const listConversations = authQuery({
               ? "🎙 Sprachmemo"
               : undefined),
         lastMessageAt: conversation.lastMessageAt,
-        unreadCount: 0,
+        unreadCount: unreadCounts[index],
       };
     });
+  },
+});
+
+// Mark conversation as read
+export const markConversationAsRead = authMutation({
+  args: { conversationId: v.id("conversations") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) return null;
+
+    const existing = await ctx.db
+      .query("conversationReadStatus")
+      .withIndex("by_conversationId_and_userId", (q) =>
+        q.eq("conversationId", args.conversationId).eq("userId", myUserId),
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastReadAt: Date.now() });
+    } else {
+      await ctx.db.insert("conversationReadStatus", {
+        conversationId: args.conversationId,
+        userId: myUserId,
+        lastReadAt: Date.now(),
+      });
+    }
+    return null;
   },
 });
 

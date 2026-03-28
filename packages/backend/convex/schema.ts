@@ -119,7 +119,17 @@ export default defineSchema({
     sharedPostId: v.optional(v.id("posts")),
     createdAt: v.number(),
   })
-    .index("by_conversationId", ["conversationId"]),
+    .index("by_conversationId", ["conversationId"])
+    .index("by_conversationId_and_createdAt", ["conversationId", "createdAt"]),
+
+  // ── Conversation Read Status ───────────────────────────────────
+  conversationReadStatus: defineTable({
+    conversationId: v.id("conversations"),
+    userId: v.id("users"),
+    lastReadAt: v.number(),
+  })
+    .index("by_conversationId_and_userId", ["conversationId", "userId"])
+    .index("by_userId", ["userId"]),
 
   // ── Posts / Feed ───────────────────────────────────────────────
   posts: defineTable({

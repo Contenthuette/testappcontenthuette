@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
@@ -24,6 +24,18 @@ export default function GroupChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { isAuthenticated } = useConvexAuth();
+  const groupConversationId = useQuery(
+    api.messaging.getGroupConversation,
+    isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip",
+  );
+  const markAsRead = useMutation(api.messaging.markConversationAsRead);
+
+  useEffect(() => {
+    if (groupConversationId && isAuthenticated) {
+      markAsRead({ conversationId: groupConversationId }).catch(() => {});
+    }
+  }, [groupConversationId, isAuthenticated, markAsRead]);
+
   const {
     results: messages,
     status: messagesStatus,
