@@ -66,7 +66,7 @@ export default function SubscriptionScreen() {
           <ZLogo size={28} />
           <Text style={styles.planLabel}>AKTUELLER PLAN</Text>
           <Text style={styles.planName}>
-            Z {me?.subscriptionPlan === "yearly" ? "Jährlich" : "Monatlich"}
+            Z Member
           </Text>
           <View style={[styles.statusPill, { backgroundColor: isActive ? colors.success : colors.danger }]}>
             <Text style={styles.statusText}>{isActive ? "Aktiv" : "Inaktiv"}</Text>
