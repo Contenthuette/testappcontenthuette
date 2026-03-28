@@ -163,6 +163,7 @@ export const sendRequest = authMutation({
       userId: args.receiverId,
       title: "Neue Freundschaftsanfrage",
       body: `${myUser?.name ?? "Jemand"} möchte mit dir befreundet sein`,
+      category: "announcements",
     });
 
     return requestId;
@@ -202,6 +203,7 @@ export const acceptRequest = authMutation({
       userId: request.senderId,
       title: "Freundschaft bestätigt",
       body: `${myUser?.name ?? "Jemand"} hat deine Freundschaftsanfrage angenommen`,
+      category: "announcements",
     });
     return null;
   },

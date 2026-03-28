@@ -74,6 +74,7 @@ export default function MainLayout() {
         <Stack.Screen name="chat" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="conversations" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="notifications" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="notification-settings" options={{ animation: "slide_from_right", headerShown: false }} />
         <Stack.Screen name="settings" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
         <Stack.Screen name="saved-posts" options={{ animation: "slide_from_right" }} />

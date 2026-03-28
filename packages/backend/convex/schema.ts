@@ -26,6 +26,13 @@ export default defineSchema({
     stripeCustomerId: v.optional(v.string()),
     stripeSubscriptionId: v.optional(v.string()),
     lastActiveAt: v.optional(v.number()),
+    notificationPreferences: v.optional(v.object({
+      calls: v.boolean(),
+      groupCalls: v.boolean(),
+      directMessages: v.boolean(),
+      groupMessages: v.boolean(),
+      announcements: v.boolean(),
+    })),
     createdAt: v.number(),
   })
     .index("by_authId", ["authId"])

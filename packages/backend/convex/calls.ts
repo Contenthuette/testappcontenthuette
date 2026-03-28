@@ -230,6 +230,7 @@ export const initiateCall = authMutation({
       title: args.type === "video" ? "Videoanruf" : "Eingehender Anruf",
       body: `${me.name} ruft dich an`,
       data: { type: "call", callId: String(callId) },
+      category: "calls",
     });
 
     return callId;
@@ -354,6 +355,7 @@ export const initiateGroupCall = authMutation({
             title: args.type === "video" ? "Gruppen-Videoanruf" : "Gruppenanruf",
             body: `${me.name} ruft in ${group.name} an`,
             data: { type: "call", callId: String(callId) },
+            category: "groupCalls",
           }),
         ]);
       }),

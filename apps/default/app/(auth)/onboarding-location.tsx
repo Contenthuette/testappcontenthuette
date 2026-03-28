@@ -14,10 +14,10 @@ export default function OnboardingLocationScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.progress}>
-          <View style={[styles.progressBar, { width: "66%" }]} />
+          <View style={[styles.progressBar, { width: "50%" }]} />
         </View>
 
-        <Text style={styles.step}>Schritt 2 von 3</Text>
+        <Text style={styles.step}>Schritt 2 von 4</Text>
         <Text style={styles.title}>Wo bist du in MV?</Text>
         <Text style={styles.subtitle}>Wähle deinen Landkreis und deine Stadt</Text>
 

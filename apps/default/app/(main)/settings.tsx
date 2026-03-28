@@ -18,7 +18,7 @@ const sections = [
     items: [
       { icon: "bookmark" as const, label: "Gespeicherte Beiträge", route: "/(main)/saved-posts" },
       { icon: "pencil.circle" as const, label: "Profil bearbeiten", route: "/(main)/edit-profile" },
-      { icon: "bell.badge" as const, label: "Benachrichtigungen", route: "/(main)/notifications" },
+      { icon: "bell.badge" as const, label: "Benachrichtigungen", route: "/(main)/notification-settings" },
     ],
   },
   {

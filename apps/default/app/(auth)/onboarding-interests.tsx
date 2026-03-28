@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { INTERESTS } from "@/lib/constants";
@@ -11,8 +9,6 @@ import { INTERESTS } from "@/lib/constants";
 export default function OnboardingInterestsScreen() {
   const params = useLocalSearchParams<{ county: string; city: string }>();
   const [selected, setSelected] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const completeOnboarding = useMutation(api.users.completeOnboarding);
 
   const toggle = (interest: string) => {
     setSelected(prev =>
@@ -20,29 +16,24 @@ export default function OnboardingInterestsScreen() {
     );
   };
 
-  const handleComplete = async () => {
-    setLoading(true);
-    try {
-      await completeOnboarding({
-        county: params.county || undefined,
-        city: params.city || undefined,
-        interests: selected,
-      });
-      router.replace("/");
-    } catch (_e) {
-      // handle error
-    } finally {
-      setLoading(false);
-    }
+  const handleNext = () => {
+    router.push({
+      pathname: "/(auth)/onboarding-notifications",
+      params: {
+        county: params.county || "",
+        city: params.city || "",
+        interests: selected.join(","),
+      },
+    });
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.topBar}>
         <View style={styles.progress}>
-          <View style={[styles.progressBar, { width: "100%" }]} />
+          <View style={[styles.progressBar, { width: "75%" }]} />
         </View>
-        <Text style={styles.step}>Schritt 3 von 3</Text>
+        <Text style={styles.step}>Schritt 3 von 4</Text>
         <Text style={styles.title}>Wähle deine Interessen</Text>
         <Text style={styles.subtitle}>{selected.length} ausgewählt • Wähle mindestens 3</Text>
       </View>
@@ -63,9 +54,8 @@ export default function OnboardingInterestsScreen() {
       </ScrollView>
       <View style={styles.footer}>
         <Button
-          title="Fertig"
-          onPress={handleComplete}
-          loading={loading}
+          title="Weiter"
+          onPress={handleNext}
           disabled={selected.length < 3}
           fullWidth
           size="lg"

@@ -39,6 +39,13 @@ export const me = authQuery({
     subscriptionPlan: v.optional(v.string()),
     subscriptionExpiresAt: v.optional(v.number()),
     lastActiveAt: v.optional(v.number()),
+    notificationPreferences: v.optional(v.object({
+      calls: v.boolean(),
+      groupCalls: v.boolean(),
+      directMessages: v.boolean(),
+      groupMessages: v.boolean(),
+      announcements: v.boolean(),
+    })),
     createdAt: v.number(),
   })),
   handler: async (ctx) => {
@@ -65,6 +72,7 @@ export const me = authQuery({
       subscriptionPlan: user.subscriptionPlan,
       subscriptionExpiresAt: user.subscriptionExpiresAt,
       lastActiveAt: user.lastActiveAt,
+      notificationPreferences: user.notificationPreferences,
       createdAt: user.createdAt,
     };
   },
@@ -121,6 +129,13 @@ export const completeOnboarding = authMutation({
     bio: v.optional(v.string()),
     gender: v.optional(v.union(v.literal("male"), v.literal("female"), v.literal("other"), v.literal("prefer_not_to_say"))),
     birthDate: v.optional(v.string()),
+    notificationPreferences: v.optional(v.object({
+      calls: v.boolean(),
+      groupCalls: v.boolean(),
+      directMessages: v.boolean(),
+      groupMessages: v.boolean(),
+      announcements: v.boolean(),
+    })),
   },
   returns: v.null(),
   handler: async (ctx, args) => {

@@ -22,10 +22,10 @@ export default function OnboardingProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.progress}>
-          <View style={[styles.progressBar, { width: "33%" }]} />
+          <View style={[styles.progressBar, { width: "25%" }]} />
         </View>
 
-        <Text style={styles.step}>Schritt 1 von 3</Text>
+        <Text style={styles.step}>Schritt 1 von 4</Text>
         <Text style={styles.title}>Erzähl uns etwas über dich</Text>
         <Text style={styles.subtitle}>Diese Infos helfen dir, die richtigen Leute zu finden.</Text>
 
