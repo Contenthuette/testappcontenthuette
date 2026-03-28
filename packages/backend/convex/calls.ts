@@ -5,6 +5,7 @@ import { authQuery, authMutation } from "./functions";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { rateLimiter } from "./rateLimit";
+import { isBlockedBetween } from "./users";
 
 const MAX_GROUP_CALL_PARTICIPANTS = 8;
 const CALL_RING_TIMEOUT_MS = 45_000;
@@ -153,6 +154,11 @@ export const initiateCall = authMutation({
     const myId = await resolveUserId(ctx);
     if (!myId) throw new Error("User not found");
     if (myId === args.receiverId) throw new Error("You cannot call yourself");
+
+    // Block check
+    if (await isBlockedBetween(ctx, myId, args.receiverId)) {
+      throw new Error("Anruf nicht möglich");
+    }
 
     await Promise.all([
       assertUserAvailableForCall(ctx, myId),

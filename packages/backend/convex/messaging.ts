@@ -8,6 +8,7 @@ import { getConversationKeyFromParticipants, getDirectConversationKey } from "./
 import { paginatedResultValidator } from "./pagination";
 import { touchConversationActivity } from "./conversationActivity";
 import { rateLimiter } from "./rateLimit";
+import { isBlockedBetween } from "./users";
 
 type AuthCtx = {
   db: QueryCtx["db"];
@@ -274,6 +275,11 @@ export const getOrCreateDM = authMutation({
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
+    // Block check
+    if (await isBlockedBetween(ctx, myUserId, args.otherUserId)) {
+      throw new Error("Diese Unterhaltung ist nicht verfügbar");
+    }
+
     const conversationKey = getDirectConversationKey(myUserId, args.otherUserId);
     const indexedConversation = await ctx.db
       .query("conversations")
@@ -353,6 +359,15 @@ export const sendMessage = authMutation({
     await rateLimiter.limit(ctx, "sendDirectMessage", { key: `${ctx.user._id}:${args.conversationId}` });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+
+    // Block check for DMs
+    const conversation = await ctx.db.get(args.conversationId);
+    if (conversation?.type === "direct") {
+      const otherUserId = conversation.participantIds.find((id: Id<"users">) => id !== myUserId);
+      if (otherUserId && await isBlockedBetween(ctx, myUserId, otherUserId)) {
+        throw new Error("Nachricht kann nicht gesendet werden");
+      }
+    }
 
     const createdAt = Date.now();
     const messageId = await ctx.db.insert("messages", {
@@ -504,6 +519,15 @@ export const sendDirectMessage = authMutation({
     await rateLimiter.limit(ctx, "sendDirectMessage", { key: `${ctx.user._id}:${args.conversationId}` });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+
+    // Block check for DMs
+    const conversation = await ctx.db.get(args.conversationId);
+    if (conversation?.type === "direct") {
+      const otherUserId = conversation.participantIds.find((id: Id<"users">) => id !== myUserId);
+      if (otherUserId && await isBlockedBetween(ctx, myUserId, otherUserId)) {
+        throw new Error("Nachricht kann nicht gesendet werden");
+      }
+    }
 
     const createdAt = Date.now();
     const messageId = await ctx.db.insert("messages", {

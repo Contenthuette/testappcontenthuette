@@ -8,9 +8,13 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  Modal,
+  Pressable,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +26,8 @@ import {
   UserCheck,
   Clock,
   Play,
+  MoreHorizontal,
+  ShieldBan,
 } from "lucide-react-native";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -38,8 +44,11 @@ export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [friendLoading, setFriendLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
 
   const userId = id as Id<"users"> | undefined;
+  const { isAuthenticated } = useConvexAuth();
 
   const user = useQuery(api.users.getById, userId ? { userId } : "skip");
   const friendStatus = useQuery(
@@ -48,6 +57,7 @@ export default function UserProfileScreen() {
   );
 
   const sendFriendRequest = useMutation(api.friends.sendRequest);
+  const blockUser = useMutation(api.users.blockUser);
 
   const handleFriendAction = useCallback(async () => {
     if (!userId || friendLoading) return;
@@ -71,6 +81,47 @@ export default function UserProfileScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: "/(main)/chat", params: { id: `new-${id}` } });
   }, [id]);
+
+  const handleBlock = useCallback(async () => {
+    if (!userId || blockLoading) return;
+    setMenuOpen(false);
+    if (Platform.OS === "web") {
+      setBlockLoading(true);
+      try {
+        await blockUser({ blockedId: userId });
+        router.back();
+      } catch (e: unknown) {
+        console.error("Block error:", e);
+      } finally {
+        setBlockLoading(false);
+      }
+      return;
+    }
+    Alert.alert(
+      "Nutzer blockieren",
+      `${user?.name ?? "Diesen Nutzer"} blockieren? Die Person kann dir keine Nachrichten mehr senden oder dich anrufen.`,
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Blockieren",
+          style: "destructive",
+          onPress: async () => {
+            setBlockLoading(true);
+            try {
+              if (Platform.OS !== "web")
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              await blockUser({ blockedId: userId });
+              router.back();
+            } catch (e: unknown) {
+              console.error("Block error:", e);
+            } finally {
+              setBlockLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [userId, blockLoading, user?.name, blockUser]);
 
   if (user === undefined) {
     return (
@@ -146,8 +197,46 @@ export default function UserProfileScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {user.name || "Profil"}
         </Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => {
+            if (Platform.OS !== "web")
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setMenuOpen(true);
+          }}
+          hitSlop={12}
+        >
+          <MoreHorizontal size={22} color="#000" />
+        </TouchableOpacity>
       </View>
+
+      {/* Block menu modal */}
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuOpen(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setMenuOpen(false)}>
+          <View style={styles.menuSheet}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleBlock}
+              activeOpacity={0.6}
+            >
+              <ShieldBan size={20} color="#EF4444" />
+              <Text style={styles.menuItemTextDanger}>Blockieren</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuCancel}
+              onPress={() => setMenuOpen(false)}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.menuCancelText}>Abbrechen</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <ScrollView
         style={styles.scrollView}
@@ -565,5 +654,54 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // More / block menu
+  moreButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f2f2f2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  menuSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 36,
+    gap: 6,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  menuItemTextDanger: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#EF4444",
+  },
+  menuCancel: {
+    alignItems: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#f2f2f2",
+    marginTop: 4,
+  },
+  menuCancelText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000",
   },
 });

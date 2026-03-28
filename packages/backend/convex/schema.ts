@@ -292,7 +292,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_blockerId", ["blockerId"])
-    .index("by_blockerId_and_blockedId", ["blockerId", "blockedId"]),
+    .index("by_blockerId_and_blockedId", ["blockerId", "blockedId"])
+    .index("by_blockedId_and_blockerId", ["blockedId", "blockerId"]),
 
   // ── Analytics snapshots ────────────────────────────────────────
   analyticsSnapshots: defineTable({

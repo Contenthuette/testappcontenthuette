@@ -424,6 +424,29 @@ export const cancelSubscription = authMutation({
   },
 });
 
+// Check if a block relationship exists in either direction
+export async function isBlockedBetween(
+  ctx: { db: QueryCtx["db"] },
+  userA: Id<"users">,
+  userB: Id<"users">,
+): Promise<boolean> {
+  const [aBlockedB, bBlockedA] = await Promise.all([
+    ctx.db
+      .query("blockedUsers")
+      .withIndex("by_blockerId_and_blockedId", (q) =>
+        q.eq("blockerId", userA).eq("blockedId", userB),
+      )
+      .first(),
+    ctx.db
+      .query("blockedUsers")
+      .withIndex("by_blockedId_and_blockerId", (q) =>
+        q.eq("blockedId", userA).eq("blockerId", userB),
+      )
+      .first(),
+  ]);
+  return aBlockedB !== null || bBlockedA !== null;
+}
+
 // Block user
 export const blockUser = authMutation({
   args: { blockedId: v.id("users") },
