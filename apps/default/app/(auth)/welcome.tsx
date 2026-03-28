@@ -1,11 +1,21 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TouchableOpacity } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, StyleSheet, ScrollView, useWindowDimensions,
+  TouchableOpacity, Alert, Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
+import { SUBSCRIPTION_PLANS } from "@/lib/constants";
+import { convexSiteUrl } from "@/lib/convex-urls";
+import * as WebBrowser from "expo-web-browser";
+import * as Crypto from "expo-crypto";
 
 const FEATURES = [
   {
@@ -30,6 +40,61 @@ export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   const cardSize = (width - spacing.xl * 2 - spacing.md) / 2;
   const cardHeight = cardSize * 0.8;
+  const { isAuthenticated } = useConvexAuth();
+
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
+  const [loading, setLoading] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+
+  const createCheckout = useAction(api.stripeActions.createCheckoutSession);
+  const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
+
+  const pendingStatus = useQuery(
+    api.stripeHelpers.getPendingByToken,
+    sessionToken ? { sessionToken } : "skip",
+  );
+
+  useEffect(() => {
+    if (pendingStatus?.status !== "completed") return;
+    if (!sessionToken) return;
+
+    if (isAuthenticated) {
+      claimSubscription({ sessionToken })
+        .then(() => router.replace("/"))
+        .catch(() => router.replace("/"));
+    } else {
+      router.replace({ pathname: "/(auth)/signup", params: { sessionToken } });
+    }
+  }, [pendingStatus, sessionToken, isAuthenticated, claimSubscription]);
+
+  const handleSubscribe = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = Crypto.randomUUID();
+      setSessionToken(token);
+
+      const { url } = await createCheckout({
+        plan: selectedPlan,
+        sessionToken: token,
+        siteUrl: convexSiteUrl,
+      });
+
+      await WebBrowser.openBrowserAsync(url, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      });
+
+      setLoading(false);
+    } catch (e) {
+      console.error("Checkout error:", e);
+      setSessionToken(null);
+      setLoading(false);
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Checkout konnte nicht gestartet werden. Bitte versuche es erneut.");
+      }
+    }
+  }, [selectedPlan, createCheckout]);
+
+  const isWaiting = sessionToken !== null && pendingStatus?.status === "pending";
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -38,16 +103,13 @@ export default function WelcomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* Logo */}
         <View style={styles.logoRow}>
           <ZLogo size={96} />
         </View>
 
-        {/* Hero text */}
         <Text style={styles.title}>We are Z</Text>
-        <Text style={styles.subtitle}>Social Media. Nur für MV.</Text>
+        <Text style={styles.subtitle}>{"Social Media. Nur f\u00fcr MV."}</Text>
 
-        {/* Feature grid */}
         <View style={styles.grid}>
           {FEATURES.map((feature, index) => (
             <View
@@ -62,18 +124,53 @@ export default function WelcomeScreen() {
           ))}
         </View>
 
-        {/* Bottom text */}
         <View style={styles.bottomText}>
-          <Text style={styles.statement}>Social Media ist{"\n"}nicht mehr social.</Text>
-          <Text style={styles.punchline}>Wir ändern das.</Text>
+          <Text style={styles.statement}>{"Social Media ist\nnicht mehr social."}</Text>
+          <Text style={styles.punchline}>{"Wir \u00e4ndern das."}</Text>
+        </View>
+
+        <View style={styles.planToggle}>
+          {SUBSCRIPTION_PLANS.map((plan) => (
+            <TouchableOpacity
+              key={plan.id}
+              style={[
+                styles.planOption,
+                selectedPlan === plan.id && styles.planOptionSelected,
+              ]}
+              onPress={() => setSelectedPlan(plan.id as "monthly" | "yearly")}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.planOptionName,
+                  selectedPlan === plan.id && styles.planOptionNameSelected,
+                ]}
+              >
+                {plan.name}
+              </Text>
+              <Text
+                style={[
+                  styles.planOptionPrice,
+                  selectedPlan === plan.id && styles.planOptionPriceSelected,
+                ]}
+              >
+                {"\u20ac"}{plan.price.toFixed(2)}/{plan.interval === "month" ? "Mo" : "Jahr"}
+              </Text>
+              {"savings" in plan && plan.savings && (
+                <View style={styles.savingsBadge}>
+                  <Text style={styles.savingsText}>-{plan.savings}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
         </View>
       </ScrollView>
 
-      {/* CTA */}
       <View style={styles.ctaWrap}>
         <Button
-          title="Join the Movement"
-          onPress={() => router.push("/(auth)/paywall")}
+          title={isWaiting ? "Zahlung wird verarbeitet..." : "Join the Movement"}
+          onPress={handleSubscribe}
+          loading={loading || isWaiting}
           fullWidth
         />
         <TouchableOpacity
@@ -81,7 +178,7 @@ export default function WelcomeScreen() {
           style={styles.loginLink}
         >
           <Text style={styles.loginText}>
-            Bereits Mitglied? <Text style={styles.loginBold}>Anmelden</Text>
+            {"Bereits Mitglied? "}<Text style={styles.loginBold}>Anmelden</Text>
           </Text>
         </TouchableOpacity>
       </View>
@@ -102,12 +199,6 @@ const styles = StyleSheet.create({
   logoRow: {
     alignItems: "center",
     marginBottom: spacing.md,
-  },
-  logo: {
-    fontSize: 42,
-    fontWeight: "900",
-    color: colors.black,
-    letterSpacing: -1.5,
   },
   title: {
     fontSize: 38,
@@ -172,6 +263,54 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     marginTop: spacing.xs,
     textAlign: "center",
+  },
+  planToggle: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.xxl,
+  },
+  planOption: {
+    flex: 1,
+    backgroundColor: colors.gray50,
+    borderRadius: radius.lg,
+    borderCurve: "continuous",
+    padding: spacing.lg,
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  planOptionSelected: {
+    borderColor: colors.black,
+    backgroundColor: colors.white,
+  },
+  planOptionName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.gray400,
+  },
+  planOptionNameSelected: {
+    color: colors.black,
+  },
+  planOptionPrice: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.gray400,
+  },
+  planOptionPriceSelected: {
+    color: colors.black,
+  },
+  savingsBadge: {
+    backgroundColor: colors.black,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginTop: 2,
+  },
+  savingsText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: "700",
   },
   ctaWrap: {
     paddingHorizontal: spacing.xl,
