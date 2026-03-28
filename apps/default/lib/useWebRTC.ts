@@ -136,7 +136,7 @@ export function useWebRTC({
         if (cancelled) return;
         // Filter out servers with invalid URLs (e.g. placeholder env vars)
         const valid = servers.filter(
-          (s) =>
+          (s: IceServerConfig) =>
             s.urls.startsWith("stun:") ||
             s.urls.startsWith("turn:") ||
             s.urls.startsWith("turns:"),
