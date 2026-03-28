@@ -136,15 +136,14 @@ export function ChatInputBar({
     setIsPickingMedia(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ["images", "videos"],
         quality: 0.8,
         allowsEditing: false,
-        videoMaxDuration: 60,
       });
 
-      if (!result.canceled && result.assets[0]) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        const isVideo = asset.type === "video";
+        const isVideo = asset.mimeType?.startsWith("video") ?? false;
         onSendMedia({
           uri: asset.uri,
           type: isVideo ? "video" : "image",
