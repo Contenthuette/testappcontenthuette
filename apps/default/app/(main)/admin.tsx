@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius, shadows } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
@@ -23,7 +23,6 @@ import { useConvexAuth } from "convex/react";
 const ABO_PRICE = "5,99";
 
 /* ─── Local types for dashboard data ─────────────────── */
-interface Buyer { ticketId: string; userName: string; userEmail: string; status: string; paid: boolean; checkedIn: boolean; checkedInAt?: number }
 interface DayStats { label: string; photos: number; videos: number }
 interface GrowthDay { label: string; count: number }
 interface EventRevenue { eventName: string; soldTickets: number; totalTickets: number; revenue: number; currency: string }
@@ -105,20 +104,6 @@ function EventRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const stats = useQuery(
-    api.admin.getEventCheckInStats,
-    expanded ? { eventId: event._id } : "skip",
-  );
-  const {
-    results: buyers,
-    status: buyersStatus,
-    loadMore: loadMoreBuyers,
-  } = usePaginatedQuery(
-    api.admin.listEventBuyers,
-    expanded ? { eventId: event._id } : "skip",
-    { initialNumItems: 10 },
-  );
-
   return (
     <View style={styles.eventCard}>
       <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={styles.eventHeader}>
@@ -130,7 +115,7 @@ function EventRow({
         </View>
         <View style={styles.eventBadge}>
           <Text style={styles.eventBadgeText}>
-            {event.soldTickets}/{event.totalTickets}
+            {event.status === "active" ? "Live" : "Entwurf"}
           </Text>
         </View>
         <SymbolView
@@ -143,14 +128,6 @@ function EventRow({
       {expanded && (
         <View style={styles.eventExpanded}>
           <View style={styles.eventActions}>
-            {/* Einlass button */}
-            <TouchableOpacity
-              onPress={() => router.push(`/(main)/event-admin-checkin?eventId=${event._id}` as "/")}
-              style={[styles.eventActionBtn, { backgroundColor: "#3B82F6" }]}
-            >
-              <SymbolView name="person.badge.shield.checkmark" size={13} tintColor={colors.white} />
-              <Text style={[styles.eventActionText, { color: colors.white }]}>Einlass</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={onEdit} style={styles.eventActionBtn}>
               <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
               <Text style={styles.eventActionText}>Bearbeiten</Text>
@@ -164,67 +141,6 @@ function EventRow({
           <Text style={styles.eventInfoRow}>
             Preis: {event.ticketPrice.toFixed(2)} {event.currency}
           </Text>
-
-          {/* Live stats mini row */}
-          {stats && (
-            <View style={styles.miniStatsRow}>
-              <Text style={styles.miniStat}>{"\ud83c\udfab"} {stats.totalTickets} Tickets</Text>
-              <Text style={styles.miniStat}>{"\u2705"} {stats.checkedIn} drin</Text>
-              <Text style={styles.miniStat}>{"\u23f3"} {stats.notCheckedIn} {"drau\u00dfen"}</Text>
-            </View>
-          )}
-
-          <Text style={styles.buyersTitle}>K\u00e4ufer ({buyers.length})</Text>
-          {buyersStatus === "LoadingFirstPage" ? (
-            <ActivityIndicator size="small" color={colors.gray400} style={{ marginTop: 8 }} />
-          ) : buyers.length === 0 ? (
-            <Text style={styles.noBuyers}>Noch keine Tickets verkauft</Text>
-          ) : (
-            <>
-              {buyers.map((buyer: Buyer) => (
-                <View key={buyer.ticketId} style={styles.buyerRow}>
-                  <View style={styles.buyerAvatar}>
-                    <Text style={styles.buyerInitial}>
-                      {buyer.userName.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.buyerName}>{buyer.userName}</Text>
-                    <Text style={styles.buyerEmail}>{buyer.userEmail}</Text>
-                  </View>
-                  <View style={styles.buyerBadges}>
-                    <View
-                      style={[
-                        styles.ticketStatus,
-                        buyer.paid ? styles.ticketActive : styles.ticketCanceled,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.ticketStatusText,
-                          { color: buyer.paid ? colors.success : "#F59E0B" },
-                        ]}
-                      >
-                        {buyer.paid ? "Bezahlt" : "Offen"}
-                      </Text>
-                    </View>
-                    {buyer.checkedIn && (
-                      <View style={[styles.ticketStatus, styles.ticketScanned]}>
-                        <Text style={[styles.ticketStatusText, { color: "#3B82F6" }]}>Drin</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ))}
-              {buyersStatus === "LoadingMore" ? (
-                <ActivityIndicator size="small" color={colors.gray400} style={{ marginTop: 12 }} />
-              ) : buyersStatus === "CanLoadMore" ? (
-                <TouchableOpacity style={styles.loadMoreInlineBtn} onPress={() => loadMoreBuyers(20)}>
-                  <Text style={styles.loadMoreInlineText}>Mehr K\u00e4ufer laden</Text>
-                </TouchableOpacity>
-              ) : null}
-            </>
-          )}
         </View>
       )}
     </View>
@@ -964,45 +880,6 @@ const styles = StyleSheet.create({
   eventDeleteBtn: { backgroundColor: "rgba(239,68,68,0.06)" },
   eventActionText: { fontSize: 13, fontWeight: "500", color: colors.gray600 },
   eventInfoRow: { fontSize: 13, color: colors.gray600, marginBottom: spacing.md },
-
-  buyersTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.gray400,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-  },
-  noBuyers: { fontSize: 13, color: colors.gray400, fontStyle: "italic" },
-  buyerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.gray100,
-  },
-  buyerAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buyerInitial: { fontSize: 13, fontWeight: "600", color: colors.gray600 },
-  buyerName: { fontSize: 14, fontWeight: "500", color: colors.black },
-  buyerEmail: { fontSize: 12, color: colors.gray400 },
-  ticketStatus: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: colors.gray100,
-  },
-  ticketActive: { backgroundColor: "rgba(34,197,94,0.1)" },
-  ticketScanned: { backgroundColor: "rgba(59,130,246,0.1)" },
-  ticketCanceled: { backgroundColor: "rgba(239,68,68,0.08)" },
-  ticketStatusText: { fontSize: 11, fontWeight: "600", color: colors.gray500 },
 
   emptyEvents: {
     alignItems: "center",
