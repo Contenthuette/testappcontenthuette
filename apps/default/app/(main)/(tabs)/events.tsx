@@ -33,8 +33,6 @@ export default function EventsScreen() {
   });
 
   const renderEvent = ({ item }: { item: NonNullable<typeof events>[number] }) => {
-    const isSoldOut = item.soldTickets >= item.totalTickets;
-    const available = item.totalTickets - item.soldTickets;
     return (
       <TouchableOpacity
         style={styles.card}
@@ -47,11 +45,6 @@ export default function EventsScreen() {
           ) : (
             <View style={styles.cardImagePlaceholder}>
               <SymbolView name="sparkles" size={32} tintColor={colors.gray300} />
-            </View>
-          )}
-          {isSoldOut && (
-            <View style={styles.soldOutBadge}>
-              <Text style={styles.soldOutText}>Ausverkauft</Text>
             </View>
           )}
           <View style={styles.priceBadge}>
@@ -69,8 +62,8 @@ export default function EventsScreen() {
             <Text style={styles.infoText}>{item.date} · {item.startTime} - {calcEndTime(item.startTime, item.durationMinutes)} Uhr</Text>
           </View>
           <View style={styles.cardFooter}>
-            <Text style={[styles.ticketCount, isSoldOut && styles.ticketCountDim]}>
-              {isSoldOut ? "Ausverkauft" : `${available} Ticket${available !== 1 ? "s" : ""} verfügbar`}
+            <Text style={styles.ticketCount}>
+              {item.totalTickets} Ticket{item.totalTickets !== 1 ? "s" : ""} verfügbar
             </Text>
           </View>
         </View>
@@ -160,16 +153,6 @@ const styles = StyleSheet.create({
   cardImageWrap: { height: 180, backgroundColor: colors.gray100, position: "relative" },
   cardImage: { width: "100%", height: "100%" },
   cardImagePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
-  soldOutBadge: {
-    position: "absolute",
-    top: spacing.md,
-    left: spacing.md,
-    backgroundColor: colors.black,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  soldOutText: { fontSize: 11, fontWeight: "700", color: colors.white, letterSpacing: 0.5 },
   priceBadge: {
     position: "absolute",
     bottom: spacing.md,
@@ -192,5 +175,4 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, color: colors.gray500, letterSpacing: -0.1, flex: 1 },
   cardFooter: { marginTop: spacing.sm },
   ticketCount: { fontSize: 13, fontWeight: "600", color: colors.black },
-  ticketCountDim: { color: colors.gray400 },
 });
