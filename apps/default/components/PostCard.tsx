@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from "react-native";
-import { Image, ImageContentPosition } from "expo-image";
+import { Image } from "expo-image";
 import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";

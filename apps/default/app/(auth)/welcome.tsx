@@ -43,6 +43,7 @@ export default function WelcomeScreen() {
 
   const [loading, setLoading] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [agbAccepted, setAgbAccepted] = useState(false);
 
   const createCheckout = useAction(api.stripeActions.createCheckoutSession);
   const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
@@ -93,6 +94,7 @@ export default function WelcomeScreen() {
   }, [createCheckout]);
 
   const isWaiting = sessionToken !== null && pendingStatus?.status === "pending";
+  const canSubscribe = agbAccepted && !loading && !isWaiting;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -129,10 +131,47 @@ export default function WelcomeScreen() {
       </ScrollView>
 
       <View style={styles.ctaWrap}>
+        {/* AGB Checkbox */}
+        <TouchableOpacity
+          style={styles.agbRow}
+          onPress={() => setAgbAccepted(!agbAccepted)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, agbAccepted && styles.checkboxChecked]}>
+            {agbAccepted && (
+              <SymbolView name="checkmark" size={12} tintColor={colors.white} />
+            )}
+          </View>
+          <Text style={styles.agbText}>
+            Ich habe die{" "}
+            <Text
+              style={styles.agbLink}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push("/(main)/privacy-center");
+              }}
+            >
+              AGB
+            </Text>
+            {" "}und{" "}
+            <Text
+              style={styles.agbLink}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push("/(main)/privacy-center");
+              }}
+            >
+              Datenschutzerkl\u00e4rung
+            </Text>
+            {" "}gelesen und akzeptiere diese.
+          </Text>
+        </TouchableOpacity>
+
         <Button
           title={isWaiting ? "Zahlung wird verarbeitet..." : "Join the Movement"}
           onPress={handleSubscribe}
           loading={loading || isWaiting}
+          disabled={!canSubscribe}
           fullWidth
         />
         <TouchableOpacity
@@ -244,5 +283,37 @@ const styles = StyleSheet.create({
   loginBold: {
     fontWeight: "600",
     color: colors.black,
+  },
+  agbRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    paddingRight: spacing.sm,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.gray300,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+    borderCurve: "continuous",
+  },
+  checkboxChecked: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  agbText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.gray500,
+    lineHeight: 19,
+  },
+  agbLink: {
+    color: colors.black,
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
 });
