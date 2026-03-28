@@ -43,8 +43,7 @@
       ],
       "expo-secure-store",
       "expo-font",
-      "expo-web-browser",
-      "react-native-webrtc"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

@@ -35,31 +35,64 @@ export const getIceServers = action({
     const meteredApiKey = process.env.METERED_TURN_API_KEY;
     if (meteredApiKey && !isPlaceholder(meteredApiKey)) {
       try {
-        const res = await fetch(
-          `https://z.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`,
-          { signal: AbortSignal.timeout(5000) },
+        // Create a temporary TURN credential using the secretKey
+        const createRes = await fetch(
+          `https://zsocial.metered.live/api/v1/turn/credential?secretKey=${meteredApiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ expiryInSeconds: 86400, label: "z-social-auto" }),
+            signal: AbortSignal.timeout(5000),
+          },
         );
-        if (res.ok) {
-          const creds = (await res.json()) as Array<{
-            urls: string | Array<string>;
-            username?: string;
-            credential?: string;
-          }>;
-          for (const c of creds) {
-            const urlList = Array.isArray(c.urls) ? c.urls : [c.urls];
-            for (const u of urlList) {
-              if (isValidTurnUrl(u)) {
-                servers.push({
-                  urls: u,
-                  username: c.username,
-                  credential: c.credential,
-                });
+
+        if (createRes.ok) {
+          const cred = (await createRes.json()) as {
+            username: string;
+            password: string;
+            apiKey: string;
+          };
+          // Use the returned credential with Metered global relay endpoints
+          const turnUrls = [
+            "stun:stun.relay.metered.ca:80",
+            "turn:global.relay.metered.ca:80",
+            "turn:global.relay.metered.ca:80?transport=tcp",
+            "turn:global.relay.metered.ca:443",
+            "turns:global.relay.metered.ca:443?transport=tcp",
+          ];
+          for (const url of turnUrls) {
+            servers.push({
+              urls: url,
+              username: cred.username,
+              credential: cred.password,
+            });
+          }
+          console.log(`[ICE] Created Metered TURN credential: ${cred.username}`);
+        } else {
+          // Fallback: try GET with apiKey (per-credential key)
+          const getRes = await fetch(
+            `https://zsocial.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`,
+            { signal: AbortSignal.timeout(5000) },
+          );
+          if (getRes.ok) {
+            const creds = (await getRes.json()) as Array<{
+              urls: string | Array<string>;
+              username?: string;
+              credential?: string;
+            }>;
+            for (const c of creds) {
+              const urlList = Array.isArray(c.urls) ? c.urls : [c.urls];
+              for (const u of urlList) {
+                if (isValidTurnUrl(u)) {
+                  servers.push({ urls: u, username: c.username, credential: c.credential });
+                }
               }
             }
+            console.log(`[ICE] Fetched ${creds.length} Metered TURN credentials via apiKey`);
+          } else {
+            const errorBody = await getRes.text().catch(() => "(no body)");
+            console.warn(`[ICE] Metered API returned ${getRes.status}: ${errorBody}`);
           }
-          console.log(`[ICE] Fetched ${creds.length} Metered TURN credentials`);
-        } else {
-          console.warn(`[ICE] Metered API returned ${res.status}`);
         }
       } catch (err) {
         console.warn("[ICE] Failed to fetch Metered TURN creds:", err);
