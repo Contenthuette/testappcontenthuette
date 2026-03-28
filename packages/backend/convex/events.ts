@@ -106,6 +106,7 @@ export const getById = query({
       thumbnailUrl: v.optional(v.string()),
       videoUrl: v.optional(v.string()),
       videoThumbnailUrl: v.optional(v.string()),
+      ticketUrl: v.optional(v.string()),
       venue: v.string(),
       city: v.string(),
       county: v.optional(v.string()),
@@ -147,6 +148,7 @@ export const getById = query({
       thumbnailUrl,
       videoUrl,
       videoThumbnailUrl,
+      ticketUrl: event.ticketUrl,
       venue: event.venue,
       city: event.city,
       county: event.county,
@@ -161,111 +163,5 @@ export const getById = query({
       creatorId: event.creatorId,
       createdAt: event.createdAt,
     };
-  },
-});
-
-// Buy ticket
-export const buyTicket = authMutation({
-  args: { eventId: v.id("events") },
-  returns: v.union(
-    v.null(),
-    v.object({ ticketId: v.id("tickets") }),
-  ),
-  handler: async (ctx, args) => {
-    const myUserId = await getMyUserId(ctx);
-    if (!myUserId) throw new Error("User not found");
-
-    const user = await ctx.db.get(myUserId);
-    if (!user) throw new Error("User not found");
-
-    const event = await ctx.db.get(args.eventId);
-    if (!event) throw new Error("Event not found");
-    if (event.status !== "upcoming" && event.status !== "ongoing") {
-      throw new Error("Event is not available");
-    }
-    if (event.soldTickets >= event.totalTickets) {
-      throw new Error("Event is sold out");
-    }
-
-    // Check if user already has an active ticket for this event
-    const existing = await ctx.db
-      .query("tickets")
-      .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
-      .collect();
-    const alreadyHas = existing.find(
-      (t) => t.userId === myUserId && (t.status === "active" || t.status === "scanned"),
-    );
-    if (alreadyHas) throw new Error("Du hast bereits ein Ticket");
-
-    const ticketId = await ctx.db.insert("tickets", {
-      eventId: args.eventId,
-      userId: myUserId,
-      buyerName: user.name,
-      buyerEmail: user.email,
-      status: "active",
-      paid: false,
-      checkedIn: false,
-      purchasedAt: Date.now(),
-    });
-
-    await ctx.db.patch(args.eventId, { soldTickets: event.soldTickets + 1 });
-    return { ticketId };
-  },
-});
-
-// Get my tickets
-export const getMyTickets = authQuery({
-  args: {},
-  returns: v.array(
-    v.object({
-      _id: v.id("tickets"),
-      eventId: v.id("events"),
-      eventName: v.string(),
-      eventDate: v.string(),
-      eventCity: v.string(),
-      eventVenue: v.string(),
-      buyerName: v.string(),
-      buyerEmail: v.string(),
-      status: v.union(
-        v.literal("active"),
-        v.literal("scanned"),
-        v.literal("canceled"),
-        v.literal("expired"),
-      ),
-      paid: v.boolean(),
-      checkedIn: v.boolean(),
-      purchasedAt: v.number(),
-    }),
-  ),
-  handler: async (ctx) => {
-    const myUserId = await getMyUserId(ctx);
-    if (!myUserId) return [];
-
-    const tickets = await ctx.db
-      .query("tickets")
-      .withIndex("by_userId", (q) => q.eq("userId", myUserId))
-      .order("desc")
-      .take(50);
-
-    return (await Promise.all(
-      tickets.map(async (ticket) => {
-        const event = await ctx.db.get(ticket.eventId);
-        if (!event) return null;
-        return {
-          _id: ticket._id,
-          eventId: ticket.eventId,
-          eventName: event.name,
-          eventDate: event.date,
-          eventCity: event.city,
-          eventVenue: event.venue,
-          buyerName: ticket.buyerName ?? "Unbekannt",
-          buyerEmail: ticket.buyerEmail ?? "",
-          status: ticket.status,
-          paid: ticket.paid ?? false,
-          checkedIn: ticket.checkedIn ?? false,
-          purchasedAt: ticket.purchasedAt,
-        };
-      }),
-    )).flatMap((ticket) => (ticket ? [ticket] : []));
   },
 });

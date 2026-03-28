@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Platform,
+  ActivityIndicator, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { useLocalSearchParams } from "expo-router";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -14,6 +14,7 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { EventVideoPlayer } from "@/components/EventVideoPlayer";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 
 function calcEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
@@ -26,8 +27,6 @@ function calcEndTime(startTime: string, durationMinutes: number): string {
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useQuery(api.events.getById, id ? { eventId: id as Id<"events"> } : "skip");
-  const buyTicket = useMutation(api.events.buyTicket);
-  const [buying, setBuying] = useState(false);
 
   if (!event) {
     return (
@@ -37,22 +36,12 @@ export default function EventDetailScreen() {
     );
   }
 
-  const isSoldOut = event.soldTickets >= event.totalTickets;
-  const available = event.totalTickets - event.soldTickets;
+  const hasTicketLink = !!event.ticketUrl;
 
-  const handleBuy = async () => {
+  const handleTicket = async () => {
+    if (!event.ticketUrl) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setBuying(true);
-    try {
-      const result = await buyTicket({ eventId: event._id });
-      if (result) {
-        router.push({ pathname: "/(main)/ticket", params: { id: result.ticketId } });
-      }
-    } catch (_e) {
-      if (Platform.OS !== "web") Alert.alert("Fehler", "Ticket konnte nicht gekauft werden.");
-    } finally {
-      setBuying(false);
-    }
+    await WebBrowser.openBrowserAsync(event.ticketUrl);
   };
 
   return (
@@ -70,11 +59,6 @@ export default function EventDetailScreen() {
           <TouchableOpacity style={styles.backBtn} onPress={() => safeBack("event-detail")}>
             <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
-          {isSoldOut && (
-            <View style={styles.soldOutOverlay}>
-              <Text style={styles.soldOutLabel}>Ausverkauft</Text>
-            </View>
-          )}
         </View>
 
         <View style={styles.content}>
@@ -100,17 +84,17 @@ export default function EventDetailScreen() {
                 <Text style={styles.infoSub}>{event.city}</Text>
               </View>
             </View>
-            <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-              <View style={styles.infoIcon}>
-                <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
+            {event.ticketPrice > 0 && (
+              <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.infoIcon}>
+                  <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
+                </View>
+                <View>
+                  <Text style={styles.infoLabel}>€{event.ticketPrice.toFixed(2)}</Text>
+                  <Text style={styles.infoSub}>Ticketpreis</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.infoLabel}>
-                  {isSoldOut ? "Ausverkauft" : `${available} Tickets verfügbar`}
-                </Text>
-                <Text style={styles.infoSub}>von {event.totalTickets} gesamt</Text>
-              </View>
-            </View>
+            )}
           </View>
 
           {/* Video player */}
@@ -126,26 +110,22 @@ export default function EventDetailScreen() {
       </ScrollView>
 
       {/* Bottom bar */}
-      <View style={styles.bottomBar}>
-        <View>
-          <Text style={styles.priceLabel}>Preis</Text>
-          <Text style={styles.price}>€{event.ticketPrice.toFixed(2)}</Text>
+      {hasTicketLink && (
+        <View style={styles.bottomBar}>
+          <View>
+            <Text style={styles.priceLabel}>Preis</Text>
+            <Text style={styles.price}>€{event.ticketPrice.toFixed(2)}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.buyBtn}
+            onPress={handleTicket}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="arrow.up.right" size={16} tintColor={colors.white} />
+            <Text style={styles.buyBtnText}>Ticket sichern</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[styles.buyBtn, (isSoldOut || buying) && styles.buyBtnDisabled]}
-          onPress={handleBuy}
-          disabled={isSoldOut || buying}
-          activeOpacity={0.7}
-        >
-          {buying ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <Text style={styles.buyBtnText}>
-              {isSoldOut ? "Ausverkauft" : "Ticket kaufen"}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -169,16 +149,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     boxShadow: "0px 2px 8px rgba(0,0,0,0.08)",
   },
-  soldOutOverlay: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: colors.black,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  soldOutLabel: { fontSize: 12, fontWeight: "700", color: colors.white },
 
   content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: 120 },
   eventName: {
@@ -236,13 +206,14 @@ const styles = StyleSheet.create({
   priceLabel: { fontSize: 12, color: colors.gray500 },
   price: { fontSize: 24, fontWeight: "800", color: colors.black, fontVariant: ["tabular-nums"] },
   buyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingHorizontal: 28,
     height: 50,
     borderRadius: radius.md,
     backgroundColor: colors.black,
-    alignItems: "center",
     justifyContent: "center",
   },
-  buyBtnDisabled: { opacity: 0.35 },
   buyBtnText: { fontSize: 16, fontWeight: "700", color: colors.white },
 });

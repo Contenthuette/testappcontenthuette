@@ -162,6 +162,7 @@ export default defineSchema({
     thumbnailUrl: v.optional(v.string()),
     videoStorageId: v.optional(v.id("_storage")),
     videoThumbnailStorageId: v.optional(v.id("_storage")),
+    ticketUrl: v.optional(v.string()),
     venue: v.string(),
     city: v.string(),
     county: v.optional(v.string()),

@@ -43,6 +43,7 @@ export default function AdminEventForm() {
   const [endTime, setEndTime] = useState("");
   const [totalTickets, setTotalTickets] = useState("");
   const [ticketPrice, setTicketPrice] = useState("");
+  const [ticketUrl, setTicketUrl] = useState("");
   const [thumbUri, setThumbUri] = useState<string | null>(null);
   const [thumbStorageId, setThumbStorageId] = useState<Id<"_storage"> | null>(null);
 
@@ -75,6 +76,7 @@ export default function AdminEventForm() {
       if (eventDetail.thumbnailUrl) setThumbUri(eventDetail.thumbnailUrl);
       if (eventDetail.videoUrl) setVideoUri(eventDetail.videoUrl);
       if (eventDetail.videoThumbnailUrl) setVideoThumbUri(eventDetail.videoThumbnailUrl);
+      if (eventDetail.ticketUrl) setTicketUrl(eventDetail.ticketUrl);
       setSeeded(true);
     }
   }, [isEdit, eventDetail, seeded]);
@@ -154,6 +156,7 @@ export default function AdminEventForm() {
           durationMinutes,
           totalTickets: parseInt(totalTickets, 10) || 0,
           ticketPrice: parseFloat(ticketPrice) || 0,
+          ticketUrl: ticketUrl.trim() || undefined,
           ...(thumbStorageId ? { thumbnailStorageId: thumbStorageId } : {}),
           ...(videoStorageId ? { videoStorageId } : {}),
           ...(videoThumbStorageId ? { videoThumbnailStorageId: videoThumbStorageId } : {}),
@@ -170,6 +173,7 @@ export default function AdminEventForm() {
           totalTickets: parseInt(totalTickets, 10) || 0,
           ticketPrice: parseFloat(ticketPrice) || 0,
           currency: "EUR",
+          ticketUrl: ticketUrl.trim() || undefined,
           ...(thumbStorageId ? { thumbnailStorageId: thumbStorageId } : {}),
           ...(videoStorageId ? { videoStorageId } : {}),
           ...(videoThumbStorageId ? { videoThumbnailStorageId: videoThumbStorageId } : {}),
@@ -245,6 +249,13 @@ export default function AdminEventForm() {
           <Field label="Endzeit" value={endTime} onChangeText={setEndTime} placeholder="HH:MM" />
           <Field label="Ticketanzahl" value={totalTickets} onChangeText={setTotalTickets} placeholder="100" keyboardType="number-pad" />
           <Field label="Ticketpreis (EUR)" value={ticketPrice} onChangeText={setTicketPrice} placeholder="15.00" keyboardType="decimal-pad" />
+
+          {/* ─── Ticket Link (ticket.io) ─── */}
+          <View style={styles.sectionHeader}>
+            <SymbolView name="link" size={16} tintColor={colors.gray600} />
+            <Text style={styles.sectionTitle}>Ticket-Link (ticket.io)</Text>
+          </View>
+          <Field label="Ticket URL" value={ticketUrl} onChangeText={setTicketUrl} placeholder="https://www.ticket.io/..." />
 
           {/* ─── Video Section ─── */}
           <View style={styles.sectionHeader}>

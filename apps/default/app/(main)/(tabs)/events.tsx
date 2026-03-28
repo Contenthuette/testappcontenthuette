@@ -84,10 +84,6 @@ export default function EventsScreen() {
         <ZLogo size={47} />
         <Text style={styles.headerTitle}>Events</Text>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => router.push("/(main)/my-tickets")} style={styles.ticketBtn} activeOpacity={0.7}>
-          <SymbolView name="ticket" size={18} tintColor={colors.black} />
-          <Text style={styles.ticketBtnText}>Meine Tickets</Text>
-        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -140,16 +136,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerTitle: { fontSize: 26, fontWeight: "800", color: colors.black, letterSpacing: -0.5 },
-  ticketBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray100,
-  },
-  ticketBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
   list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
   loadMoreBtn: {

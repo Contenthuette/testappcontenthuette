@@ -189,14 +189,6 @@ export default function ProfileScreen() {
               <SymbolView name="shield.checkered" size={18} tintColor={colors.white} />
               <Text style={styles.adminBtnText}>Admin Dashboard</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.eventAdminBtn}
-              onPress={() => router.push("/(main)/event-admin" as "/")}
-              activeOpacity={0.7}
-            >
-              <SymbolView name="ticket" size={18} tintColor={colors.black} />
-              <Text style={styles.eventAdminBtnText}>Event Einlass</Text>
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -327,19 +319,6 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xl,
     marginTop: spacing.xxl,
   },
-  eventAdminBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    padding: spacing.lg,
-    backgroundColor: colors.gray100,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray200,
-  },
-  eventAdminBtnText: { fontSize: 15, fontWeight: "600", color: colors.black },
 
   videoCell: {
     width: "100%",
