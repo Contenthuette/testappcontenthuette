@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Platform,
   Modal,
 } from "react-native";
@@ -175,31 +175,41 @@ export function IncomingCallOverlay({
         {/* Bottom: Accept / Decline */}
         <View style={styles.bottomSection}>
           <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.declineBtn]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.declineBtn,
+                pressed && { opacity: 0.8, transform: [{ scale: 0.92 }] },
+              ]}
               onPress={() => {
+                if (Platform.OS !== "web")
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 stopSound("ringtone");
                 onDecline();
               }}
-              activeOpacity={0.7}
             >
               <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.acceptBtn]}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.acceptBtn,
+                pressed && { opacity: 0.8, transform: [{ scale: 0.92 }] },
+              ]}
               onPress={() => {
+                if (Platform.OS !== "web")
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 stopSound("ringtone");
                 playSound("success");
                 onAccept();
               }}
-              activeOpacity={0.7}
             >
               <SymbolView
                 name={callType === "video" ? "video.fill" : "phone.fill"}
                 size={28}
                 tintColor="#FFF"
               />
-            </TouchableOpacity>
+            </Pressable>
           </View>
           <View style={styles.labelRow}>
             <Text style={styles.actionLabel}>Ablehnen</Text>

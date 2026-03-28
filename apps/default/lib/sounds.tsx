@@ -27,23 +27,36 @@ export function useSound() {
   return useContext(SoundContext);
 }
 
+// Pre-warm AudioContext on first user gesture, richer tones, lower latency
 const SOUND_HTML = `
 <!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;overflow:hidden">
 <script>
 var ctx;
+var compressor;
 function C(){
-  if(!ctx) ctx=new(window.AudioContext||window.webkitAudioContext)();
+  if(!ctx){
+    ctx=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+    // master compressor for consistent volume
+    compressor=ctx.createDynamicsCompressor();
+    compressor.threshold.value=-24;
+    compressor.knee.value=12;
+    compressor.ratio.value=4;
+    compressor.connect(ctx.destination);
+  }
   if(ctx.state==='suspended') ctx.resume();
   return ctx;
 }
+function D(){return compressor||C()&&compressor;}
+
 var ringtoneInterval=null;
 var ringbackInterval=null;
 var ringbackTimeout=null;
+var activeOscillators=[];
 
 function osc(f,t0,dur,vol,type){
-  var c=C();
+  var c=C(),d=D();
   var o=c.createOscillator();
   var g=c.createGain();
   o.type=type||'sine';
@@ -51,66 +64,69 @@ function osc(f,t0,dur,vol,type){
   else{o.frequency.setValueAtTime(f[0],t0);o.frequency.exponentialRampToValueAtTime(f[1],t0+dur);}
   g.gain.setValueAtTime(vol,t0);
   g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
-  o.connect(g);g.connect(c.destination);
+  o.connect(g);g.connect(d);
   o.start(t0);o.stop(t0+dur+0.01);
+  activeOscillators.push(o);
+  o.onended=function(){activeOscillators=activeOscillators.filter(function(x){return x!==o;});}
 }
 
 function tap(){
   var c=C(),t=c.currentTime;
-  osc(1200,t,0.035,0.12);
-  osc(2400,t,0.02,0.04);
+  osc(1200,t,0.03,0.1);
+  osc(2400,t,0.015,0.03);
 }
 
 function success(){
   var c=C(),t=c.currentTime;
-  osc(523,t,0.12,0.18);
-  osc(659,t+0.1,0.15,0.2);
-  osc(784,t+0.2,0.18,0.12);
+  osc(523,t,0.1,0.16);
+  osc(659,t+0.08,0.12,0.18);
+  osc(784,t+0.16,0.15,0.12);
 }
 
 function error(){
   var c=C(),t=c.currentTime;
-  osc([330,220],t,0.25,0.2);
-  osc([660,440],t,0.15,0.08);
+  osc([330,220],t,0.2,0.18);
+  osc([660,440],t,0.12,0.06);
 }
 
 function send(){
   var c=C(),t=c.currentTime;
-  osc([600,1400],t,0.09,0.12);
-  osc([1200,2800],t,0.06,0.04);
+  osc([600,1400],t,0.07,0.1);
+  osc([1200,2800],t,0.05,0.03);
 }
 
 function receive(){
   var c=C(),t=c.currentTime;
-  osc(659,t,0.08,0.12);
-  osc(880,t+0.08,0.14,0.15);
+  osc(659,t,0.06,0.1);
+  osc(880,t+0.06,0.1,0.13);
 }
 
 function hangup(){
   var c=C(),t=c.currentTime;
-  osc([480,320],t,0.2,0.2,'sine');
-  osc([620,400],t+0.15,0.2,0.15,'sine');
-  osc([400,260],t+0.3,0.3,0.12,'sine');
+  osc([480,320],t,0.15,0.18,'sine');
+  osc([620,400],t+0.12,0.15,0.13,'sine');
+  osc([400,260],t+0.25,0.25,0.1,'sine');
 }
 
 function ringtoneOnce(){
   var c=C(),t=c.currentTime;
-  osc(523,t,0.18,0.22);
-  osc(659,t+0.15,0.18,0.25);
-  osc(1046,t,0.12,0.06);
-  osc(1318,t+0.15,0.12,0.06);
+  // Two-note ascending ring with harmonics
+  osc(523,t,0.15,0.2);
+  osc(659,t+0.12,0.15,0.22);
+  osc(1046,t,0.1,0.05);
+  osc(1318,t+0.12,0.1,0.05);
 }
 
 function ringbackPulse(){
   var c=C(),t=c.currentTime;
-  osc(440,t,0.16,0.08,'sine');
-  osc(554,t+0.18,0.16,0.06,'sine');
+  osc(440,t,0.14,0.07,'sine');
+  osc(554,t+0.15,0.14,0.05,'sine');
 }
 
 function startRingtone(){
   stopRingtone();
   ringtoneOnce();
-  ringtoneInterval=setInterval(ringtoneOnce,1500);
+  ringtoneInterval=setInterval(ringtoneOnce,1400);
 }
 
 function stopRingtone(){
@@ -119,13 +135,13 @@ function stopRingtone(){
 
 function ringbackBurst(){
   ringbackPulse();
-  ringbackTimeout=setTimeout(ringbackPulse,380);
+  ringbackTimeout=setTimeout(ringbackPulse,350);
 }
 
 function startRingback(){
   stopRingback();
   ringbackBurst();
-  ringbackInterval=setInterval(ringbackBurst,1800);
+  ringbackInterval=setInterval(ringbackBurst,1600);
 }
 
 function stopRingback(){
@@ -145,6 +161,9 @@ function onMsg(e){
 }
 window.addEventListener('message',onMsg);
 document.addEventListener('message',onMsg);
+
+// Pre-warm audio context immediately
+try{C();}catch(e){}
 
 if(window.ReactNativeWebView){
   window.ReactNativeWebView.postMessage(JSON.stringify({ready:true}));

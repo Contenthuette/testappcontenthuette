@@ -15,8 +15,10 @@ import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
+import type { MediaPickResult } from "@/components/ChatInputBar";
 import { SharedPostBubble } from "@/components/SharedPostBubble";
 import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
+import { MediaMessageBubble } from "@/components/MediaMessageBubble";
 
 export default function GroupChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,18 +61,14 @@ export default function GroupChatScreen() {
     if (!id) return;
     try {
       const uploadUrl = await generateUploadUrl();
-
       const response = await fetch(uri);
       const blob = await response.blob();
-
       const uploadResponse = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": "audio/mp4" },
         body: blob,
       });
-
       const { storageId } = await uploadResponse.json() as { storageId: Id<"_storage"> };
-
       await sendMessage({
         groupId: id as Id<"groups">,
         type: "voice",
@@ -82,6 +80,32 @@ export default function GroupChatScreen() {
       console.error("Failed to send voice message", err);
       if (Platform.OS !== "web") {
         Alert.alert("Fehler", "Sprachnachricht konnte nicht gesendet werden.");
+      }
+    }
+  }, [id, generateUploadUrl, sendMessage]);
+
+  const handleSendMedia = useCallback(async (media: MediaPickResult) => {
+    if (!id) return;
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(media.uri);
+      const blob = await response.blob();
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": media.mimeType },
+        body: blob,
+      });
+      const { storageId } = await uploadResponse.json() as { storageId: Id<"_storage"> };
+      await sendMessage({
+        groupId: id as Id<"groups">,
+        type: media.type,
+        mediaStorageId: storageId,
+        text: media.type === "video" ? "\ud83c\udfa5 Video" : "\ud83d\uddbc\ufe0f Foto",
+      });
+    } catch (err) {
+      console.error("Failed to send media", err);
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Medium konnte nicht gesendet werden.");
       }
     }
   }, [id, generateUploadUrl, sendMessage]);
@@ -118,6 +142,24 @@ export default function GroupChatScreen() {
             <VoiceMessageBubble
               audioUrl={item.mediaUrl ?? ""}
               durationMs={item.mediaDuration}
+              isMine={isMine}
+              timestamp={timeStr}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    // Image/Video message bubble
+    if ((item.type === "image" || item.type === "video") && item.mediaUrl) {
+      return (
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+          {!isMine && <Avatar uri={item.senderAvatarUrl} name={item.senderName} size={30} />}
+          <View>
+            {!isMine && <Text style={styles.senderName}>{item.senderName}</Text>}
+            <MediaMessageBubble
+              mediaUrl={item.mediaUrl}
+              type={item.type}
               isMine={isMine}
               timestamp={timeStr}
             />
@@ -188,7 +230,7 @@ export default function GroupChatScreen() {
           }
         />
 
-        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} />
+        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} onSendMedia={handleSendMedia} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

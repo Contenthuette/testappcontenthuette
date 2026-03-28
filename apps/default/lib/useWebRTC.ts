@@ -75,7 +75,7 @@ const DEFAULT_ICE_SERVERS = [
 ];
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
-const SIGNAL_ACK_DEBOUNCE_MS = 1_500;
+const SIGNAL_ACK_DEBOUNCE_MS = 500;
 
 interface IceServerConfig {
   urls: string;

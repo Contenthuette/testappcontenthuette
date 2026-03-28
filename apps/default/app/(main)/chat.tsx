@@ -11,8 +11,10 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { ChatInputBar } from "@/components/ChatInputBar";
+import type { MediaPickResult } from "@/components/ChatInputBar";
 import { SharedPostBubble } from "@/components/SharedPostBubble";
 import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
+import { MediaMessageBubble } from "@/components/MediaMessageBubble";
 import * as Haptics from "expo-haptics";
 
 export default function ChatScreen() {
@@ -31,7 +33,6 @@ export default function ChatScreen() {
     if (isNewChat && otherUserId && !resolvedRef.current) {
       getOrCreateDM({ otherUserId: otherUserId as Id<"users"> }).then((convId) => {
         resolvedRef.current = convId;
-        // Replace with the real conversation id
         router.replace({ pathname: "/(main)/chat" as "/", params: { id: convId } });
       }).catch(console.error);
     }
@@ -121,12 +122,38 @@ export default function ChatScreen() {
         type: "voice",
         mediaStorageId: storageId,
         mediaDuration: durationMs,
-        text: `🎤 ${Math.round(durationMs / 1000)}s`,
+        text: `\ud83c\udfa4 ${Math.round(durationMs / 1000)}s`,
       });
     } catch (err) {
       console.error("Failed to send voice message", err);
       if (Platform.OS !== "web") {
         Alert.alert("Fehler", "Sprachnachricht konnte nicht gesendet werden.");
+      }
+    }
+  }, [conversationId, generateUploadUrl, sendMessage]);
+
+  const handleSendMedia = useCallback(async (media: MediaPickResult) => {
+    if (!conversationId) return;
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(media.uri);
+      const blob = await response.blob();
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": media.mimeType },
+        body: blob,
+      });
+      const { storageId } = await uploadResponse.json() as { storageId: Id<"_storage"> };
+      await sendMessage({
+        conversationId,
+        type: media.type,
+        mediaStorageId: storageId,
+        text: media.type === "video" ? "\ud83c\udfa5 Video" : "\ud83d\uddbc\ufe0f Foto",
+      });
+    } catch (err) {
+      console.error("Failed to send media", err);
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Medium konnte nicht gesendet werden.");
       }
     }
   }, [conversationId, generateUploadUrl, sendMessage]);
@@ -157,12 +184,23 @@ export default function ChatScreen() {
 
     if (item.type === "voice") {
       return (
-        <View
-          style={[styles.msgRow, isMine && styles.msgRowMine]}
-        >
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
           <VoiceMessageBubble
             audioUrl={item.mediaUrl ?? ""}
             durationMs={item.mediaDuration}
+            isMine={isMine}
+            timestamp={timeStr}
+          />
+        </View>
+      );
+    }
+
+    if ((item.type === "image" || item.type === "video") && item.mediaUrl) {
+      return (
+        <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
+          <MediaMessageBubble
+            mediaUrl={item.mediaUrl}
+            type={item.type}
             isMine={isMine}
             timestamp={timeStr}
           />
@@ -226,7 +264,7 @@ export default function ChatScreen() {
           }
         />
 
-        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} />
+        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} onSendMedia={handleSendMedia} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

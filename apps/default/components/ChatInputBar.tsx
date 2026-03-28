@@ -3,11 +3,13 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { SymbolView } from "@/components/Icon";
 import { useSound } from "@/lib/sounds";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
@@ -35,16 +37,15 @@ class VoiceRecorderErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <View style={ebStyles.errorBar}>
-          <TouchableOpacity
+          <Pressable
             onPress={() => {
               this.setState({ hasError: false });
               this.props.onReset();
             }}
             style={ebStyles.closeBtn}
-            activeOpacity={0.7}
           >
             <SymbolView name="xmark" size={14} tintColor="#9CA3AF" />
-          </TouchableOpacity>
+          </Pressable>
           <Text style={ebStyles.errorText}>
             Sprachaufnahme nicht verfügbar
           </Text>
@@ -80,9 +81,16 @@ const ebStyles = StyleSheet.create({
   },
 });
 
+export interface MediaPickResult {
+  uri: string;
+  type: "image" | "video";
+  mimeType: string;
+}
+
 interface ChatInputBarProps {
   onSend: (text: string) => void;
   onSendVoice?: (uri: string, durationMs: number) => void;
+  onSendMedia?: (media: MediaPickResult) => void;
   onPlusPress?: () => void;
   placeholder?: string;
 }
@@ -90,11 +98,13 @@ interface ChatInputBarProps {
 export function ChatInputBar({
   onSend,
   onSendVoice,
+  onSendMedia,
   onPlusPress,
   placeholder = "Nachricht...",
 }: ChatInputBarProps) {
   const [text, setText] = useState("");
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [isPickingMedia, setIsPickingMedia] = useState(false);
   const { playSound } = useSound();
 
   const handleSend = () => {
@@ -113,6 +123,38 @@ export function ChatInputBar({
     playSound("tap");
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const handleGalleryPress = async () => {
+    if (isPickingMedia || !onSendMedia) return;
+    playSound("tap");
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    setIsPickingMedia(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        quality: 0.8,
+        allowsEditing: false,
+        videoMaxDuration: 60,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const isVideo = asset.type === "video";
+        onSendMedia({
+          uri: asset.uri,
+          type: isVideo ? "video" : "image",
+          mimeType: asset.mimeType ?? (isVideo ? "video/mp4" : "image/jpeg"),
+        });
+      }
+    } catch (err) {
+      console.error("Media picker error:", err);
+    } finally {
+      setIsPickingMedia(false);
     }
   };
 
@@ -138,14 +180,37 @@ export function ChatInputBar({
         </VoiceRecorderErrorBoundary>
       ) : (
         <View style={styles.bar}>
+          {/* Gallery button */}
+          {onSendMedia && (
+            <Pressable
+              onPress={handleGalleryPress}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                pressed && styles.btnPressed,
+              ]}
+              hitSlop={6}
+              disabled={isPickingMedia}
+            >
+              {isPickingMedia ? (
+                <ActivityIndicator size="small" color="#8E8E93" />
+              ) : (
+                <SymbolView name="photo.on.rectangle" size={19} tintColor="#8E8E93" />
+              )}
+            </Pressable>
+          )}
+
+          {/* Plus button */}
           {onPlusPress && (
-            <TouchableOpacity
+            <Pressable
               onPress={onPlusPress}
-              style={styles.plusBtn}
-              activeOpacity={0.7}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                pressed && styles.btnPressed,
+              ]}
+              hitSlop={6}
             >
               <SymbolView name="plus" size={20} tintColor="#8E8E93" />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           <View style={styles.inputContainer}>
@@ -162,22 +227,28 @@ export function ChatInputBar({
           </View>
 
           {hasText ? (
-            <TouchableOpacity
+            <Pressable
               onPress={handleSend}
-              style={styles.sendBtn}
-              activeOpacity={0.7}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                pressed && styles.btnPressed,
+              ]}
+              hitSlop={6}
             >
               <SymbolView name="arrow.up" size={16} tintColor="#FFF" />
-            </TouchableOpacity>
+            </Pressable>
           ) : (
             onSendVoice && (
-              <TouchableOpacity
+              <Pressable
                 onPress={handleMicPress}
-                style={styles.micBtn}
-                activeOpacity={0.7}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  pressed && styles.btnPressed,
+                ]}
+                hitSlop={6}
               >
                 <SymbolView name="mic.fill" size={18} tintColor="#8E8E93" />
-              </TouchableOpacity>
+              </Pressable>
             )
           )}
         </View>
@@ -202,10 +273,10 @@ const styles = StyleSheet.create({
     paddingRight: 4,
     paddingVertical: 4,
     minHeight: 48,
-    gap: 6,
+    gap: 4,
     boxShadow: "0px 1px 8px rgba(0,0,0,0.08)",
   },
-  plusBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -227,14 +298,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
-  micBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F2F2F7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
   sendBtn: {
     width: 36,
     height: 36,
@@ -242,5 +305,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
+  },
+  btnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
 });
