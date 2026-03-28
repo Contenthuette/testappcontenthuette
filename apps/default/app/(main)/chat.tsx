@@ -64,8 +64,11 @@ export default function ChatScreen() {
         type,
       });
       router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
-    } catch (e) {
-      console.error("Failed to initiate call", e);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Anruf fehlgeschlagen";
+      if (Platform.OS !== "web") {
+        Alert.alert("Anruf fehlgeschlagen", message);
+      }
     }
   }, [conversationId, partner, initiateCall]);
 

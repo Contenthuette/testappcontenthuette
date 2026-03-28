@@ -278,19 +278,28 @@ export const initiateGroupCall = authMutation({
       throw new Error(`Group calls are limited to ${MAX_GROUP_CALL_PARTICIPANTS} participants`);
     }
 
-    await Promise.all(
-      activeMemberIds
-        .filter((userId) => userId !== myId)
-        .map((userId) => assertUserAvailableForCall(ctx, userId)),
-    );
+    // Filter out busy members instead of blocking the whole call
+    const potentialRecipients = activeMemberIds.filter((userId) => userId !== myId);
+    const availableRecipientIds: Array<Id<"users">> = [];
+    for (const userId of potentialRecipients) {
+      try {
+        await assertUserAvailableForCall(ctx, userId);
+        availableRecipientIds.push(userId);
+      } catch {
+        // User is busy, skip them
+      }
+    }
+
+    if (availableRecipientIds.length === 0) {
+      throw new Error("Kein Gruppenmitglied ist gerade erreichbar");
+    }
 
     const avatarUrl = me.avatarStorageId
       ? await ctx.storage.getUrl(me.avatarStorageId)
       : me.avatarUrl;
 
-    const recipientIds = activeMemberIds.filter((userId) => userId !== myId);
     const recipientUsers = await Promise.all(
-      recipientIds.map((userId) => ctx.db.get(userId)),
+      availableRecipientIds.map((userId) => ctx.db.get(userId)),
     );
     const recipientAvatars = await Promise.all(
       recipientUsers.map((user) =>
@@ -325,7 +334,7 @@ export const initiateGroupCall = authMutation({
     });
 
     await Promise.all(
-      recipientIds.map(async (recipientId, index) => {
+      availableRecipientIds.map(async (recipientId, index) => {
         const recipient = recipientUsers[index];
         const recipientAvatarUrl = recipientAvatars[index];
 

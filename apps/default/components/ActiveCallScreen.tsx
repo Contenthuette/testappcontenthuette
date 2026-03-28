@@ -46,8 +46,10 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 
   const isVideoCall = call?.type === "video";
   const isInitiator = !!(call && me && call.callerId === me._id);
+  // CRITICAL: Don't enable WebRTC until `me` is loaded so isInitiator is correct
   const webrtcEnabled = !!(
     call &&
+    me &&
     (call.status === "ringing" || call.status === "active")
   );
 

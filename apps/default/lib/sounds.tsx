@@ -103,30 +103,36 @@ function receive(){
 
 function hangup(){
   var c=C(),t=c.currentTime;
-  osc([480,320],t,0.15,0.18,'sine');
-  osc([620,400],t+0.12,0.15,0.13,'sine');
-  osc([400,260],t+0.25,0.25,0.1,'sine');
+  osc([480,320],t,0.15,0.35,'sine');
+  osc([620,400],t+0.12,0.15,0.25,'sine');
+  osc([400,260],t+0.25,0.25,0.2,'sine');
 }
 
 function ringtoneOnce(){
   var c=C(),t=c.currentTime;
-  // Two-note ascending ring with harmonics
-  osc(523,t,0.15,0.2);
-  osc(659,t+0.12,0.15,0.22);
-  osc(1046,t,0.1,0.05);
-  osc(1318,t+0.12,0.1,0.05);
+  // Loud two-note phone ring with overtones
+  osc(523,t,0.18,0.45);
+  osc(659,t+0.14,0.18,0.5);
+  osc(1046,t,0.12,0.15);
+  osc(1318,t+0.14,0.12,0.15);
+  // Second ring burst
+  osc(523,t+0.45,0.18,0.45);
+  osc(659,t+0.59,0.18,0.5);
+  osc(1046,t+0.45,0.12,0.15);
+  osc(1318,t+0.59,0.12,0.15);
 }
 
 function ringbackPulse(){
   var c=C(),t=c.currentTime;
-  osc(440,t,0.14,0.07,'sine');
-  osc(554,t+0.15,0.14,0.05,'sine');
+  // Audible dial tone pulses
+  osc(440,t,0.5,0.25,'sine');
+  osc(480,t,0.5,0.25,'sine');
 }
 
 function startRingtone(){
   stopRingtone();
   ringtoneOnce();
-  ringtoneInterval=setInterval(ringtoneOnce,1400);
+  ringtoneInterval=setInterval(ringtoneOnce,2000);
 }
 
 function stopRingtone(){
@@ -135,13 +141,13 @@ function stopRingtone(){
 
 function ringbackBurst(){
   ringbackPulse();
-  ringbackTimeout=setTimeout(ringbackPulse,350);
+  ringbackTimeout=setTimeout(ringbackPulse,1000);
 }
 
 function startRingback(){
   stopRingback();
   ringbackBurst();
-  ringbackInterval=setInterval(ringbackBurst,1600);
+  ringbackInterval=setInterval(ringbackBurst,3000);
 }
 
 function stopRingback(){

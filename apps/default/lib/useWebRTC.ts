@@ -69,9 +69,12 @@ if (Platform.OS !== "web") {
   }
 }
 
-const DEFAULT_ICE_SERVERS = [
+const DEFAULT_ICE_SERVERS: Array<IceServerConfig> = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -168,6 +171,14 @@ export function useWebRTC({
 
     return () => clearInterval(interval);
   }, [callId, enabled, heartbeat]);
+
+  // Reset setup state when callId changes so a new call can initialize
+  useEffect(() => {
+    setupDoneRef.current = false;
+    hasHandledOfferRef.current = false;
+    processedSignalIdsRef.current.clear();
+    pendingCandidatesRef.current = [];
+  }, [callId]);
 
   // Setup peer connection with ICE servers
   useEffect(() => {

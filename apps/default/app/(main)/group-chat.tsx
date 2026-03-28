@@ -61,8 +61,11 @@ export default function GroupChatScreen() {
         type,
       });
       router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
-    } catch (e) {
-      console.error("Failed to initiate group call", e);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Gruppenanruf fehlgeschlagen";
+      if (Platform.OS !== "web") {
+        Alert.alert("Anruf fehlgeschlagen", message);
+      }
     } finally {
       setIsCallStarting(false);
     }
