@@ -129,3 +129,87 @@ export const verifyCheckoutSession = internalAction({
     }
   },
 });
+
+// Public action: create a Stripe Billing Portal session for subscription management
+export const createBillingPortalSession = action({
+  args: {
+    stripeCustomerId: v.string(),
+    returnUrl: v.string(),
+  },
+  returns: v.object({ url: v.string() }),
+  handler: async (_ctx, args) => {
+    const session = await stripeRequest("/billing_portal/sessions", {
+      customer: args.stripeCustomerId,
+      return_url: args.returnUrl,
+    });
+
+    const portalUrl = session.url as string | undefined;
+    if (!portalUrl) throw new Error("Stripe did not return a portal URL");
+
+    return { url: portalUrl };
+  },
+});
+
+// Internal action: handle Stripe webhook events
+export const handleWebhookEvent = internalAction({
+  args: {
+    eventType: v.string(),
+    customerId: v.optional(v.string()),
+    subscriptionId: v.optional(v.string()),
+    subscriptionStatus: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { eventType, customerId, subscriptionId, subscriptionStatus } = args;
+
+    if (!customerId) {
+      console.warn("Webhook event missing customerId:", eventType);
+      return null;
+    }
+
+    switch (eventType) {
+      case "customer.subscription.deleted":
+        await ctx.runMutation(internal.stripeHelpers.updateSubscriptionByCustomer, {
+          stripeCustomerId: customerId,
+          status: "canceled",
+        });
+        break;
+
+      case "customer.subscription.updated":
+        if (subscriptionStatus === "active") {
+          // Renewal or reactivation
+          await ctx.runMutation(internal.stripeHelpers.updateSubscriptionByCustomer, {
+            stripeCustomerId: customerId,
+            status: "active",
+          });
+        } else if (
+          subscriptionStatus === "past_due" ||
+          subscriptionStatus === "unpaid"
+        ) {
+          await ctx.runMutation(internal.stripeHelpers.updateSubscriptionByCustomer, {
+            stripeCustomerId: customerId,
+            status: "expired",
+          });
+        } else if (subscriptionStatus === "canceled") {
+          await ctx.runMutation(internal.stripeHelpers.updateSubscriptionByCustomer, {
+            stripeCustomerId: customerId,
+            status: "canceled",
+          });
+        }
+        break;
+
+      case "invoice.payment_failed":
+        console.warn("Payment failed for customer:", customerId);
+        await ctx.runMutation(internal.stripeHelpers.updateSubscriptionByCustomer, {
+          stripeCustomerId: customerId,
+          status: "expired",
+        });
+        break;
+
+      default:
+        console.log("Unhandled webhook event:", eventType);
+    }
+
+    return null;
+  },
+});

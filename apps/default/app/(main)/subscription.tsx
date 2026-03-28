@@ -1,35 +1,52 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Platform, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
-import { Button } from "@/components/Button";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
+import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
+
+function getConvexSiteUrl(): string {
+  const url = Constants.expoConfig?.extra?.convexUrl as string | undefined;
+  if (url) return url.replace(".convex.cloud", ".convex.site");
+  return "";
+}
 
 export default function SubscriptionScreen() {
   const { isAuthenticated } = useConvexAuth();
   const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
-  const updateSubscription = useMutation(api.users.updateSubscription);
-  const [showCancel, setShowCancel] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const createPortalSession = useAction(api.stripeActions.createBillingPortalSession);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const isActive = me?.subscriptionStatus === "active";
+  const hasStripeCustomer = !!me?.stripeCustomerId;
 
-  const handleCancel = async () => {
-    setLoading(true);
+  const handleManageSubscription = async () => {
+    if (!me?.stripeCustomerId) return;
+    setPortalLoading(true);
     try {
-      await updateSubscription({ status: "canceled", plan: me?.subscriptionPlan ?? "monthly" });
-      safeBack("subscription");
-    } catch (_e) {
-      // handle
+      const returnUrl = getConvexSiteUrl() + "/stripe/success";
+      const { url } = await createPortalSession({
+        stripeCustomerId: me.stripeCustomerId,
+        returnUrl,
+      });
+      if (Platform.OS === "web") {
+        window.open(url, "_blank");
+      } else {
+        await WebBrowser.openBrowserAsync(url);
+      }
+    } catch (e) {
+      console.error("Portal session error:", e);
     } finally {
-      setLoading(false);
+      setPortalLoading(false);
     }
   };
 
@@ -79,38 +96,38 @@ export default function SubscriptionScreen() {
           ))}
         </View>
 
-        {/* Cancel area */}
-        {isActive && !showCancel && (
+        {/* Stripe Portal Button */}
+        {hasStripeCustomer && (
           <TouchableOpacity
-            style={styles.cancelTrigger}
-            onPress={() => setShowCancel(true)}
-            activeOpacity={0.6}
+            style={styles.portalButton}
+            onPress={handleManageSubscription}
+            activeOpacity={0.7}
+            disabled={portalLoading}
           >
-            <Text style={styles.cancelTriggerText}>Abonnement kündigen</Text>
+            {portalLoading ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <>
+                <SymbolView name="creditcard" size={18} tintColor={colors.white} />
+                <Text style={styles.portalButtonText}>Abo bei Stripe verwalten</Text>
+                <SymbolView name="arrow.up.right" size={14} tintColor={colors.white} />
+              </>
+            )}
           </TouchableOpacity>
         )}
 
-        {showCancel && (
-          <View style={styles.cancelBox}>
-            <SymbolView name="exclamationmark.triangle.fill" size={28} tintColor={colors.danger} />
-            <Text style={styles.cancelTitle}>Möchtest du wirklich kündigen?</Text>
-            <Text style={styles.cancelDesc}>
-              Du verlierst den Zugang zu allen Gruppen, Chats und Events.
-              Deine Daten werden nach 30 Tagen gelöscht.
+        {hasStripeCustomer && (
+          <Text style={styles.portalHint}>
+            Über Stripe kannst du dein Abo kündigen, Zahlungsmethode ändern oder Rechnungen einsehen.
+          </Text>
+        )}
+
+        {!hasStripeCustomer && isActive && (
+          <View style={styles.noStripeBox}>
+            <SymbolView name="info.circle" size={20} tintColor={colors.gray400} />
+            <Text style={styles.noStripeText}>
+              Abo-Verwaltung ist für dein Konto nicht verfügbar.
             </Text>
-            <Button
-              title="Endgültig kündigen"
-              onPress={handleCancel}
-              loading={loading}
-              variant="danger"
-              fullWidth
-            />
-            <Button
-              title="Abbrechen"
-              onPress={() => setShowCancel(false)}
-              variant="ghost"
-              fullWidth
-            />
           </View>
         )}
       </ScrollView>
@@ -191,33 +208,43 @@ const styles = StyleSheet.create({
   },
   featureText: { fontSize: 15, color: colors.gray700, letterSpacing: -0.1 },
 
-  cancelTrigger: {
+  portalButton: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.xl,
-    marginTop: spacing.lg,
-  },
-  cancelTriggerText: { fontSize: 15, color: colors.danger, fontWeight: "600" },
-
-  cancelBox: {
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.black,
+    borderRadius: radius.full,
+    paddingVertical: 16,
     marginTop: spacing.xl,
-    padding: spacing.xxl,
+  },
+  portalButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  portalHint: {
+    fontSize: 13,
+    color: colors.gray400,
+    textAlign: "center",
+    marginTop: spacing.md,
+    lineHeight: 19,
+    paddingHorizontal: spacing.md,
+  },
+  noStripeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     backgroundColor: colors.white,
     borderRadius: radius.xl,
     borderCurve: "continuous",
-    alignItems: "center",
-    gap: spacing.md,
+    padding: spacing.lg,
+    marginTop: spacing.xl,
   },
-  cancelTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.danger,
-    textAlign: "center",
-  },
-  cancelDesc: {
+  noStripeText: {
+    flex: 1,
     fontSize: 14,
-    color: colors.gray600,
-    textAlign: "center",
-    lineHeight: 21,
-    marginBottom: spacing.sm,
+    color: colors.gray500,
+    lineHeight: 20,
   },
 });

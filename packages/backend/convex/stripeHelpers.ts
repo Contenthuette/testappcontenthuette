@@ -182,3 +182,24 @@ export const claimSubscription = mutation({
     return "claimed" as const;
   },
 });
+
+// Internal: update user subscription status via Stripe customer ID (for webhooks)
+export const updateSubscriptionByCustomer = internalMutation({
+  args: {
+    stripeCustomerId: v.string(),
+    status: v.union(v.literal("active"), v.literal("canceled"), v.literal("expired")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_stripeCustomerId", (q) => q.eq("stripeCustomerId", args.stripeCustomerId))
+      .unique();
+    if (!user) {
+      console.warn("No user found for Stripe customer:", args.stripeCustomerId);
+      return null;
+    }
+    await ctx.db.patch(user._id, { subscriptionStatus: args.status });
+    return null;
+  },
+});

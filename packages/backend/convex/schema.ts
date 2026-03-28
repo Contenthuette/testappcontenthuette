@@ -35,6 +35,7 @@ export default defineSchema({
     .index("by_county_and_city", ["county", "city"])
     .index("by_lastActiveAt", ["lastActiveAt"])
     .index("by_createdAt", ["createdAt"])
+    .index("by_stripeCustomerId", ["stripeCustomerId"])
     .searchIndex("search_text", { searchField: "searchText" }),
 
   // ── Pending Subscriptions (pre-signup Stripe payments) ─────────
