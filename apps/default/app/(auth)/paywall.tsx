@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, Link } from "expo-router";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -21,6 +21,7 @@ export default function PaywallScreen() {
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [agbAccepted, setAgbAccepted] = useState(false);
 
   const createCheckout = useAction(api.stripeActions.createCheckoutSession);
   const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
@@ -79,6 +80,7 @@ export default function PaywallScreen() {
 
   // Show waiting state after browser closes if payment is processing
   const isWaiting = sessionToken !== null && pendingStatus?.status === "pending";
+  const canSubscribe = agbAccepted && !loading && !isWaiting;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -142,10 +144,47 @@ export default function PaywallScreen() {
           ))}
         </View>
 
+        {/* AGB Checkbox */}
+        <TouchableOpacity
+          style={styles.agbRow}
+          onPress={() => setAgbAccepted(!agbAccepted)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, agbAccepted && styles.checkboxChecked]}>
+            {agbAccepted && (
+              <SymbolView name="checkmark" size={12} tintColor={colors.white} />
+            )}
+          </View>
+          <Text style={styles.agbText}>
+            Ich habe die{" "}
+            <Text
+              style={styles.agbLink}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push("/(main)/privacy-center");
+              }}
+            >
+              AGB
+            </Text>
+            {" "}und{" "}
+            <Text
+              style={styles.agbLink}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push("/(main)/privacy-center");
+              }}
+            >
+              Datenschutzerklärung
+            </Text>
+            {" "}gelesen und akzeptiere diese.
+          </Text>
+        </TouchableOpacity>
+
         <Button
           title={isWaiting ? "Zahlung wird verarbeitet..." : "Jetzt abonnieren"}
           onPress={handleSubscribe}
           loading={loading || isWaiting}
+          disabled={!canSubscribe}
           fullWidth
           size="lg"
         />
@@ -221,6 +260,39 @@ const styles = StyleSheet.create({
   savingsText: { color: colors.white, fontSize: 12, fontWeight: "700" },
   planPrice: { fontSize: 24, fontWeight: "700", color: colors.black },
   planInterval: { fontSize: 15, fontWeight: "400", color: colors.gray500 },
+  agbRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+    paddingRight: spacing.sm,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.gray300,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+    borderCurve: "continuous",
+  },
+  checkboxChecked: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  agbText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.gray600,
+    lineHeight: 20,
+  },
+  agbLink: {
+    color: colors.black,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
   paymentMethods: {
     alignItems: "center",
     marginTop: spacing.xl,
