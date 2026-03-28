@@ -23,6 +23,8 @@ export default defineSchema({
     subscriptionStatus: v.union(v.literal("none"), v.literal("active"), v.literal("canceled"), v.literal("expired")),
     subscriptionPlan: v.optional(v.string()),
     subscriptionExpiresAt: v.optional(v.number()),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
     lastActiveAt: v.optional(v.number()),
     createdAt: v.number(),
   })
@@ -34,6 +36,21 @@ export default defineSchema({
     .index("by_lastActiveAt", ["lastActiveAt"])
     .index("by_createdAt", ["createdAt"])
     .searchIndex("search_text", { searchField: "searchText" }),
+
+  // ── Pending Subscriptions (pre-signup Stripe payments) ─────────
+  pendingSubscriptions: defineTable({
+    sessionToken: v.string(),
+    plan: v.string(),
+    status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+    stripeSessionId: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    claimedByUserId: v.optional(v.id("users")),
+    createdAt: v.number(),
+  })
+    .index("by_sessionToken", ["sessionToken"])
+    .index("by_stripeSessionId", ["stripeSessionId"])
+    .index("by_status", ["status"]),
 
   // ── Groups ─────────────────────────────────────────────────────
   groups: defineTable({

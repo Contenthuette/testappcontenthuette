@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -9,10 +9,12 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export default function LoginScreen() {
   const { isAuthenticated } = useConvexAuth();
+  const params = useLocalSearchParams<{ sessionToken?: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,13 +22,37 @@ export default function LoginScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState("");
   const [awaitingAuth, setAwaitingAuth] = useState(false);
+  const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
+  const claimAttempted = React.useRef(false);
 
   // Navigate once Convex confirms authentication
   useEffect(() => {
-    if (awaitingAuth && isAuthenticated) {
+    if (!awaitingAuth || !isAuthenticated) return;
+    if (claimAttempted.current) return;
+    claimAttempted.current = true;
+
+    const token = params.sessionToken;
+    if (token) {
+      const attemptClaim = async (retries: number): Promise<void> => {
+        try {
+          const result = await claimSubscription({ sessionToken: token });
+          if (result === "no_user" && retries > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
+            return attemptClaim(retries - 1);
+          }
+        } catch {
+          if (retries > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
+            return attemptClaim(retries - 1);
+          }
+        }
+        router.replace("/");
+      };
+      attemptClaim(3);
+    } else {
       router.replace("/");
     }
-  }, [awaitingAuth, isAuthenticated]);
+  }, [awaitingAuth, isAuthenticated, params.sessionToken, claimSubscription]);
 
   // Timeout fallback — if Convex doesn't confirm within 15s, let the user retry
   useEffect(() => {

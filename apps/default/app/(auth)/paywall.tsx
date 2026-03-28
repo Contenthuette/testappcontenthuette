@@ -1,35 +1,88 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 import { SUBSCRIPTION_PLANS } from "@/lib/constants";
+import { convexSiteUrl } from "@/lib/convex-urls";
+import * as WebBrowser from "expo-web-browser";
+import * as Crypto from "expo-crypto";
 
 export default function PaywallScreen() {
-  const [selectedPlan, setSelectedPlan] = useState("monthly");
+  const { isAuthenticated } = useConvexAuth();
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(false);
-  const updateSubscription = useMutation(api.users.updateSubscription);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
-  const handleSubscribe = async () => {
+  const createCheckout = useAction(api.stripeActions.createCheckoutSession);
+  const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
+
+  // Watch the pending subscription status reactively
+  const pendingStatus = useQuery(
+    api.stripeHelpers.getPendingByToken,
+    sessionToken ? { sessionToken } : "skip",
+  );
+
+  // When subscription is completed, navigate forward
+  useEffect(() => {
+    if (pendingStatus?.status !== "completed") return;
+    if (!sessionToken) return;
+
+    if (isAuthenticated) {
+      // User is already logged in — claim directly
+      claimSubscription({ sessionToken })
+        .then(() => router.replace("/"))
+        .catch(() => router.replace("/"));
+    } else {
+      // Not logged in — go to signup with sessionToken
+      router.replace({ pathname: "/(auth)/signup", params: { sessionToken } });
+    }
+  }, [pendingStatus, sessionToken, isAuthenticated, claimSubscription]);
+
+  const handleSubscribe = useCallback(async () => {
     setLoading(true);
     try {
-      await updateSubscription({ plan: selectedPlan, status: "active" });
-      router.replace("/");
-    } catch (_e) {
-      // handle error
-    } finally {
+      const token = Crypto.randomUUID();
+      setSessionToken(token);
+
+      const { url } = await createCheckout({
+        plan: selectedPlan,
+        sessionToken: token,
+        siteUrl: convexSiteUrl,
+      });
+
+      // Open Stripe Checkout in browser
+      await WebBrowser.openBrowserAsync(url, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      });
+
+      // Browser closed — pendingStatus query will reactively update
+      // If the payment was not completed, allow retry
       setLoading(false);
+    } catch (e) {
+      console.error("Checkout error:", e);
+      setSessionToken(null);
+      setLoading(false);
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Checkout konnte nicht gestartet werden. Bitte versuche es erneut.");
+      }
     }
-  };
+  }, [selectedPlan, createCheckout]);
+
+  // Show waiting state after browser closes if payment is processing
+  const isWaiting = sessionToken !== null && pendingStatus?.status === "pending";
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <ZLogo size={48} />
           <Text style={styles.title}>Z Premium</Text>
@@ -37,7 +90,13 @@ export default function PaywallScreen() {
         </View>
 
         <View style={styles.features}>
-          {["Unbegrenzte Gruppen & Chats", "Alle Events entdecken", "Direktnachrichten", "Medien teilen", "Exklusive Community"].map((f, i) => (
+          {[
+            "Unbegrenzte Gruppen & Chats",
+            "Alle Events entdecken",
+            "Direktnachrichten",
+            "Medien teilen",
+            "Exklusive Community",
+          ].map((f, i) => (
             <View key={i} style={styles.featureRow}>
               <SymbolView name="checkmark.circle.fill" size={20} tintColor={colors.black} />
               <Text style={styles.featureText}>{f}</Text>
@@ -46,14 +105,23 @@ export default function PaywallScreen() {
         </View>
 
         <View style={styles.plans}>
-          {SUBSCRIPTION_PLANS.map(plan => (
+          {SUBSCRIPTION_PLANS.map((plan) => (
             <TouchableOpacity
               key={plan.id}
-              style={[styles.planCard, selectedPlan === plan.id && styles.planCardSelected]}
-              onPress={() => setSelectedPlan(plan.id)}
+              style={[
+                styles.planCard,
+                selectedPlan === plan.id && styles.planCardSelected,
+              ]}
+              onPress={() => setSelectedPlan(plan.id as "monthly" | "yearly")}
+              activeOpacity={0.7}
             >
               <View style={styles.planHeader}>
-                <View style={[styles.radio, selectedPlan === plan.id && styles.radioSelected]}>
+                <View
+                  style={[
+                    styles.radio,
+                    selectedPlan === plan.id && styles.radioSelected,
+                  ]}
+                >
                   {selectedPlan === plan.id && <View style={styles.radioDot} />}
                 </View>
                 <Text style={styles.planName}>{plan.name}</Text>
@@ -63,15 +131,37 @@ export default function PaywallScreen() {
                   </View>
                 )}
               </View>
-              <Text style={styles.planPrice}>€{plan.price.toFixed(2)}<Text style={styles.planInterval}> / {plan.interval === "month" ? "Monat" : "Jahr"}</Text></Text>
+              <Text style={styles.planPrice}>
+                €{plan.price.toFixed(2)}
+                <Text style={styles.planInterval}>
+                  {" / "}
+                  {plan.interval === "month" ? "Monat" : "Jahr"}
+                </Text>
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Button title="Jetzt abonnieren" onPress={handleSubscribe} loading={loading} fullWidth size="lg" />
+        <Button
+          title={isWaiting ? "Zahlung wird verarbeitet..." : "Jetzt abonnieren"}
+          onPress={handleSubscribe}
+          loading={loading || isWaiting}
+          fullWidth
+          size="lg"
+        />
+
+        <View style={styles.paymentMethods}>
+          <Text style={styles.paymentLabel}>Bezahle sicher mit</Text>
+          <View style={styles.paymentIcons}>
+            <View style={styles.paymentBadge}><Text style={styles.paymentBadgeText}>Apple Pay</Text></View>
+            <View style={styles.paymentBadge}><Text style={styles.paymentBadgeText}>Google Pay</Text></View>
+            <View style={styles.paymentBadge}><Text style={styles.paymentBadgeText}>Kreditkarte</Text></View>
+          </View>
+        </View>
 
         <Text style={styles.terms}>
-          Mit dem Abonnement stimmst du den Nutzungsbedingungen zu. Abonnement kann jederzeit gekündigt werden.
+          Mit dem Abonnement stimmst du den Nutzungsbedingungen zu.{"\n"}
+          Abonnement kann jederzeit gekündigt werden.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -81,7 +171,12 @@ export default function PaywallScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
   scroll: { paddingHorizontal: spacing.xxl, paddingBottom: 40 },
-  header: { alignItems: "center", paddingTop: 60, paddingBottom: spacing.xxxl, gap: spacing.md },
+  header: {
+    alignItems: "center",
+    paddingTop: 60,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.md,
+  },
   title: { fontSize: 34, fontWeight: "800", color: colors.black },
   subtitle: { fontSize: 16, color: colors.gray500, textAlign: "center" },
   features: { gap: spacing.md, marginBottom: spacing.xxxl },
@@ -95,15 +190,68 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderCurve: "continuous",
   },
-  planCardSelected: { borderColor: colors.black, backgroundColor: colors.gray50 },
-  planHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.sm },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.gray300, alignItems: "center", justifyContent: "center" },
+  planCardSelected: {
+    borderColor: colors.black,
+    backgroundColor: colors.gray50,
+  },
+  planHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.gray300,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   radioSelected: { borderColor: colors.black },
   radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.black },
   planName: { fontSize: 17, fontWeight: "600", color: colors.black, flex: 1 },
-  savingsBadge: { backgroundColor: colors.black, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.sm },
+  savingsBadge: {
+    backgroundColor: colors.black,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
   savingsText: { color: colors.white, fontSize: 12, fontWeight: "700" },
   planPrice: { fontSize: 24, fontWeight: "700", color: colors.black },
   planInterval: { fontSize: 15, fontWeight: "400", color: colors.gray500 },
-  terms: { fontSize: 12, color: colors.gray400, textAlign: "center", marginTop: spacing.xl, lineHeight: 18 },
+  paymentMethods: {
+    alignItems: "center",
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  paymentLabel: {
+    fontSize: 13,
+    color: colors.gray400,
+    fontWeight: "500",
+  },
+  paymentIcons: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  paymentBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+    borderCurve: "continuous",
+  },
+  paymentBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.gray600,
+  },
+  terms: {
+    fontSize: 12,
+    color: colors.gray400,
+    textAlign: "center",
+    marginTop: spacing.lg,
+    lineHeight: 18,
+  },
 });

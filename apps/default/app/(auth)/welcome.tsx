@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -73,9 +73,17 @@ export default function WelcomeScreen() {
       <View style={styles.ctaWrap}>
         <Button
           title="Join the Movement"
-          onPress={() => router.push("/(auth)/login")}
+          onPress={() => router.push("/(auth)/paywall")}
           fullWidth
         />
+        <TouchableOpacity
+          onPress={() => router.push("/(auth)/login")}
+          style={styles.loginLink}
+        >
+          <Text style={styles.loginText}>
+            Bereits Mitglied? <Text style={styles.loginBold}>Anmelden</Text>
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -170,5 +178,18 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
     paddingTop: spacing.md,
     backgroundColor: colors.white,
+    gap: spacing.md,
+  },
+  loginLink: {
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  loginText: {
+    fontSize: 15,
+    color: colors.gray500,
+  },
+  loginBold: {
+    fontWeight: "600",
+    color: colors.black,
   },
 });
