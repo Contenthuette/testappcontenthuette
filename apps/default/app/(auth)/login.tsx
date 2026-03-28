@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { authClient } from "@/lib/auth-client";
@@ -18,8 +18,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState("");
   const [awaitingAuth, setAwaitingAuth] = useState(false);
   const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
@@ -104,28 +102,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    try {
-      await authClient.signIn.social({ provider: "google" });
-    } catch (_e: unknown) {
-      setError("Google-Anmeldung fehlgeschlagen");
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleAppleLogin = async () => {
-    setAppleLoading(true);
-    try {
-      await authClient.signIn.social({ provider: "apple" });
-    } catch (_e: unknown) {
-      setError("Apple-Anmeldung fehlgeschlagen");
-    } finally {
-      setAppleLoading(false);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -152,19 +128,6 @@ export default function LoginScreen() {
 
         <Button title="Anmelden" onPress={handleEmailLogin} loading={loading} fullWidth style={{ marginTop: spacing.xl }} />
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>oder</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.socialBtns}>
-          <Button title="Mit Google anmelden" onPress={handleGoogleLogin} variant="outline" fullWidth loading={googleLoading} />
-          {Platform.OS === "ios" && (
-            <Button title="Mit Apple anmelden" onPress={handleAppleLogin} variant="outline" fullWidth loading={appleLoading} />
-          )}
-        </View>
-
         <View style={styles.footer}>
           <Text style={styles.footerText}>Noch kein Konto? </Text>
           <TouchableOpacity onPress={() => router.replace("/(auth)/signup")}>
@@ -185,10 +148,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, color: colors.gray500 },
   error: { fontSize: 14, color: colors.danger, marginBottom: spacing.lg, padding: spacing.md, backgroundColor: "#FEF2F2", borderRadius: radius.sm, overflow: "hidden" },
   forgotText: { fontSize: 14, color: colors.gray600, fontWeight: "500", textAlign: "right", marginTop: -spacing.sm },
-  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.xxl },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.gray200 },
-  dividerText: { marginHorizontal: spacing.lg, fontSize: 14, color: colors.gray400 },
-  socialBtns: { gap: spacing.md },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xxl },
   footerText: { fontSize: 15, color: colors.gray500 },
   footerLink: { fontSize: 15, fontWeight: "600", color: colors.black },

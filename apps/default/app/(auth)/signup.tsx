@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { authClient } from "@/lib/auth-client";
@@ -101,25 +101,6 @@ export default function SignupScreen() {
     }
   };
 
-  const handleGoogleSignup = async () => {
-    try {
-      await authClient.signIn.social({ provider: "google" });
-      // OAuth flow will redirect; once auth is confirmed, the effect above handles claiming
-      setAwaitingAuth(true);
-    } catch {
-      setError("Google-Registrierung fehlgeschlagen");
-    }
-  };
-
-  const handleAppleSignup = async () => {
-    try {
-      await authClient.signIn.social({ provider: "apple" });
-      setAwaitingAuth(true);
-    } catch {
-      setError("Apple-Registrierung fehlgeschlagen");
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -149,17 +130,6 @@ export default function SignupScreen() {
           onChangeText={setPassword} isPassword />
 
         <Button title="Registrieren" onPress={handleSignup} loading={loading} fullWidth style={{ marginTop: spacing.md }} />
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>oder</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Button title="Mit Google registrieren" onPress={handleGoogleSignup} variant="outline" fullWidth />
-        {Platform.OS === "ios" && (
-          <Button title="Mit Apple registrieren" onPress={handleAppleSignup} variant="outline" fullWidth style={{ marginTop: spacing.md }} />
-        )}
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Bereits ein Konto? </Text>
@@ -203,9 +173,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   error: { fontSize: 14, color: colors.danger, marginBottom: spacing.lg, padding: spacing.md, backgroundColor: "#FEF2F2", borderRadius: radius.sm, overflow: "hidden" },
-  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.xxl },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.gray200 },
-  dividerText: { marginHorizontal: spacing.lg, fontSize: 14, color: colors.gray400 },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xxl },
   footerText: { fontSize: 15, color: colors.gray500 },
   footerLink: { fontSize: 15, fontWeight: "600", color: colors.black },
