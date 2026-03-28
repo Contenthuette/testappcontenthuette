@@ -109,7 +109,7 @@ export default function SubscriptionScreen() {
             ) : (
               <>
                 <SymbolView name="creditcard" size={18} tintColor={colors.white} />
-                <Text style={styles.portalButtonText}>Abo bei Stripe verwalten</Text>
+                <Text style={styles.portalButtonText}>Abonnement verwalten</Text>
                 <SymbolView name="arrow.up.right" size={14} tintColor={colors.white} />
               </>
             )}
