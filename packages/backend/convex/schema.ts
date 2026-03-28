@@ -211,6 +211,13 @@ export default defineSchema({
     status: v.union(v.literal("upcoming"), v.literal("ongoing"), v.literal("completed"), v.literal("canceled")),
     creatorId: v.id("users"),
     createdAt: v.number(),
+    // Blur fields – when true the corresponding datum is hidden on the public event page
+    blurDate: v.optional(v.boolean()),
+    blurTime: v.optional(v.boolean()),
+    blurVenue: v.optional(v.boolean()),
+    blurCity: v.optional(v.boolean()),
+    blurPrice: v.optional(v.boolean()),
+    blurDescription: v.optional(v.boolean()),
   })
     .index("by_city", ["city"])
     .index("by_status", ["status"])

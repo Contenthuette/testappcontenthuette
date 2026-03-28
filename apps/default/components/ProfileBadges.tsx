@@ -31,49 +31,58 @@ export function GroupBadges({ groups }: { groups: GroupInfo[] }) {
 
   return (
     <View style={styles.container}>
-      {/* Admin badges */}
       {adminGroups.map((g) => (
         <TouchableOpacity
           key={g.groupId}
-          style={styles.adminChip}
+          style={styles.groupChip}
           activeOpacity={0.7}
           onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
         >
           <View style={styles.crownCircle}>
             <SymbolView name="crown.fill" size={10} tintColor={colors.white} />
           </View>
-          <Text style={styles.adminChipText} numberOfLines={1}>
-            Admin: {g.groupName}
+          <Text style={styles.groupChipText} numberOfLines={1}>
+            {g.groupName}
           </Text>
         </TouchableOpacity>
       ))}
+      {memberGroups.map((g) => (
+        <TouchableOpacity
+          key={g.groupId}
+          style={styles.groupChip}
+          activeOpacity={0.7}
+          onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
+        >
+          <View style={styles.memberDot} />
+          <Text style={styles.groupChipText} numberOfLines={1}>
+            {g.groupName}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
 
-      {/* Member chips */}
-      {memberGroups.length > 0 && (
-        <View style={styles.memberRow}>
-          <Text style={styles.memberLabel}>Member in</Text>
-          <View style={styles.memberChips}>
-            {memberGroups.map((g) => (
-              <TouchableOpacity
-                key={g.groupId}
-                style={styles.memberChip}
-                activeOpacity={0.7}
-                onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
-              >
-                <Text style={styles.memberChipText} numberOfLines={1}>
-                  {g.groupName}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
+/* ── Location Badge ────────────────────────────── */
+export function LocationBadge({ city, county }: { city?: string; county?: string }) {
+  const text = [city, county].filter(Boolean).join(", ");
+  if (!text) return null;
+
+  return (
+    <View style={styles.locationChip}>
+      <SymbolView name="mappin" size={11} tintColor={colors.gray500} />
+      <Text style={styles.locationText} numberOfLines={1}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: spacing.sm, marginTop: spacing.sm },
+  container: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: spacing.sm,
+  },
 
   /* Z Admin */
   zBadge: {
@@ -90,68 +99,62 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  /* Admin group chip */
-  adminChip: {
+  /* Group chips — unified style */
+  groupChip: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 6,
-    backgroundColor: colors.gray100,
-    paddingLeft: 4,
+    backgroundColor: colors.gray50,
+    paddingLeft: 5,
     paddingRight: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: radius.full,
     borderCurve: "continuous",
     borderWidth: 1,
     borderColor: colors.gray200,
   },
   crownCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
   },
-  adminChipText: {
+  memberDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gray200,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: colors.black,
-    maxWidth: 180,
+    color: colors.gray700,
+    maxWidth: 140,
   },
 
-  /* Member */
-  memberRow: {
+  /* Location chip */
+  locationChip: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  memberLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: colors.gray400,
-    marginTop: 6,
-  },
-  memberChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    flex: 1,
-  },
-  memberChip: {
-    backgroundColor: colors.gray100,
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: colors.gray50,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.full,
+    borderCurve: "continuous",
     borderWidth: 1,
     borderColor: colors.gray200,
-    borderCurve: "continuous",
+    marginTop: 6,
   },
-  memberChipText: {
+  locationText: {
     fontSize: 12,
     fontWeight: "500",
-    color: colors.gray700,
-    maxWidth: 140,
+    color: colors.gray600,
+    maxWidth: 200,
   },
 });

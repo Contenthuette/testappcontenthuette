@@ -19,13 +19,32 @@ import { SymbolView } from "@/components/Icon";
 import { MiniLineChart, MiniBarChart, RevenueRow } from "@/components/admin/MiniChart";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConvexAuth } from "convex/react";
+import { Switch } from "react-native";
 
 const ABO_PRICE = "5,99";
 
-/* ─── Local types for dashboard data ─────────────────── */
+/* ─── Local types for dashboard data ───────────────────── */
 interface DayStats { label: string; photos: number; videos: number }
 interface GrowthDay { label: string; count: number }
-interface AdminEvent { _id: Id<"events">; name: string; date: string; city: string; totalTickets: number; soldTickets: number; ticketPrice: number; currency: string; status: string }
+
+type BlurField = "blurDate" | "blurTime" | "blurVenue" | "blurCity" | "blurPrice" | "blurDescription";
+interface AdminEvent {
+  _id: Id<"events">;
+  name: string;
+  date: string;
+  city: string;
+  totalTickets: number;
+  soldTickets: number;
+  ticketPrice: number;
+  currency: string;
+  status: string;
+  blurDate?: boolean;
+  blurTime?: boolean;
+  blurVenue?: boolean;
+  blurCity?: boolean;
+  blurPrice?: boolean;
+  blurDescription?: boolean;
+}
 
 /* ─── KPI Card ───────────────────────────────────────────── */
 function KPI({
@@ -86,30 +105,31 @@ function EventRow({
   onToggle,
   onEdit,
   onDelete,
+  onBlurToggle,
 }: {
-  event: {
-    _id: Id<"events">;
-    name: string;
-    date: string;
-    city: string;
-    totalTickets: number;
-    soldTickets: number;
-    ticketPrice: number;
-    currency: string;
-    status: string;
-  };
+  event: AdminEvent;
   expanded: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onBlurToggle: (field: BlurField, value: boolean) => void;
 }) {
+  const blurFields: Array<{ field: BlurField; label: string }> = [
+    { field: "blurDate", label: "Datum" },
+    { field: "blurTime", label: "Uhrzeit" },
+    { field: "blurVenue", label: "Veranstaltungsort" },
+    { field: "blurCity", label: "Stadt" },
+    { field: "blurPrice", label: "Preis" },
+    { field: "blurDescription", label: "Beschreibung" },
+  ];
+
   return (
     <View style={styles.eventCard}>
       <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={styles.eventHeader}>
         <View style={{ flex: 1 }}>
           <Text style={styles.eventName}>{event.name}</Text>
           <Text style={styles.eventMeta}>
-            {event.date} · {event.city}
+            {event.date} \u00b7 {event.city}
           </Text>
         </View>
         <View style={styles.eventBadge}>
@@ -133,13 +153,32 @@ function EventRow({
             </TouchableOpacity>
             <TouchableOpacity onPress={onDelete} style={[styles.eventActionBtn, styles.eventDeleteBtn]}>
               <SymbolView name="trash" size={13} tintColor={colors.danger} />
-              <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
+              <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.eventInfoRow}>
             Preis: {event.ticketPrice.toFixed(2)} {event.currency}
           </Text>
+
+          {/* Blur toggles */}
+          <View style={styles.blurSection}>
+            <View style={styles.blurHeader}>
+              <SymbolView name="eye.slash" size={13} tintColor={colors.gray500} />
+              <Text style={styles.blurTitle}>Daten verbergen</Text>
+            </View>
+            {blurFields.map(({ field, label }) => (
+              <View key={field} style={styles.blurRow}>
+                <Text style={styles.blurLabel}>{label}</Text>
+                <Switch
+                  value={!!event[field]}
+                  onValueChange={(val) => onBlurToggle(field, val)}
+                  trackColor={{ false: colors.gray200, true: colors.black }}
+                  thumbColor={colors.white}
+                />
+              </View>
+            ))}
+          </View>
         </View>
       )}
     </View>
@@ -152,6 +191,7 @@ export default function AdminDashboard() {
   const stats = useQuery(api.admin.getAdminDashboard, isAuthenticated ? {} : "skip");
   const events = useQuery(api.admin.listEventsAdmin, isAuthenticated ? {} : "skip");
   const deleteEvent = useMutation(api.admin.deleteEvent);
+  const toggleEventBlur = useMutation(api.admin.toggleEventBlur);
   const refreshAnalyticsSnapshot = useMutation(api.admin.refreshAnalyticsSnapshot);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
@@ -529,6 +569,9 @@ export default function AdminDashboard() {
                 onToggle={() => setExpandedId((prev: Id<"events"> | null) => (prev === ev._id ? null : ev._id))}
                 onEdit={() => router.push(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
+                onBlurToggle={(field, value) => {
+                  toggleEventBlur({ eventId: ev._id, field, value }).catch(() => {});
+                }}
               />
             ))
           )}
@@ -967,5 +1010,36 @@ const styles = StyleSheet.create({
   buyerBadges: {
     flexDirection: "row",
     gap: 4,
+  },
+
+  /* blur toggles */
+  blurSection: {
+    marginTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
+    paddingTop: spacing.md,
+  },
+  blurHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  blurTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
+  blurRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  blurLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.gray700,
   },
 });

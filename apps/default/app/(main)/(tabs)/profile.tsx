@@ -11,7 +11,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
-import { ZAdminBadge, GroupBadges } from "@/components/ProfileBadges";
+import { ZAdminBadge, GroupBadges, LocationBadge } from "@/components/ProfileBadges";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 
@@ -90,15 +90,8 @@ export default function ProfileScreen() {
 
           <Text style={styles.name}>{me.name}</Text>
           {me.role === "admin" && <ZAdminBadge />}
+          <LocationBadge city={me.city} county={me.county} />
           {userGroups && userGroups.length > 0 && <GroupBadges groups={userGroups} />}
-          {(me.city || me.county) && (
-            <View style={styles.locationRow}>
-              <SymbolView name="mappin" size={12} tintColor={colors.gray400} />
-              <Text style={styles.location} numberOfLines={1}>
-                {[me.city, me.county].filter(Boolean).join(", ")}
-              </Text>
-            </View>
-          )}
           {me.bio ? <Text style={styles.bio}>{me.bio}</Text> : null}
 
           {/* Action buttons */}
@@ -238,8 +231,6 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: colors.gray500, marginTop: 1 },
 
   name: { fontSize: 20, fontWeight: "700", color: colors.black, marginTop: spacing.md, letterSpacing: -0.3 },
-  locationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  location: { fontSize: 14, color: colors.gray500, flex: 1 },
   bio: { fontSize: 15, color: colors.gray700, marginTop: spacing.sm, lineHeight: 22, letterSpacing: -0.1 },
 
   actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },

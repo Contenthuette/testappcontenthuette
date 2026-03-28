@@ -125,6 +125,12 @@ export const getById = query({
       ),
       creatorId: v.id("users"),
       createdAt: v.number(),
+      blurDate: v.optional(v.boolean()),
+      blurTime: v.optional(v.boolean()),
+      blurVenue: v.optional(v.boolean()),
+      blurCity: v.optional(v.boolean()),
+      blurPrice: v.optional(v.boolean()),
+      blurDescription: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -162,6 +168,12 @@ export const getById = query({
       status: event.status,
       creatorId: event.creatorId,
       createdAt: event.createdAt,
+      blurDate: event.blurDate,
+      blurTime: event.blurTime,
+      blurVenue: event.blurVenue,
+      blurCity: event.blurCity,
+      blurPrice: event.blurPrice,
+      blurDescription: event.blurDescription,
     };
   },
 });

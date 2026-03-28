@@ -70,18 +70,20 @@ export default function EventDetailScreen() {
               <View style={styles.infoIcon}>
                 <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
               </View>
-              <View>
+              <View style={{ flex: 1, position: "relative" }}>
                 <Text style={styles.infoLabel}>{event.date}</Text>
-                <Text style={styles.infoSub}>Start: {event.startTime} Uhr · Ende: {calcEndTime(event.startTime, event.durationMinutes)} Uhr</Text>
+                <Text style={styles.infoSub}>Start: {event.startTime} Uhr \u00b7 Ende: {calcEndTime(event.startTime, event.durationMinutes)} Uhr</Text>
+                {(event.blurDate || event.blurTime) && <View style={styles.blurOverlay} />}
               </View>
             </View>
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
                 <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, position: "relative" }}>
                 <Text style={styles.infoLabel}>{event.venue}</Text>
                 <Text style={styles.infoSub}>{event.city}</Text>
+                {(event.blurVenue || event.blurCity) && <View style={styles.blurOverlay} />}
               </View>
             </View>
             {event.ticketPrice > 0 && (
@@ -89,9 +91,10 @@ export default function EventDetailScreen() {
                 <View style={styles.infoIcon}>
                   <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
                 </View>
-                <View>
-                  <Text style={styles.infoLabel}>€{event.ticketPrice.toFixed(2)}</Text>
+                <View style={{ position: "relative" }}>
+                  <Text style={styles.infoLabel}>\u20ac{event.ticketPrice.toFixed(2)}</Text>
                   <Text style={styles.infoSub}>Ticketpreis</Text>
+                  {event.blurPrice && <View style={styles.blurOverlay} />}
                 </View>
               </View>
             )}
@@ -105,7 +108,12 @@ export default function EventDetailScreen() {
             />
           )}
 
-          {event.description && <Text style={styles.desc}>{event.description}</Text>}
+          {event.description && (
+            <View style={{ position: "relative" }}>
+              <Text style={styles.desc}>{event.description}</Text>
+              {event.blurDescription && <View style={styles.blurOverlay} />}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -216,4 +224,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buyBtnText: { fontSize: 16, fontWeight: "700", color: colors.white },
+  blurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.gray200,
+    borderRadius: radius.sm,
+    opacity: 0.95,
+  } as const,
 });

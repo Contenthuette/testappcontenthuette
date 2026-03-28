@@ -428,6 +428,12 @@ export const listEventsAdmin = authQuery({
         v.literal("completed"),
         v.literal("canceled"),
       ),
+      blurDate: v.optional(v.boolean()),
+      blurTime: v.optional(v.boolean()),
+      blurVenue: v.optional(v.boolean()),
+      blurCity: v.optional(v.boolean()),
+      blurPrice: v.optional(v.boolean()),
+      blurDescription: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx) => {
@@ -444,6 +450,12 @@ export const listEventsAdmin = authQuery({
       ticketPrice: event.ticketPrice,
       currency: event.currency,
       status: event.status,
+      blurDate: event.blurDate,
+      blurTime: event.blurTime,
+      blurVenue: event.blurVenue,
+      blurCity: event.blurCity,
+      blurPrice: event.blurPrice,
+      blurDescription: event.blurDescription,
     }));
   },
 });
@@ -691,6 +703,30 @@ export const deleteEvent = authMutation({
       await ctx.db.delete(t._id);
     }
     await ctx.db.delete(args.eventId);
+    return null;
+  },
+});
+
+/* ── toggle individual blur fields on an event ───────────────── */
+export const toggleEventBlur = authMutation({
+  args: {
+    eventId: v.id("events"),
+    field: v.union(
+      v.literal("blurDate"),
+      v.literal("blurTime"),
+      v.literal("blurVenue"),
+      v.literal("blurCity"),
+      v.literal("blurPrice"),
+      v.literal("blurDescription"),
+    ),
+    value: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const event = await ctx.db.get(args.eventId);
+    if (!event) throw new Error("Event nicht gefunden");
+    await ctx.db.patch(args.eventId, { [args.field]: args.value });
     return null;
   },
 });
