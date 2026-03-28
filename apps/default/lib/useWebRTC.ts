@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import type { ComponentType } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -29,6 +29,7 @@ interface RTCPeerConnectionLike {
   duration?: number;
   connectionState?: string;
   iceConnectionState?: string;
+  signalingState?: string;
   ontrack: ((event: { streams?: Array<MediaStreamLike> }) => void) | null;
   onicecandidate: ((event: { candidate?: unknown }) => void) | null;
   onconnectionstatechange: (() => void) | null;
@@ -72,9 +73,6 @@ if (Platform.OS !== "web") {
 const DEFAULT_ICE_SERVERS: Array<IceServerConfig> = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -141,16 +139,28 @@ export function useWebRTC({
             s.urls.startsWith("turn:") ||
             s.urls.startsWith("turns:"),
         );
+
+        const hasTurn = valid.some(
+          (s: IceServerConfig) => s.urls.startsWith("turn:") || s.urls.startsWith("turns:"),
+        );
+
         if (valid.length > 0) {
-          console.log(`[WebRTC] Loaded ${valid.length} valid ICE servers from backend`);
+          console.log(
+            `[WebRTC] Loaded ${valid.length} ICE servers (${hasTurn ? "with" : "WITHOUT"} TURN)`,
+          );
+          if (!hasTurn) {
+            console.warn(
+              "[WebRTC] ⚠️ No TURN servers available! Calls will fail on cellular/NAT networks.",
+            );
+          }
           setIceServers(valid);
         } else {
-          console.warn("[WebRTC] No valid ICE servers from backend, using defaults");
+          console.warn("[WebRTC] No valid ICE servers from backend, using STUN-only defaults");
         }
         setIceServersLoaded(true);
       })
       .catch((error) => {
-        console.warn("Failed to fetch ICE servers, using defaults:", error);
+        console.warn("[WebRTC] Failed to fetch ICE servers, using STUN-only defaults:", error);
         if (!cancelled) setIceServersLoaded(true);
       });
 
@@ -200,20 +210,43 @@ export function useWebRTC({
     setupDoneRef.current = true;
 
     let cancelled = false;
+    const rtc = RTC; // capture for closure
 
     (async () => {
       try {
-        const stream = await RTC.mediaDevices.getUserMedia({
-          audio: true,
-          video: isVideo
-            ? {
-                facingMode: "user",
-                width: 480,
-                height: 360,
-                frameRate: 20,
-              }
-            : false,
-        });
+        // ── Request media permissions and get stream ──
+        console.log(
+          `[WebRTC] Requesting media: audio=true, video=${isVideo}, role=${isInitiator ? "initiator" : "receiver"}`,
+        );
+        let stream: MediaStreamLike;
+        try {
+          stream = await rtc.mediaDevices.getUserMedia({
+            audio: true,
+            video: isVideo
+              ? {
+                  facingMode: "user",
+                  width: 480,
+                  height: 360,
+                  frameRate: 20,
+                }
+              : false,
+          });
+        } catch (mediaError: unknown) {
+          const msg = mediaError instanceof Error ? mediaError.message : String(mediaError);
+          console.error("[WebRTC] getUserMedia failed:", msg);
+
+          // Show a user-friendly alert on native
+          if (Platform.OS !== "web") {
+            Alert.alert(
+              "Berechtigung benötigt",
+              isVideo
+                ? "Bitte erlaube Zugriff auf Kamera und Mikrofon in den Einstellungen, um Videoanrufe zu nutzen."
+                : "Bitte erlaube Zugriff auf das Mikrofon in den Einstellungen, um Anrufe zu nutzen.",
+            );
+          }
+          setConnectionState("failed");
+          return;
+        }
 
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
@@ -222,8 +255,15 @@ export function useWebRTC({
 
         localStreamRef.current = stream;
         setLocalStreamUrl(stream.toURL());
+        console.log(
+          `[WebRTC] Local stream acquired: ${stream.getAudioTracks().length} audio, ${stream.getVideoTracks().length} video tracks`,
+        );
 
-        const peerConnection = new RTC.RTCPeerConnection({
+        // ── Create PeerConnection ──
+        console.log(
+          `[WebRTC] Creating PeerConnection with ${iceServers.length} ICE servers`,
+        );
+        const peerConnection = new rtc.RTCPeerConnection({
           iceServers,
         });
         peerConnectionRef.current = peerConnection;
@@ -233,6 +273,7 @@ export function useWebRTC({
         });
 
         peerConnection.ontrack = (event) => {
+          console.log("[WebRTC] 🎧 Remote track received");
           if (event.streams?.[0]) {
             setRemoteStreamUrl(event.streams[0].toURL());
           }
@@ -245,7 +286,9 @@ export function useWebRTC({
             callId,
             type: "ice-candidate",
             payload: JSON.stringify(event.candidate),
-          }).catch(() => {});
+          }).catch((err) => {
+            console.warn("[WebRTC] Failed to send ICE candidate:", err);
+          });
         };
 
         peerConnection.onconnectionstatechange = () => {
@@ -256,36 +299,49 @@ export function useWebRTC({
 
         peerConnection.oniceconnectionstatechange = () => {
           const iceState = peerConnection.iceConnectionState;
-          console.log("[WebRTC] iceConnectionState:", iceState);
+          console.log(
+            `[WebRTC] iceConnectionState: ${iceState}, signalingState: ${peerConnection.signalingState ?? "unknown"}`,
+          );
           if (
             iceState === "connected" ||
             iceState === "completed"
           ) {
             setConnectionState("connected");
           } else if (iceState === "failed") {
-            console.error("[WebRTC] ICE connection failed — TURN servers may be unreachable");
+            console.error(
+              "[WebRTC] ❌ ICE connection failed — TURN servers may be unreachable or missing",
+            );
             setConnectionState("failed");
+          } else if (iceState === "disconnected") {
+            console.warn(
+              "[WebRTC] ICE disconnected — peer may have lost network temporarily",
+            );
           }
         };
 
+        // ── Initiator creates Offer ──
         if (isInitiator) {
+          console.log("[WebRTC] Creating offer (initiator)");
           const offer = await peerConnection.createOffer({
             offerToReceiveAudio: true,
             offerToReceiveVideo: isVideo,
           });
           await peerConnection.setLocalDescription(offer);
+          console.log("[WebRTC] Offer set as localDescription, sending via signaling");
           await sendSignal({
             callId,
             type: "offer",
             payload: JSON.stringify(offer),
           });
+        } else {
+          console.log("[WebRTC] Waiting for offer (receiver)");
         }
 
         if (!cancelled) {
           setSetupComplete(true);
         }
       } catch (error) {
-        console.error("WebRTC setup error:", error);
+        console.error("[WebRTC] Setup error:", error);
         setConnectionState("failed");
       }
     })();
@@ -300,6 +356,7 @@ export function useWebRTC({
     if (!signals || !peerConnectionRef.current || !setupComplete || !RTC) return;
 
     const peerConnection = peerConnectionRef.current;
+    const rtc = RTC;
 
     (async () => {
       for (const signal of signals) {
@@ -310,17 +367,26 @@ export function useWebRTC({
           if (signal.type === "offer" && !isInitiator && !hasHandledOfferRef.current) {
             hasHandledOfferRef.current = true;
             const offer = JSON.parse(signal.payload);
+            console.log("[WebRTC] ⬇️ Received offer, setting remoteDescription");
             await peerConnection.setRemoteDescription(
-              new RTC.RTCSessionDescription(offer),
+              new rtc.RTCSessionDescription(offer),
             );
 
-            for (const candidate of pendingCandidatesRef.current) {
-              await peerConnection.addIceCandidate(new RTC.RTCIceCandidate(candidate));
+            // Drain pending ICE candidates now that remote description is set
+            if (pendingCandidatesRef.current.length > 0) {
+              console.log(
+                `[WebRTC] Adding ${pendingCandidatesRef.current.length} queued ICE candidates`,
+              );
+              for (const candidate of pendingCandidatesRef.current) {
+                await peerConnection.addIceCandidate(new rtc.RTCIceCandidate(candidate));
+              }
+              pendingCandidatesRef.current = [];
             }
-            pendingCandidatesRef.current = [];
 
+            console.log("[WebRTC] Creating answer");
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
+            console.log("[WebRTC] ⬆️ Sending answer via signaling");
             if (callId) {
               await sendSignal({
                 callId,
@@ -332,29 +398,39 @@ export function useWebRTC({
 
           if (signal.type === "answer" && isInitiator) {
             const answer = JSON.parse(signal.payload);
+            console.log("[WebRTC] ⬇️ Received answer, setting remoteDescription");
             await peerConnection.setRemoteDescription(
-              new RTC.RTCSessionDescription(answer),
+              new rtc.RTCSessionDescription(answer),
             );
 
-            for (const candidate of pendingCandidatesRef.current) {
-              await peerConnection.addIceCandidate(new RTC.RTCIceCandidate(candidate));
+            // Drain pending ICE candidates
+            if (pendingCandidatesRef.current.length > 0) {
+              console.log(
+                `[WebRTC] Adding ${pendingCandidatesRef.current.length} queued ICE candidates`,
+              );
+              for (const candidate of pendingCandidatesRef.current) {
+                await peerConnection.addIceCandidate(new rtc.RTCIceCandidate(candidate));
+              }
+              pendingCandidatesRef.current = [];
             }
-            pendingCandidatesRef.current = [];
           }
 
           if (signal.type === "ice-candidate") {
             const candidate = JSON.parse(signal.payload);
             if (peerConnection.remoteDescription) {
-              await peerConnection.addIceCandidate(new RTC.RTCIceCandidate(candidate));
+              await peerConnection.addIceCandidate(new rtc.RTCIceCandidate(candidate));
             } else {
               pendingCandidatesRef.current.push(candidate);
+              console.log(
+                `[WebRTC] Queued ICE candidate (no remoteDescription yet), total queued: ${pendingCandidatesRef.current.length}`,
+              );
             }
           }
 
           // Acknowledge this signal for deletion from the DB
           scheduleAck(signal._id);
         } catch (error) {
-          console.error("Signal processing error:", signal.type, error);
+          console.error("[WebRTC] Signal processing error:", signal.type, error);
           // Still ack failed signals to avoid re-processing them forever
           scheduleAck(signal._id);
         }
