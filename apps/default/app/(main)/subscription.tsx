@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery, useAction } from "convex/react";
+import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -12,36 +12,20 @@ import { safeBack } from "@/lib/navigation";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
 import * as WebBrowser from "expo-web-browser";
-import Constants from "expo-constants";
 
-function getConvexSiteUrl(): string {
-  const url = Constants.expoConfig?.extra?.convexUrl as string | undefined;
-  if (url) return url.replace(".convex.cloud", ".convex.site");
-  return "";
-}
+const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/aFa5kwaSC4nDc833EC5wI00";
 
 export default function SubscriptionScreen() {
   const { isAuthenticated } = useConvexAuth();
   const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
-  const createPortalSession = useAction(api.stripeActions.createBillingPortalSession);
-  const [portalLoading, setPortalLoading] = useState(false);
 
   const isActive = me?.subscriptionStatus === "active";
 
   const handleManageSubscription = async () => {
-    setPortalLoading(true);
-    try {
-      const returnUrl = getConvexSiteUrl() + "/stripe/success";
-      const { url } = await createPortalSession({ returnUrl });
-      if (Platform.OS === "web") {
-        window.open(url, "_blank");
-      } else {
-        await WebBrowser.openBrowserAsync(url);
-      }
-    } catch (e) {
-      console.error("Portal session error:", e);
-    } finally {
-      setPortalLoading(false);
+    if (Platform.OS === "web") {
+      window.open(STRIPE_PORTAL_URL, "_blank");
+    } else {
+      await WebBrowser.openBrowserAsync(STRIPE_PORTAL_URL);
     }
   };
 
@@ -97,13 +81,8 @@ export default function SubscriptionScreen() {
             style={styles.portalButton}
             onPress={handleManageSubscription}
             activeOpacity={0.7}
-            disabled={portalLoading}
           >
-            {portalLoading ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Text style={styles.portalButtonText}>Abonnement verwalten</Text>
-            )}
+            <Text style={styles.portalButtonText}>Abonnement verwalten</Text>
           </TouchableOpacity>
         )}
 
