@@ -12,7 +12,6 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
-import { SUBSCRIPTION_PLANS } from "@/lib/constants";
 import { convexSiteUrl } from "@/lib/convex-urls";
 import * as WebBrowser from "expo-web-browser";
 import * as Crypto from "expo-crypto";
@@ -42,7 +41,6 @@ export default function WelcomeScreen() {
   const cardHeight = cardSize * 0.8;
   const { isAuthenticated } = useConvexAuth();
 
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
 
@@ -74,7 +72,7 @@ export default function WelcomeScreen() {
       setSessionToken(token);
 
       const { url } = await createCheckout({
-        plan: selectedPlan,
+        plan: "monthly",
         sessionToken: token,
         siteUrl: convexSiteUrl,
       });
@@ -92,7 +90,7 @@ export default function WelcomeScreen() {
         Alert.alert("Fehler", "Checkout konnte nicht gestartet werden. Bitte versuche es erneut.");
       }
     }
-  }, [selectedPlan, createCheckout]);
+  }, [createCheckout]);
 
   const isWaiting = sessionToken !== null && pendingStatus?.status === "pending";
 
@@ -127,42 +125,6 @@ export default function WelcomeScreen() {
         <View style={styles.bottomText}>
           <Text style={styles.statement}>{"Social Media ist\nnicht mehr social."}</Text>
           <Text style={styles.punchline}>{"Wir \u00e4ndern das."}</Text>
-        </View>
-
-        <View style={styles.planToggle}>
-          {SUBSCRIPTION_PLANS.map((plan) => (
-            <TouchableOpacity
-              key={plan.id}
-              style={[
-                styles.planOption,
-                selectedPlan === plan.id && styles.planOptionSelected,
-              ]}
-              onPress={() => setSelectedPlan(plan.id as "monthly" | "yearly")}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.planOptionName,
-                  selectedPlan === plan.id && styles.planOptionNameSelected,
-                ]}
-              >
-                {plan.name}
-              </Text>
-              <Text
-                style={[
-                  styles.planOptionPrice,
-                  selectedPlan === plan.id && styles.planOptionPriceSelected,
-                ]}
-              >
-                {"\u20ac"}{plan.price.toFixed(2)}/{plan.interval === "month" ? "Mo" : "Jahr"}
-              </Text>
-              {"savings" in plan && plan.savings && (
-                <View style={styles.savingsBadge}>
-                  <Text style={styles.savingsText}>-{plan.savings}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
         </View>
       </ScrollView>
 
@@ -263,54 +225,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     marginTop: spacing.xs,
     textAlign: "center",
-  },
-  planToggle: {
-    flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.xxl,
-  },
-  planOption: {
-    flex: 1,
-    backgroundColor: colors.gray50,
-    borderRadius: radius.lg,
-    borderCurve: "continuous",
-    padding: spacing.lg,
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  planOptionSelected: {
-    borderColor: colors.black,
-    backgroundColor: colors.white,
-  },
-  planOptionName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.gray400,
-  },
-  planOptionNameSelected: {
-    color: colors.black,
-  },
-  planOptionPrice: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.gray400,
-  },
-  planOptionPriceSelected: {
-    color: colors.black,
-  },
-  savingsBadge: {
-    backgroundColor: colors.black,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    marginTop: 2,
-  },
-  savingsText: {
-    color: colors.white,
-    fontSize: 11,
-    fontWeight: "700",
   },
   ctaWrap: {
     paddingHorizontal: spacing.xl,
