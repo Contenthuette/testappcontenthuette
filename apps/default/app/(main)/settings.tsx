@@ -22,12 +22,9 @@ const sections = [
     ],
   },
   {
-    title: "Privatsphäre & Sicherheit",
+    title: "Privatsph\u00e4re & Sicherheit",
     items: [
-      { icon: "lock.shield" as const, label: "Privatsphäre", route: "/(main)/legal?type=privacy" },
-      { icon: "person.badge.shield.checkmark" as const, label: "Konto & Sicherheit", route: "/(main)/legal?type=terms" },
       { icon: "hand.raised" as const, label: "Blockierte Nutzer", route: "/(main)/blocked-users" },
-      { icon: "photo.stack" as const, label: "Medienverwaltung", route: "/(main)/saved-posts" },
     ],
   },
   {

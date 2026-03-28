@@ -363,7 +363,7 @@ export const sendMessage = authMutation({
     // Block check for DMs
     const conversation = await ctx.db.get(args.conversationId);
     if (conversation?.type === "direct") {
-      const otherUserId = conversation.participantIds.find((id: Id<"users">) => id !== myUserId);
+      const otherUserId = conversation.participantIds?.find((id: Id<"users">) => id !== myUserId);
       if (otherUserId && await isBlockedBetween(ctx, myUserId, otherUserId)) {
         throw new Error("Nachricht kann nicht gesendet werden");
       }
@@ -523,7 +523,7 @@ export const sendDirectMessage = authMutation({
     // Block check for DMs
     const conversation = await ctx.db.get(args.conversationId);
     if (conversation?.type === "direct") {
-      const otherUserId = conversation.participantIds.find((id: Id<"users">) => id !== myUserId);
+      const otherUserId = conversation.participantIds?.find((id: Id<"users">) => id !== myUserId);
       if (otherUserId && await isBlockedBetween(ctx, myUserId, otherUserId)) {
         throw new Error("Nachricht kann nicht gesendet werden");
       }

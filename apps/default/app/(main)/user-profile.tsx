@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
-import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -48,7 +47,6 @@ export default function UserProfileScreen() {
   const [blockLoading, setBlockLoading] = useState(false);
 
   const userId = id as Id<"users"> | undefined;
-  const { isAuthenticated } = useConvexAuth();
 
   const user = useQuery(api.users.getById, userId ? { userId } : "skip");
   const friendStatus = useQuery(
