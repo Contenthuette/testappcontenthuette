@@ -143,7 +143,7 @@ export const sendToUser = internalMutation({
             data: args.data ?? {},
             sound: "default",
           },
-          logLevel: "ERROR",
+          logLevel: "WARN",
         }
       );
     } catch (e: unknown) {
