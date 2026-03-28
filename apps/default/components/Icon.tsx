@@ -54,6 +54,7 @@ import {
   Layers,
   ArrowUp,
   ArrowUpCircle,
+  ArrowUpRight,
   SquarePen,
   QrCode,
   AlertTriangle,
@@ -96,6 +97,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "chevron.up": ChevronUp,
   "arrow.up": ArrowUp,
   "arrow.up.circle.fill": ArrowUpCircle,
+  "arrow.up.right": ArrowUpRight,
 
   // Actions
   plus: Plus,
