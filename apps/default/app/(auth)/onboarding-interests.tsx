@@ -39,14 +39,12 @@ export default function OnboardingInterestsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.topBar}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.progress}>
-            <View style={[styles.progressBar, { width: "100%" }]} />
-          </View>
-          <Text style={styles.step}>Schritt 3 von 3</Text>
-          <Text style={styles.title}>Wähle deine Interessen</Text>
-          <Text style={styles.subtitle}>{selected.length} ausgewählt • Wähle mindestens 3</Text>
+        <View style={styles.progress}>
+          <View style={[styles.progressBar, { width: "100%" }]} />
         </View>
+        <Text style={styles.step}>Schritt 3 von 3</Text>
+        <Text style={styles.title}>Wähle deine Interessen</Text>
+        <Text style={styles.subtitle}>{selected.length} ausgewählt • Wähle mindestens 3</Text>
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.chipContainer}>
