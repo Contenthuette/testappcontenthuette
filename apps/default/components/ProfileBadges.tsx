@@ -1,7 +1,7 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, FlatList } from "react-native";
 import { router } from "expo-router";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, radius } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -16,50 +16,94 @@ export function ZAdminBadge() {
   );
 }
 
-/* ── Group Role Badges ─────────────────────────── */
+/* ── Group Info type ───────────────────────────── */
 interface GroupInfo {
   groupId: Id<"groups">;
   groupName: string;
   role: "admin" | "member";
 }
 
-export function GroupBadges({ groups }: { groups: GroupInfo[] }) {
-  if (groups.length === 0) return null;
-
+/* ── Group Admin Link ──────────────────────────── */
+// Shows "Gruppenadmin: GroupName" as a tappable link
+export function GroupAdminLinks({ groups }: { groups: GroupInfo[] }) {
   const adminGroups = groups.filter((g) => g.role === "admin");
-  const memberGroups = groups.filter((g) => g.role === "member");
+  if (adminGroups.length === 0) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.adminLinksContainer}>
       {adminGroups.map((g) => (
         <TouchableOpacity
           key={g.groupId}
-          style={styles.groupChip}
-          activeOpacity={0.7}
+          style={styles.adminLinkRow}
+          activeOpacity={0.6}
           onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
         >
-          <View style={styles.crownCircle}>
-            <SymbolView name="crown.fill" size={10} tintColor={colors.white} />
-          </View>
-          <Text style={styles.groupChipText} numberOfLines={1}>
-            {g.groupName}
-          </Text>
-        </TouchableOpacity>
-      ))}
-      {memberGroups.map((g) => (
-        <TouchableOpacity
-          key={g.groupId}
-          style={styles.groupChip}
-          activeOpacity={0.7}
-          onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
-        >
-          <View style={styles.memberDot} />
-          <Text style={styles.groupChipText} numberOfLines={1}>
-            {g.groupName}
-          </Text>
+          <SymbolView name="crown.fill" size={11} tintColor={colors.gray500} />
+          <Text style={styles.adminLinkLabel}>Gruppenadmin: </Text>
+          <Text style={styles.adminLinkName} numberOfLines={1}>{g.groupName}</Text>
         </TouchableOpacity>
       ))}
     </View>
+  );
+}
+
+/* ── Member In Button + Sheet ─────────────────── */
+// Small pill button "Mitglied in X Gruppen" → opens a list sheet
+export function MemberInButton({ groups }: { groups: GroupInfo[] }) {
+  const memberGroups = groups.filter((g) => g.role === "member");
+  const [open, setOpen] = useState(false);
+
+  if (memberGroups.length === 0) return null;
+
+  return (
+    <>
+      <TouchableOpacity
+        style={styles.memberBtn}
+        activeOpacity={0.6}
+        onPress={() => setOpen(true)}
+      >
+        <SymbolView name="person.2" size={11} tintColor={colors.gray500} />
+        <Text style={styles.memberBtnText}>
+          Mitglied in {memberGroups.length} {memberGroups.length === 1 ? "Gruppe" : "Gruppen"}
+        </Text>
+        <SymbolView name="chevron.right" size={9} tintColor={colors.gray400} />
+      </TouchableOpacity>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setOpen(false)}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Mitglied in</Text>
+            <FlatList
+              data={memberGroups}
+              keyExtractor={(item) => item.groupId}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.groupRow}
+                  activeOpacity={0.6}
+                  onPress={() => {
+                    setOpen(false);
+                    router.push(`/(main)/group-detail?id=${item.groupId}` as "/");
+                  }}
+                >
+                  <View style={styles.groupIcon}>
+                    <SymbolView name="person.3.fill" size={14} tintColor={colors.gray500} />
+                  </View>
+                  <Text style={styles.groupRowName} numberOfLines={1}>{item.groupName}</Text>
+                  <SymbolView name="chevron.right" size={12} tintColor={colors.gray300} />
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -77,13 +121,6 @@ export function LocationBadge({ city, county }: { city?: string; county?: string
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: spacing.sm,
-  },
-
   /* Z Admin */
   zBadge: {
     flexDirection: "row",
@@ -99,41 +136,105 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  /* Group chips — unified style */
-  groupChip: {
+  /* Group Admin Links */
+  adminLinksContainer: {
+    marginTop: 6,
+    gap: 4,
+  },
+  adminLinkRow: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 5,
+  },
+  adminLinkLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.gray500,
+  },
+  adminLinkName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.black,
+    maxWidth: 200,
+    textDecorationLine: "underline",
+    textDecorationColor: colors.gray300,
+  },
+
+  /* Member In Button */
+  memberBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
     gap: 6,
+    marginTop: 8,
     backgroundColor: colors.gray50,
-    paddingLeft: 5,
-    paddingRight: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: radius.full,
     borderCurve: "continuous",
     borderWidth: 1,
     borderColor: colors.gray200,
   },
-  crownCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  memberDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  groupChipText: {
+  memberBtnText: {
     fontSize: 12,
+    fontWeight: "500",
+    color: colors.gray600,
+  },
+
+  /* Sheet */
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: "50%",
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray200,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.black,
+    marginBottom: 14,
+  },
+  groupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  groupIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderCurve: "continuous",
+    backgroundColor: colors.gray50,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  groupRowName: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: "600",
-    color: colors.gray700,
-    maxWidth: 140,
+    color: colors.black,
   },
 
   /* Location chip */

@@ -29,6 +29,7 @@ import {
   ShieldBan,
 } from "lucide-react-native";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
+import { GroupAdminLinks, MemberInButton, LocationBadge } from "@/components/ProfileBadges";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface UserPostItem { _id: string; type: string; thumbnailUrl?: string; mediaUrl?: string; cropOffsetX?: number; cropOffsetY?: number; cropZoom?: number }
@@ -49,6 +50,7 @@ export default function UserProfileScreen() {
   const userId = id as Id<"users"> | undefined;
 
   const user = useQuery(api.users.getById, userId ? { userId } : "skip");
+  const userGroups = useQuery(api.users.getUserGroups, userId ? { userId } : "skip");
   const friendStatus = useQuery(
     api.friends.getStatus,
     userId ? { otherUserId: userId } : "skip"
@@ -278,6 +280,9 @@ export default function UserProfileScreen() {
         {/* User Info */}
         <View style={styles.infoSection}>
           <Text style={styles.displayName}>{user.name || "Unbekannt"}</Text>
+          {userGroups && userGroups.length > 0 && <GroupAdminLinks groups={userGroups} />}
+          <LocationBadge city={user.city} county={user.county} />
+          {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
           {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
 
           {/* Stats */}

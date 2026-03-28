@@ -11,7 +11,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
-import { ZAdminBadge, GroupBadges, LocationBadge } from "@/components/ProfileBadges";
+import { ZAdminBadge, GroupAdminLinks, MemberInButton, LocationBadge } from "@/components/ProfileBadges";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 
@@ -90,8 +90,9 @@ export default function ProfileScreen() {
 
           <Text style={styles.name}>{me.name}</Text>
           {me.role === "admin" && <ZAdminBadge />}
+          {userGroups && userGroups.length > 0 && <GroupAdminLinks groups={userGroups} />}
           <LocationBadge city={me.city} county={me.county} />
-          {userGroups && userGroups.length > 0 && <GroupBadges groups={userGroups} />}
+          {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
           {me.bio ? <Text style={styles.bio}>{me.bio}</Text> : null}
 
           {/* Action buttons */}

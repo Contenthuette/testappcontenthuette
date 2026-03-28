@@ -49,7 +49,7 @@ export default function OnboardingInterestsScreen() {
   };
 
   // Split into preset vs. custom
-  const presetSet = new Set(INTERESTS);
+  const presetSet = new Set<string>(INTERESTS);
   const customTags = selected.filter((s) => !presetSet.has(s));
 
   return (
