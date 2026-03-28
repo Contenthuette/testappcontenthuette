@@ -183,7 +183,7 @@ export default function GroupChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => safeBack("group-chat")} style={styles.headerBack} hitSlop={12}>
@@ -208,7 +208,6 @@ export default function GroupChatScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 56 : 0}
       >
         <FlatList
           data={messages}
@@ -230,7 +229,7 @@ export default function GroupChatScreen() {
           }
         />
 
-        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} onSendMedia={handleSendMedia} />
+        <ChatInputBar onSend={handleSend} onSendVoice={handleSendVoice} onSendMedia={handleSendMedia} bottomInset={insets.bottom} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

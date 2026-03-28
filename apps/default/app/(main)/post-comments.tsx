@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Platform, ActivityIndicator,
-  Keyboard, Alert,
+  Keyboard, Alert, KeyboardAvoidingView,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -106,94 +106,99 @@ export default function PostCommentsScreen() {
         <View style={styles.closePlaceholder} />
       </View>
 
-      {/* Comments list */}
-      <FlatList
-        style={styles.list}
-        data={comments ?? []}
-        keyExtractor={item => item._id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onLongPress={() => handleLongPress(item)}
-            delayLongPress={500}
-            disabled={item.authorId !== meId}
-          >
-            <View style={styles.commentRow}>
-              <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
-              <View style={styles.commentBody}>
-                <Text style={styles.commentAuthor}>{item.authorName}</Text>
-                <Text style={styles.commentText}>{item.text}</Text>
-                <View style={styles.commentMeta}>
-                  <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
-                  {item.likeCount > 0 && (
-                    <Text style={styles.commentLikeCount}>
-                      {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
-                    </Text>
-                  )}
-                  {item.authorId === meId && (
-                    <Text style={styles.ownBadge}>Dein Kommentar</Text>
-                  )}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        {/* Comments list */}
+        <FlatList
+          style={styles.list}
+          data={comments ?? []}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onLongPress={() => handleLongPress(item)}
+              delayLongPress={500}
+              disabled={item.authorId !== meId}
+            >
+              <View style={styles.commentRow}>
+                <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={34} />
+                <View style={styles.commentBody}>
+                  <Text style={styles.commentAuthor}>{item.authorName}</Text>
+                  <Text style={styles.commentText}>{item.text}</Text>
+                  <View style={styles.commentMeta}>
+                    <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
+                    {item.likeCount > 0 && (
+                      <Text style={styles.commentLikeCount}>
+                        {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
+                      </Text>
+                    )}
+                    {item.authorId === meId && (
+                      <Text style={styles.ownBadge}>Dein Kommentar</Text>
+                    )}
+                  </View>
                 </View>
+                <TouchableOpacity
+                  style={styles.likeBtn}
+                  onPress={() => handleToggleLike(item._id)}
+                  hitSlop={12}
+                >
+                  <SymbolView
+                    name={item.isLiked ? "heart.fill" : "heart"}
+                    size={16}
+                    tintColor={item.isLiked ? "#FF3B30" : colors.gray400}
+                  />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.likeBtn}
-                onPress={() => handleToggleLike(item._id)}
-                hitSlop={12}
-              >
-                <SymbolView
-                  name={item.isLiked ? "heart.fill" : "heart"}
-                  size={16}
-                  tintColor={item.isLiked ? "#FF3B30" : colors.gray400}
-                />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          comments === undefined ? (
-            <View style={styles.emptyWrap}>
-              <ActivityIndicator color={colors.gray300} />
-            </View>
-          ) : (
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>Noch keine Kommentare</Text>
-              <Text style={styles.emptySub}>Sei der Erste!</Text>
-            </View>
-          )
-        }
-      />
-
-      {/* Input bar - send button matches input height */}
-      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          placeholder="Kommentar schreiben..."
-          placeholderTextColor={colors.gray400}
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={1000}
-          returnKeyType="send"
-          blurOnSubmit
-          onSubmitEditing={handleSend}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            comments === undefined ? (
+              <View style={styles.emptyWrap}>
+                <ActivityIndicator color={colors.gray300} />
+              </View>
+            ) : (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>Noch keine Kommentare</Text>
+                <Text style={styles.emptySub}>Sei der Erste!</Text>
+              </View>
+            )
+          }
         />
-        <TouchableOpacity
-          onPress={handleSend}
-          disabled={text.trim().length === 0}
-          activeOpacity={0.7}
-          style={[
-            styles.sendBtn,
-            text.trim().length === 0 && styles.sendBtnDisabled,
-          ]}
-        >
-          <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
-        </TouchableOpacity>
-      </View>
+
+        {/* Input bar - send button matches input height */}
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder="Kommentar schreiben..."
+            placeholderTextColor={colors.gray400}
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={1000}
+            returnKeyType="send"
+            blurOnSubmit
+            onSubmitEditing={handleSend}
+          />
+          <TouchableOpacity
+            onPress={handleSend}
+            disabled={text.trim().length === 0}
+            activeOpacity={0.7}
+            style={[
+              styles.sendBtn,
+              text.trim().length === 0 && styles.sendBtnDisabled,
+            ]}
+          >
+            <SymbolView name="arrow.up" size={16} tintColor={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

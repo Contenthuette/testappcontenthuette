@@ -93,6 +93,7 @@ interface ChatInputBarProps {
   onSendMedia?: (media: MediaPickResult) => void;
   onPlusPress?: () => void;
   placeholder?: string;
+  bottomInset?: number;
 }
 
 export function ChatInputBar({
@@ -101,6 +102,7 @@ export function ChatInputBar({
   onSendMedia,
   onPlusPress,
   placeholder = "Nachricht...",
+  bottomInset = 0,
 }: ChatInputBarProps) {
   const [text, setText] = useState("");
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
@@ -169,7 +171,7 @@ export function ChatInputBar({
   const hasText = text.trim().length > 0;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, bottomInset > 0 && { paddingBottom: bottomInset }]}>
       {showVoiceRecorder ? (
         <VoiceRecorderErrorBoundary onReset={handleVoiceCancel}>
           <VoiceRecorder
