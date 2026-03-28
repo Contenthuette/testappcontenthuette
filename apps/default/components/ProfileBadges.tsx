@@ -48,7 +48,7 @@ export function GroupAdminLinks({ groups }: { groups: GroupInfo[] }) {
 }
 
 /* ── Member In Button + Sheet ─────────────────── */
-// Small pill button "Mitglied in X Gruppen" → opens a list sheet
+// Small pill button "Mitglied in..." → opens a list sheet
 export function MemberInButton({ groups }: { groups: GroupInfo[] }) {
   const memberGroups = groups.filter((g) => g.role === "member");
   const [open, setOpen] = useState(false);
@@ -64,7 +64,7 @@ export function MemberInButton({ groups }: { groups: GroupInfo[] }) {
       >
         <SymbolView name="person.2" size={11} tintColor={colors.gray500} />
         <Text style={styles.memberBtnText}>
-          Mitglied in {memberGroups.length} {memberGroups.length === 1 ? "Gruppe" : "Gruppen"}
+          Mitglied in...
         </Text>
         <SymbolView name="chevron.right" size={9} tintColor={colors.gray400} />
       </TouchableOpacity>
@@ -165,12 +165,10 @@ const styles = StyleSheet.create({
   memberBtn: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 6,
-    marginTop: 8,
+    height: 34,
     backgroundColor: colors.gray50,
     paddingHorizontal: 12,
-    paddingVertical: 7,
     borderRadius: radius.full,
     borderCurve: "continuous",
     borderWidth: 1,
@@ -241,21 +239,19 @@ const styles = StyleSheet.create({
   locationChip: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 4,
+    height: 34,
     backgroundColor: colors.gray50,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
     borderRadius: radius.full,
     borderCurve: "continuous",
     borderWidth: 1,
     borderColor: colors.gray200,
-    marginTop: 6,
   },
   locationText: {
     fontSize: 12,
     fontWeight: "500",
     color: colors.gray600,
-    maxWidth: 200,
+    maxWidth: 160,
   },
 });

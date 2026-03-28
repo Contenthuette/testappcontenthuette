@@ -281,8 +281,10 @@ export default function UserProfileScreen() {
         <View style={styles.infoSection}>
           <Text style={styles.displayName}>{user.name || "Unbekannt"}</Text>
           {userGroups && userGroups.length > 0 && <GroupAdminLinks groups={userGroups} />}
-          <LocationBadge city={user.city} county={user.county} />
-          {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
+          <View style={styles.locationAndMemberContainer}>
+            <LocationBadge city={user.city} county={user.county} />
+            {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
+          </View>
           {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
 
           {/* Stats */}
@@ -504,6 +506,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     marginBottom: 16,
+  },
+  locationAndMemberContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    flexWrap: "wrap",
+    justifyContent: "center",
   },
   displayName: {
     fontSize: 22,

@@ -91,8 +91,10 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{me.name}</Text>
           {me.role === "admin" && <ZAdminBadge />}
           {userGroups && userGroups.length > 0 && <GroupAdminLinks groups={userGroups} />}
-          <LocationBadge city={me.city} county={me.county} />
-          {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
+          <View style={styles.widgetRow}>
+            <LocationBadge city={me.city} county={me.county} />
+            {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
+          </View>
           {me.bio ? <Text style={styles.bio}>{me.bio}</Text> : null}
 
           {/* Action buttons */}
@@ -232,6 +234,13 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: colors.gray500, marginTop: 1 },
 
   name: { fontSize: 20, fontWeight: "700", color: colors.black, marginTop: spacing.md, letterSpacing: -0.3 },
+  widgetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: 8,
+    flexWrap: "wrap",
+  },
   bio: { fontSize: 15, color: colors.gray700, marginTop: spacing.sm, lineHeight: 22, letterSpacing: -0.1 },
 
   actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
