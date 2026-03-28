@@ -15,6 +15,7 @@ import { Image } from "expo-image";
 import { EventVideoPlayer } from "@/components/EventVideoPlayer";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
+import { BlurView } from "expo-blur";
 
 function calcEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
@@ -23,6 +24,43 @@ function calcEndTime(startTime: string, durationMinutes: number): string {
   const endM = totalMin % 60;
   return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 }
+
+/** Replaces each character with a block to make text fully unreadable */
+function redactText(text: string): string {
+  return text.replace(/[^\s]/g, "\u2588");
+}
+
+function BlurredField({ children, isBlurred }: { children: React.ReactNode; isBlurred: boolean }) {
+  if (!isBlurred) return <>{children}</>;
+  return (
+    <View style={blurStyles.wrapper}>
+      {children}
+      <View style={blurStyles.fogLayer}>
+        <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={blurStyles.solidFog} />
+      </View>
+    </View>
+  );
+}
+
+const blurStyles = StyleSheet.create({
+  wrapper: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 10,
+    borderCurve: "continuous",
+  },
+  fogLayer: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 10,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+  solidFog: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(210, 210, 215, 0.75)",
+  },
+});
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,12 +75,29 @@ export default function EventDetailScreen() {
   }
 
   const hasTicketLink = !!event.ticketUrl;
+  const blurDate = event.blurDate === true;
+  const blurTime = event.blurTime === true;
+  const blurVenue = event.blurVenue === true;
+  const blurCity = event.blurCity === true;
+  const blurPrice = event.blurPrice === true;
+  const blurDescription = event.blurDescription === true;
+  const blurDateOrTime = blurDate || blurTime;
 
   const handleTicket = async () => {
     if (!event.ticketUrl) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await WebBrowser.openBrowserAsync(event.ticketUrl);
   };
+
+  const dateText = blurDate ? redactText(event.date) : event.date;
+  const startTimeText = blurTime ? redactText(event.startTime + " Uhr") : event.startTime + " Uhr";
+  const endTimeText = blurTime
+    ? redactText(calcEndTime(event.startTime, event.durationMinutes) + " Uhr")
+    : calcEndTime(event.startTime, event.durationMinutes) + " Uhr";
+  const venueText = blurVenue ? redactText(event.venue) : event.venue;
+  const cityText = blurCity ? redactText(event.city) : event.city;
+  const priceText = blurPrice ? redactText(`€${event.ticketPrice.toFixed(2)}`) : `€${event.ticketPrice.toFixed(2)}`;
+  const descText = blurDescription && event.description ? redactText(event.description) : event.description;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -66,36 +121,44 @@ export default function EventDetailScreen() {
 
           {/* Info rows */}
           <View style={styles.infoCard}>
+            {/* Date / Time */}
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
                 <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
               </View>
-              <View style={{ flex: 1, position: "relative" }}>
-                <Text style={styles.infoLabel}>{event.date}</Text>
-                <Text style={styles.infoSub}>Start: {event.startTime} Uhr \u00b7 Ende: {calcEndTime(event.startTime, event.durationMinutes)} Uhr</Text>
-                {(event.blurDate || event.blurTime) && <View style={styles.blurOverlay} />}
-              </View>
+              <BlurredField isBlurred={blurDateOrTime}>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>{dateText}</Text>
+                  <Text style={styles.infoSub}>Start: {startTimeText} · Ende: {endTimeText}</Text>
+                </View>
+              </BlurredField>
             </View>
+
+            {/* Venue / City */}
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
                 <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />
               </View>
-              <View style={{ flex: 1, position: "relative" }}>
-                <Text style={styles.infoLabel}>{event.venue}</Text>
-                <Text style={styles.infoSub}>{event.city}</Text>
-                {(event.blurVenue || event.blurCity) && <View style={styles.blurOverlay} />}
-              </View>
+              <BlurredField isBlurred={blurVenue || blurCity}>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>{venueText}</Text>
+                  <Text style={styles.infoSub}>{cityText}</Text>
+                </View>
+              </BlurredField>
             </View>
+
+            {/* Price */}
             {event.ticketPrice > 0 && (
               <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
                 <View style={styles.infoIcon}>
                   <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
                 </View>
-                <View style={{ position: "relative" }}>
-                  <Text style={styles.infoLabel}>\u20ac{event.ticketPrice.toFixed(2)}</Text>
-                  <Text style={styles.infoSub}>Ticketpreis</Text>
-                  {event.blurPrice && <View style={styles.blurOverlay} />}
-                </View>
+                <BlurredField isBlurred={blurPrice}>
+                  <View style={styles.infoTextWrap}>
+                    <Text style={styles.infoLabel}>{priceText}</Text>
+                    <Text style={styles.infoSub}>Ticketpreis</Text>
+                  </View>
+                </BlurredField>
               </View>
             )}
           </View>
@@ -108,11 +171,13 @@ export default function EventDetailScreen() {
             />
           )}
 
+          {/* Description */}
           {event.description && (
-            <View style={{ position: "relative" }}>
-              <Text style={styles.desc}>{event.description}</Text>
-              {event.blurDescription && <View style={styles.blurOverlay} />}
-            </View>
+            <BlurredField isBlurred={blurDescription}>
+              <View style={{ padding: blurDescription ? 8 : 0 }}>
+                <Text style={styles.desc}>{descText}</Text>
+              </View>
+            </BlurredField>
           )}
         </View>
       </ScrollView>
@@ -122,7 +187,11 @@ export default function EventDetailScreen() {
         <View style={styles.bottomBar}>
           <View>
             <Text style={styles.priceLabel}>Preis</Text>
-            <Text style={styles.price}>€{event.ticketPrice.toFixed(2)}</Text>
+            <BlurredField isBlurred={blurPrice}>
+              <Text style={[styles.price, blurPrice && { paddingHorizontal: 4 }]}>
+                {priceText}
+              </Text>
+            </BlurredField>
           </View>
           <TouchableOpacity
             style={styles.buyBtn}
@@ -191,6 +260,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  infoTextWrap: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    minWidth: 120,
+  },
   infoLabel: { fontSize: 15, fontWeight: "600", color: colors.black },
   infoSub: { fontSize: 13, color: colors.gray500, marginTop: 1 },
 
@@ -224,10 +298,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buyBtnText: { fontSize: 16, fontWeight: "700", color: colors.white },
-  blurOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.gray200,
-    borderRadius: radius.sm,
-    opacity: 0.95,
-  } as const,
 });
