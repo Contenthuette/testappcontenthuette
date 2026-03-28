@@ -375,7 +375,7 @@ export default function UserProfileScreen() {
                         source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                         style={styles.postImage}
                         contentFit="cover"
-                        contentPosition={`${(post.cropOffsetX ?? 0.5) * 100}% ${(post.cropOffsetY ?? 0.5) * 100}%`}
+                        contentPosition={{ top: `${(post.cropOffsetY ?? 0.5) * 100}%`, left: `${(post.cropOffsetX ?? 0.5) * 100}%` }}
                         cachePolicy="memory-disk"
                         priority="high"
                         transition={0}

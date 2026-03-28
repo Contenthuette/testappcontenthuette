@@ -304,7 +304,7 @@ export default function CreatePostScreen() {
     );
   }
 
-  const isCropped = true;
+  const _isCropped = true;
   const needsCrop = mediaDims
     ? baseMediaHeight > containerHeight || baseMediaWidth > previewWidth
     : false;

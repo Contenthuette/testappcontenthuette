@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from "react-native";
-import { Image } from "expo-image";
+import { Image, ImageContentPosition } from "expo-image";
 import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
@@ -55,7 +55,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
 
   // Use thumbnail for videos, media for photos
   const displayImage = isVideo ? (post.thumbnailUrl ?? post.mediaUrl) : post.mediaUrl;
-  const cropPosition = `${(post.cropOffsetX ?? 0.5) * 100}% ${(post.cropOffsetY ?? 0.5) * 100}%`;
+  const cropPosition = { top: `${(post.cropOffsetY ?? 0.5) * 100}%`, left: `${(post.cropOffsetX ?? 0.5) * 100}%` } as const;
 
   return (
     <View style={[s.container, post.isAnnouncement && s.announcement]}>
