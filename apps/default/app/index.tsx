@@ -39,10 +39,11 @@ function AuthenticatedRouter() {
       router.replace("/(main)/(tabs)/groups");
       return;
     }
-    if (me.subscriptionStatus !== "active") {
-      router.replace("/(auth)/paywall");
-      return;
-    }
+    // DISABLED: Paywall check — kept for re-enabling later
+    // if (me.subscriptionStatus !== "active") {
+    //   router.replace("/(auth)/paywall");
+    //   return;
+    // }
     if (!me.onboardingComplete) {
       router.replace("/(auth)/onboarding-profile");
       return;

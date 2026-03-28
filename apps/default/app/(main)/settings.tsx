@@ -27,12 +27,13 @@ const sections = [
       { icon: "hand.raised" as const, label: "Blockierte Nutzer", route: "/(main)/blocked-users" },
     ],
   },
-  {
-    title: "Abonnement",
-    items: [
-      { icon: "creditcard" as const, label: "Abonnement verwalten", route: "/(main)/subscription" },
-    ],
-  },
+  // DISABLED: Subscription section — kept for re-enabling later
+  // {
+  //   title: "Abonnement",
+  //   items: [
+  //     { icon: "creditcard" as const, label: "Abonnement verwalten", route: "/(main)/subscription" },
+  //   ],
+  // },
   {
     title: "Rechtliches",
     items: [
