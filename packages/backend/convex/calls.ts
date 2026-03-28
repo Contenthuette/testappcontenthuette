@@ -81,6 +81,12 @@ async function assertUserAvailableForCall(
   if (!activeParticipant) return;
   if (currentCallId && activeParticipant.callId === currentCallId) return;
 
+  // Check if the call is actually still active — if not, this is a stale participant
+  const call = await ctx.db.get(activeParticipant.callId);
+  if (!call || call.status === "ended" || call.status === "declined" || call.status === "missed") {
+    return;
+  }
+
   throw new Error("User is already in another call");
 }
 
@@ -863,5 +869,29 @@ export const cleanupStaleCalls = internalMutation({
     }
 
     return null;
+  },
+});
+
+// ── cleanup stale participants (internal tool) ─────────────────────────────
+export const cleanupStaleParticipants = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    let cleaned = 0;
+    for (const status of ["ringing", "connected"] as const) {
+      const participants = await ctx.db
+        .query("callParticipants")
+        .withIndex("by_userId_and_status")
+        .filter((q) => q.eq(q.field("status"), status))
+        .take(200);
+      for (const p of participants) {
+        const call = await ctx.db.get(p.callId);
+        if (!call || call.status === "ended" || call.status === "declined" || call.status === "missed") {
+          await ctx.db.patch(p._id, { status: "left", leftAt: Date.now() });
+          cleaned++;
+        }
+      }
+    }
+    return cleaned;
   },
 });
