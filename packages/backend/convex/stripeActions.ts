@@ -133,13 +133,58 @@ export const verifyCheckoutSession = internalAction({
 // Public action: create a Stripe Billing Portal session for subscription management
 export const createBillingPortalSession = action({
   args: {
-    stripeCustomerId: v.string(),
     returnUrl: v.string(),
   },
   returns: v.object({ url: v.string() }),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    // Get authenticated user
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Authentication required");
+    const authId = identity.subject.split("|")[0]?.trim();
+    if (!authId) throw new Error("Invalid auth token");
+
+    // Get user from DB
+    const user: Record<string, unknown> | null = await ctx.runQuery(
+      internal.stripeHelpers.getUserForPortal,
+      { authId },
+    );
+    if (!user) throw new Error("User not found");
+
+    let customerId = user.stripeCustomerId as string | undefined;
+
+    // If no stripeCustomerId stored, look up by email in Stripe
+    if (!customerId) {
+      const email = user.email as string;
+      if (!email) throw new Error("No email on user account");
+
+      const key = getStripeKey();
+      const searchRes = await fetch(
+        `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${key}` },
+        },
+      );
+      if (!searchRes.ok) {
+        throw new Error(`Stripe customer search failed: ${await searchRes.text()}`);
+      }
+      const searchData = (await searchRes.json()) as { data: Array<{ id: string }> };
+      if (searchData.data.length > 0) {
+        customerId = searchData.data[0].id;
+        // Save it for next time
+        await ctx.runMutation(internal.stripeHelpers.saveStripeCustomerId, {
+          authId,
+          stripeCustomerId: customerId,
+        });
+      }
+    }
+
+    if (!customerId) {
+      throw new Error("Kein Stripe-Konto gefunden. Bitte kontaktiere den Support.");
+    }
+
     const session = await stripeRequest("/billing_portal/sessions", {
-      customer: args.stripeCustomerId,
+      customer: customerId,
       return_url: args.returnUrl,
     });
 

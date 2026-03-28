@@ -27,17 +27,12 @@ export default function SubscriptionScreen() {
   const [portalLoading, setPortalLoading] = useState(false);
 
   const isActive = me?.subscriptionStatus === "active";
-  const hasStripeCustomer = !!me?.stripeCustomerId;
 
   const handleManageSubscription = async () => {
-    if (!me?.stripeCustomerId) return;
     setPortalLoading(true);
     try {
       const returnUrl = getConvexSiteUrl() + "/stripe/success";
-      const { url } = await createPortalSession({
-        stripeCustomerId: me.stripeCustomerId,
-        returnUrl,
-      });
+      const { url } = await createPortalSession({ returnUrl });
       if (Platform.OS === "web") {
         window.open(url, "_blank");
       } else {
@@ -97,7 +92,7 @@ export default function SubscriptionScreen() {
         </View>
 
         {/* Stripe Portal Button */}
-        {hasStripeCustomer && (
+        {isActive && (
           <TouchableOpacity
             style={styles.portalButton}
             onPress={handleManageSubscription}
@@ -107,28 +102,15 @@ export default function SubscriptionScreen() {
             {portalLoading ? (
               <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <>
-                <SymbolView name="creditcard" size={18} tintColor={colors.white} />
-                <Text style={styles.portalButtonText}>Abonnement verwalten</Text>
-                <SymbolView name="arrow.up.right" size={14} tintColor={colors.white} />
-              </>
+              <Text style={styles.portalButtonText}>Abonnement verwalten</Text>
             )}
           </TouchableOpacity>
         )}
 
-        {hasStripeCustomer && (
+        {isActive && (
           <Text style={styles.portalHint}>
             Über Stripe kannst du dein Abo kündigen, Zahlungsmethode ändern oder Rechnungen einsehen.
           </Text>
-        )}
-
-        {!hasStripeCustomer && isActive && (
-          <View style={styles.noStripeBox}>
-            <SymbolView name="info.circle" size={20} tintColor={colors.gray400} />
-            <Text style={styles.noStripeText}>
-              Abo-Verwaltung ist für dein Konto nicht verfügbar.
-            </Text>
-          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -230,21 +212,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     lineHeight: 19,
     paddingHorizontal: spacing.md,
-  },
-  noStripeBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    borderCurve: "continuous",
-    padding: spacing.lg,
-    marginTop: spacing.xl,
-  },
-  noStripeText: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.gray500,
-    lineHeight: 20,
   },
 });

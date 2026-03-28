@@ -203,3 +203,46 @@ export const updateSubscriptionByCustomer = internalMutation({
     return null;
   },
 });
+
+// Internal: get user data for portal session creation
+export const getUserForPortal = internalQuery({
+  args: { authId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("users"),
+      email: v.string(),
+      stripeCustomerId: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_authId", (q) => q.eq("authId", args.authId))
+      .unique();
+    if (!user) return null;
+    return {
+      _id: user._id,
+      email: user.email,
+      stripeCustomerId: user.stripeCustomerId,
+    };
+  },
+});
+
+// Internal: save stripeCustomerId on user record
+export const saveStripeCustomerId = internalMutation({
+  args: {
+    authId: v.string(),
+    stripeCustomerId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_authId", (q) => q.eq("authId", args.authId))
+      .unique();
+    if (!user) return null;
+    await ctx.db.patch(user._id, { stripeCustomerId: args.stripeCustomerId });
+    return null;
+  },
+});
