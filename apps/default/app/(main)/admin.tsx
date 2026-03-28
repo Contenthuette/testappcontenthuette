@@ -25,7 +25,6 @@ const ABO_PRICE = "5,99";
 /* ─── Local types for dashboard data ─────────────────── */
 interface DayStats { label: string; photos: number; videos: number }
 interface GrowthDay { label: string; count: number }
-interface EventRevenue { eventName: string; soldTickets: number; totalTickets: number; revenue: number; currency: string }
 interface AdminEvent { _id: Id<"events">; name: string; date: string; city: string; totalTickets: number; soldTickets: number; ticketPrice: number; currency: string; status: string }
 
 /* ─── KPI Card ───────────────────────────────────────────── */
@@ -110,7 +109,7 @@ function EventRow({
         <View style={{ flex: 1 }}>
           <Text style={styles.eventName}>{event.name}</Text>
           <Text style={styles.eventMeta}>
-            {event.date} \u00b7 {event.city}
+            {event.date} · {event.city}
           </Text>
         </View>
         <View style={styles.eventBadge}>
@@ -134,7 +133,7 @@ function EventRow({
             </TouchableOpacity>
             <TouchableOpacity onPress={onDelete} style={[styles.eventActionBtn, styles.eventDeleteBtn]}>
               <SymbolView name="trash" size={13} tintColor={colors.danger} />
-              <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
+              <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
             </TouchableOpacity>
           </View>
 
@@ -243,13 +242,13 @@ export default function AdminDashboard() {
         try {
           await deletePartnerMut({ partnerId });
         } catch {
-          if (Platform.OS !== "web") Alert.alert("Fehler", "Partner konnte nicht gel\u00f6scht werden");
+          if (Platform.OS !== "web") Alert.alert("Fehler", "Partner konnte nicht gelöscht werden");
         }
       };
       if (Platform.OS !== "web") {
-        Alert.alert("Partner l\u00f6schen", `"${name}" wirklich l\u00f6schen?`, [
+        Alert.alert("Partner löschen", `"${name}" wirklich löschen?`, [
           { text: "Abbrechen", style: "cancel" },
-          { text: "L\u00f6schen", style: "destructive", onPress: doDelete },
+          { text: "Löschen", style: "destructive", onPress: doDelete },
         ]);
       } else {
         doDelete();
@@ -427,33 +426,6 @@ export default function AdminDashboard() {
           />
         </Card>
 
-        {/* ── Ticketeinnahmen ─────────────────────── */}
-        <Card title="Ticketeinnahmen" icon="ticket">
-          <View style={styles.revenueHighlight}>
-            <Text style={styles.revenueAmount}>
-              {stats.ticketRevenueTotal.toFixed(2).replace(".", ",")} €
-            </Text>
-            <Text style={styles.revenuePeriod}>gesamt</Text>
-          </View>
-          <RevenueRow
-            label="Letzten 30 Tage"
-            amount={`${stats.ticketRevenueMonth.toFixed(2).replace(".", ",")} €`}
-          />
-          {stats.ticketRevenuePerEvent.length > 0 && (
-            <View style={styles.eventRevenueSection}>
-              <Text style={styles.eventRevenueTitle}>Pro Event</Text>
-              {stats.ticketRevenuePerEvent.map((ev: EventRevenue, i: number) => (
-                <RevenueRow
-                  key={i}
-                  label={ev.eventName}
-                  subtitle={`${ev.soldTickets}/${ev.totalTickets} Tickets`}
-                  amount={`${ev.revenue.toFixed(2).replace(".", ",")} ${ev.currency}`}
-                />
-              ))}
-            </View>
-          )}
-        </Card>
-
         {/* ── Nutzeraktivität Chart ───────────────── */}
         <Card title="Neue Nutzer (7 Tage)" icon="person.badge.plus">
           <MiniLineChart
@@ -590,12 +562,12 @@ export default function AdminDashboard() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.eventName}>{p.businessName}</Text>
                     <Text style={styles.eventMeta}>
-                      {p.city || "Kein Ort"} \u00b7 {p.status === "active" ? "Aktiv" : "Inaktiv"}
+                      {p.city || "Kein Ort"} · {p.status === "active" ? "Aktiv" : "Inaktiv"}
                     </Text>
                   </View>
                   <View style={[styles.eventBadge, p.status !== "active" && { backgroundColor: colors.gray100 }]}>
                     <Text style={[styles.eventBadgeText, p.status !== "active" && { color: colors.gray400 }]}>
-                      {p.status === "active" ? "\u2713 Live" : "Inaktiv"}
+                      {p.status === "active" ? "✓ Live" : "Inaktiv"}
                     </Text>
                   </View>
                 </View>
@@ -613,7 +585,7 @@ export default function AdminDashboard() {
                       style={[styles.eventActionBtn, styles.eventDeleteBtn]}
                     >
                       <SymbolView name="trash" size={13} tintColor={colors.danger} />
-                      <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
+                      <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -738,23 +710,6 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     fontWeight: "500",
     marginTop: 4,
-  },
-
-  /* event revenue */
-  eventRevenueSection: {
-    marginTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
-    paddingTop: spacing.sm,
-  },
-  eventRevenueTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.gray400,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    marginBottom: 4,
   },
 
   /* chart legend */
