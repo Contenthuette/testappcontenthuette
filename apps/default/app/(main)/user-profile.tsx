@@ -31,7 +31,7 @@ import {
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import type { Id } from "@/convex/_generated/dataModel";
 
-interface UserPostItem { _id: string; type: string; thumbnailUrl?: string; mediaUrl?: string }
+interface UserPostItem { _id: string; type: string; thumbnailUrl?: string; mediaUrl?: string; cropOffsetX?: number; cropOffsetY?: number; cropZoom?: number }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_GAP = 2;
@@ -375,6 +375,7 @@ export default function UserProfileScreen() {
                         source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                         style={styles.postImage}
                         contentFit="cover"
+                        contentPosition={`${(post.cropOffsetX ?? 0.5) * 100}% ${(post.cropOffsetY ?? 0.5) * 100}%`}
                         cachePolicy="memory-disk"
                         priority="high"
                         transition={0}

@@ -20,6 +20,9 @@ interface UserPost {
   type: string;
   thumbnailUrl?: string;
   mediaUrl?: string;
+  cropOffsetX?: number;
+  cropOffsetY?: number;
+  cropZoom?: number;
 }
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -153,6 +156,7 @@ export default function ProfileScreen() {
                     source={{ uri: post.thumbnailUrl ?? post.mediaUrl }}
                     style={styles.gridImage}
                     contentFit="cover"
+                    contentPosition={`${(post.cropOffsetX ?? 0.5) * 100}% ${(post.cropOffsetY ?? 0.5) * 100}%`}
                     cachePolicy="memory-disk"
                     priority="high"
                     transition={0}

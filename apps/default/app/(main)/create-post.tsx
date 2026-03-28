@@ -37,7 +37,6 @@ import Animated, {
 } from "react-native-reanimated";
 
 type PostType = "photo" | "video";
-type AspectMode = "original" | "cropped";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
   photo: { title: "Foto posten", pickLabel: "Foto auswaehlen", icon: "photo" },
@@ -65,7 +64,6 @@ export default function CreatePostScreen() {
   const [picking, setPicking] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
-  const [aspectMode, setAspectMode] = useState<AspectMode>("cropped");
   const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
 
   // Thumbnail state
@@ -77,9 +75,6 @@ export default function CreatePostScreen() {
 
   // For videos, we extract a frame to use as the crop preview
   const [videoFrameUri, setVideoFrameUri] = useState<string | null>(null);
-
-  // Videos always cropped to 4:3
-  const effectiveAspectMode: AspectMode = postType === "video" ? "cropped" : aspectMode;
 
   const previewWidth = width - spacing.lg * 2;
   const containerHeight = previewWidth / FEED_ASPECT_RATIO; // 4:3 landscape
@@ -241,14 +236,6 @@ export default function CreatePostScreen() {
     }
   };
 
-  const handleAspectToggle = (mode: AspectMode) => {
-    setAspectMode(mode);
-    resetCrop();
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  };
-
   const handleThumbnailSelected = useCallback((uri: string, isCustom: boolean) => {
     setThumbnailUri(uri);
     setThumbnailIsCustom(isCustom);
@@ -277,17 +264,15 @@ export default function CreatePostScreen() {
         }
       }
 
-      const isCropped = effectiveAspectMode === "cropped";
-
       await createPost({
         type: postType,
         caption: caption.trim() || undefined,
         mediaStorageId: storageId as never,
         thumbnailStorageId: thumbStorageId as never,
-        aspectMode: effectiveAspectMode,
-        cropOffsetX: isCropped ? cropState.x : undefined,
-        cropOffsetY: isCropped ? cropState.y : undefined,
-        cropZoom: isCropped ? cropState.zoom : undefined,
+        aspectMode: "cropped",
+        cropOffsetX: cropState.x,
+        cropOffsetY: cropState.y,
+        cropZoom: cropState.zoom,
         mediaAspectRatio: mediaDims ? mediaDims.width / mediaDims.height : undefined,
       });
 
@@ -319,7 +304,7 @@ export default function CreatePostScreen() {
     );
   }
 
-  const isCropped = effectiveAspectMode === "cropped";
+  const isCropped = true;
   const needsCrop = mediaDims
     ? baseMediaHeight > containerHeight || baseMediaWidth > previewWidth
     : false;
@@ -329,119 +314,67 @@ export default function CreatePostScreen() {
 
     return (
       <View>
-        {/* Aspect mode toggle – only for photos */}
-        {postType === "photo" && (
-          <View style={styles.aspectToggleRow}>
-            <Text style={styles.aspectLabel}>Format</Text>
-            <View style={styles.aspectToggle}>
-              <TouchableOpacity
-                style={[styles.aspectBtn, isCropped && styles.aspectBtnActive]}
-                onPress={() => handleAspectToggle("cropped")}
-                activeOpacity={0.7}
-              >
-                <Icon name="crop" size={14} tintColor={isCropped ? colors.white : colors.gray600} />
-                <Text style={[styles.aspectBtnText, isCropped && styles.aspectBtnTextActive]}>
-                  4:3 anpassen
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.aspectBtn, !isCropped && styles.aspectBtnActive]}
-                onPress={() => handleAspectToggle("original")}
-                activeOpacity={0.7}
-              >
-                <Icon
-                  name="arrow.up.left.and.arrow.down.right"
-                  size={14}
-                  tintColor={!isCropped ? colors.white : colors.gray600}
-                />
-                <Text style={[styles.aspectBtnText, !isCropped && styles.aspectBtnTextActive]}>
-                  Original
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {isCropped ? (
-          <View>
-            {/* Fixed 4:3 crop container */}
-            <GestureDetector gesture={composedGesture}>
-              <Animated.View
-                style={[
-                  styles.cropContainer,
-                  {
-                    width: previewWidth,
-                    height: containerHeight,
-                  },
-                ]}
-              >
-                <Animated.View
-                  style={[
-                    {
-                      width: baseMediaWidth,
-                      height: baseMediaHeight,
-                      // Center media initially
-                      position: "absolute",
-                      left: (previewWidth - baseMediaWidth) / 2,
-                      top: (containerHeight - baseMediaHeight) / 2,
-                    },
-                    animatedMediaStyle,
-                  ]}
-                >
-                  {postType === "video" ? (
-                    <Image
-                      source={{ uri: videoFrameUri ?? mediaPreview }}
-                      style={{ width: baseMediaWidth, height: baseMediaHeight }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Image
-                      source={{ uri: mediaPreview }}
-                      style={{ width: baseMediaWidth, height: baseMediaHeight }}
-                      contentFit="cover"
-                    />
-                  )}
-                </Animated.View>
-
-                {/* Drag hint overlay */}
-                {needsCrop && (
-                  <View style={styles.dragOverlay} pointerEvents="none">
-                    <View style={styles.dragHandleTop}>
-                      <Icon name="hand.draw" size={16} tintColor="rgba(255,255,255,0.9)" />
-                      <Text style={styles.dragHintText}>Verschieben & Zoomen</Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* 4:3 label badge */}
-                <View style={styles.aspectBadge} pointerEvents="none">
-                  <Text style={styles.aspectBadgeText}>4:3</Text>
-                </View>
-              </Animated.View>
-            </GestureDetector>
-
-            <Text style={styles.cropHint}>
-              {needsCrop
-                ? "Verschiebe das Bild mit 1 Finger, zoome mit 2 Fingern"
-                : "Dein Medium passt perfekt ins 4:3 Format"}
-            </Text>
-          </View>
-        ) : (
-          /* ── Original preview ── */
-          <View style={[styles.originalContainer, { width: previewWidth }]}>
-            <Image
-              source={{ uri: mediaPreview }}
+        {/* Fixed 4:3 crop container */}
+        <GestureDetector gesture={composedGesture}>
+          <Animated.View
+            style={[
+              styles.cropContainer,
+              {
+                width: previewWidth,
+                height: containerHeight,
+              },
+            ]}
+          >
+            <Animated.View
               style={[
-                styles.originalImage,
                 {
-                  width: previewWidth,
-                  height: Math.min(baseMediaHeight, containerHeight),
+                  width: baseMediaWidth,
+                  height: baseMediaHeight,
+                  // Center media initially
+                  position: "absolute",
+                  left: (previewWidth - baseMediaWidth) / 2,
+                  top: (containerHeight - baseMediaHeight) / 2,
                 },
+                animatedMediaStyle,
               ]}
-              contentFit="contain"
-            />
-          </View>
-        )}
+            >
+              {postType === "video" ? (
+                <Image
+                  source={{ uri: videoFrameUri ?? mediaPreview }}
+                  style={{ width: baseMediaWidth, height: baseMediaHeight }}
+                  contentFit="cover"
+                />
+              ) : (
+                <Image
+                  source={{ uri: mediaPreview }}
+                  style={{ width: baseMediaWidth, height: baseMediaHeight }}
+                  contentFit="cover"
+                />
+              )}
+            </Animated.View>
+
+            {/* Drag hint overlay */}
+            {needsCrop && (
+              <View style={styles.dragOverlay} pointerEvents="none">
+                <View style={styles.dragHandleTop}>
+                  <Icon name="hand.draw" size={16} tintColor="rgba(255,255,255,0.9)" />
+                  <Text style={styles.dragHintText}>Verschieben & Zoomen</Text>
+                </View>
+              </View>
+            )}
+
+            {/* 4:3 label badge */}
+            <View style={styles.aspectBadge} pointerEvents="none">
+              <Text style={styles.aspectBadgeText}>4:3</Text>
+            </View>
+          </Animated.View>
+        </GestureDetector>
+
+        <Text style={styles.cropHint}>
+          {needsCrop
+            ? "Verschiebe das Bild mit 1 Finger, zoome mit 2 Fingern"
+            : "Dein Medium passt perfekt ins 4:3 Format"}
+        </Text>
 
         {/* Thumbnail picker for videos */}
         {postType === "video" && mediaPreview && (
@@ -599,38 +532,6 @@ const styles = StyleSheet.create({
   emptyLabel: { fontSize: 16, fontWeight: "600", color: colors.gray500 },
   emptyHint: { fontSize: 13, color: colors.gray400 },
 
-  // Aspect toggle
-  aspectToggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  aspectLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.gray500,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  aspectToggle: {
-    flexDirection: "row",
-    backgroundColor: colors.gray100,
-    borderRadius: 10,
-    padding: 3,
-  },
-  aspectBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  aspectBtnActive: { backgroundColor: colors.black },
-  aspectBtnText: { fontSize: 13, fontWeight: "600", color: colors.gray600 },
-  aspectBtnTextActive: { color: colors.white },
-
   // Crop container - fixed 4:3
   cropContainer: {
     borderRadius: 16,
@@ -677,19 +578,6 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     textAlign: "center",
     marginTop: 8,
-  },
-
-  // Original preview
-  originalContainer: {
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    borderCurve: "continuous",
-  },
-  originalImage: {
-    borderRadius: 16,
   },
 
   // Change button

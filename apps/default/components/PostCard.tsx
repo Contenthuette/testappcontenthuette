@@ -55,6 +55,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
 
   // Use thumbnail for videos, media for photos
   const displayImage = isVideo ? (post.thumbnailUrl ?? post.mediaUrl) : post.mediaUrl;
+  const cropPosition = `${(post.cropOffsetX ?? 0.5) * 100}% ${(post.cropOffsetY ?? 0.5) * 100}%`;
 
   return (
     <View style={[s.container, post.isAnnouncement && s.announcement]}>
@@ -114,6 +115,7 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
             source={{ uri: post.mediaUrl }}
             style={s.media}
             contentFit="cover"
+            contentPosition={cropPosition}
             cachePolicy="memory-disk"
             priority="high"
             transition={0}
