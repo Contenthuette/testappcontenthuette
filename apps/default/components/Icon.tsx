@@ -35,6 +35,7 @@ import {
   PhoneIncoming,
   Volume1,
   Volume2,
+  VolumeOff,
   RefreshCcw,
   Calendar,
   Clock,
@@ -173,6 +174,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "person.circle": UserCircle,
   "person.circle.fill": UserCircle,
   "person.2": Users,
+  "person.2.fill": Users,
   "person.3": Users,
   "person.3.fill": Users,
   person: User,
@@ -206,6 +208,8 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "speaker.wave.1.fill": Volume1,
   "speaker.wave.2.fill": Volume2,
   "speaker.wave.3.fill": Volume2,
+  "speaker.slash": VolumeOff,
+  "speaker.slash.fill": VolumeOff,
 
   // Buildings
   "building.2": Building2,
