@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { useLivestreamViewer } from "@/lib/useLivestreamViewer";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
-import { setSpeakerOn } from "@/lib/audioRouting";
+import { setSpeakerOn, forceSpeakerWithRetries } from "@/lib/audioRouting";
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
   Easing, FadeIn, FadeInUp,
@@ -66,13 +66,21 @@ export default function WatchStreamScreen() {
     setHasJoined(true);
     joinStream({ livestreamId }).catch(() => {});
     // Force audio to loudspeaker for viewer
-    setSpeakerOn(true);
+    const cancelRetries = forceSpeakerWithRetries();
     return () => {
+      cancelRetries();
       leaveStream({ livestreamId }).catch(() => {});
       cleanup();
       setSpeakerOn(false);
     };
   }, [livestreamId, hasJoined, joinStream, leaveStream, cleanup]);
+
+  // Re-force speaker when remote stream actually arrives (WebRTC resets audio session)
+  useEffect(() => {
+    if (!remoteStreamUrl) return;
+    const cancelRetries = forceSpeakerWithRetries();
+    return () => cancelRetries();
+  }, [remoteStreamUrl]);
 
   // Reversed comments for inverted FlatList (newest at bottom)
   const reversedComments = useMemo(

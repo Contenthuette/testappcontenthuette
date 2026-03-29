@@ -390,7 +390,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             >
               <SymbolView
                 name={isMuted ? "mic.slash.fill" : "mic.fill"}
-                size={22}
+                size={24}
                 tintColor={isMuted ? "#111" : "#FFF"}
               />
             </Pressable>
@@ -411,8 +411,8 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               hitSlop={8}
             >
               <SymbolView
-                name={isSpeakerOn ? "speaker.wave.3.fill" : "speaker.fill"}
-                size={22}
+                name={isSpeakerOn ? "speaker.wave.2.fill" : "speaker.slash.fill"}
+                size={24}
                 tintColor={isSpeakerOn ? "#111" : "#FFF"}
               />
             </Pressable>
@@ -435,7 +435,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               >
                 <SymbolView
                   name={isVideoOff ? "video.slash.fill" : "video.fill"}
-                  size={22}
+                  size={24}
                   tintColor={isVideoOff ? "#111" : "#FFF"}
                 />
               </Pressable>
@@ -455,7 +455,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               onPress={handleHangUp}
               hitSlop={8}
             >
-              <SymbolView name="phone.down.fill" size={24} tintColor="#FFF" />
+              <SymbolView name="phone.down.fill" size={28} tintColor="#FFF" />
             </Pressable>
             <Text style={styles.controlLabel}>Auflegen</Text>
           </View>
@@ -473,7 +473,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               >
                 <SymbolView
                   name="camera.rotate.fill"
-                  size={22}
+                  size={24}
                   tintColor="#FFF"
                 />
               </Pressable>
@@ -649,18 +649,18 @@ const styles = StyleSheet.create({
   },
   controlGroup: { alignItems: "center", gap: 6, minWidth: 56 },
   controlBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
   controlBtnActive: { backgroundColor: "#FFF" },
   hangupBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
