@@ -1,20 +1,14 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
-  TouchableOpacity, Alert, Platform,
+  TouchableOpacity, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { useConvexAuth } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
-import { convexSiteUrl } from "@/lib/convex-urls";
-import * as WebBrowser from "expo-web-browser";
-import * as Crypto from "expo-crypto";
 
 const FEATURES = [
   {
@@ -39,62 +33,12 @@ export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   const cardSize = (width - spacing.xl * 2 - spacing.md) / 2;
   const cardHeight = cardSize * 0.8;
-  const { isAuthenticated } = useConvexAuth();
 
-  const [loading, setLoading] = useState(false);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [agbAccepted, setAgbAccepted] = useState(false);
 
-  const createCheckout = useAction(api.stripeActions.createCheckoutSession);
-  const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
-
-  const pendingStatus = useQuery(
-    api.stripeHelpers.getPendingByToken,
-    sessionToken ? { sessionToken } : "skip",
-  );
-
-  useEffect(() => {
-    if (pendingStatus?.status !== "completed") return;
-    if (!sessionToken) return;
-
-    if (isAuthenticated) {
-      claimSubscription({ sessionToken })
-        .then(() => router.replace("/"))
-        .catch(() => router.replace("/"));
-    } else {
-      router.replace({ pathname: "/(auth)/signup", params: { sessionToken } });
-    }
-  }, [pendingStatus, sessionToken, isAuthenticated, claimSubscription]);
-
-  const handleSubscribe = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = Crypto.randomUUID();
-      setSessionToken(token);
-
-      const { url } = await createCheckout({
-        plan: "monthly",
-        sessionToken: token,
-        siteUrl: convexSiteUrl,
-      });
-
-      await WebBrowser.openBrowserAsync(url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-      });
-
-      setLoading(false);
-    } catch (e) {
-      console.error("Checkout error:", e);
-      setSessionToken(null);
-      setLoading(false);
-      if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Checkout konnte nicht gestartet werden. Bitte versuche es erneut.");
-      }
-    }
-  }, [createCheckout]);
-
-  const isWaiting = sessionToken !== null && pendingStatus?.status === "pending";
-  const canSubscribe = agbAccepted && !loading && !isWaiting;
+  const handleJoin = useCallback(() => {
+    router.push("/(auth)/signup");
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -132,10 +76,9 @@ export default function WelcomeScreen() {
 
       <View style={styles.ctaWrap}>
         <Button
-          title={isWaiting ? "Zahlung wird verarbeitet..." : "Join the Movement"}
-          onPress={handleSubscribe}
-          loading={loading || isWaiting}
-          disabled={!canSubscribe}
+          title="Join the Movement"
+          onPress={handleJoin}
+          disabled={!agbAccepted}
           fullWidth
         />
 

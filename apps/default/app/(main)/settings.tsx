@@ -126,7 +126,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.version}>Z · Version 1.0.0</Text>
+        <Text style={styles.brand}>CONTENTHUETTE</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -200,6 +200,14 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     textAlign: "center",
     marginTop: spacing.xxl,
+    marginBottom: spacing.xs,
+  },
+  brand: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.gray300,
+    textAlign: "center",
+    letterSpacing: 2,
     marginBottom: spacing.lg,
   },
 });
