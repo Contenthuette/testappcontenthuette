@@ -10,7 +10,7 @@ const createOptions = [
   {
     icon: "photo" as const,
     label: "Foto posten",
-    desc: "Teile einen Moment mit deiner Community",
+    desc: "Teile einen Moment mit der Z Community",
     route: "/(main)/create-post?type=photo" as const,
   },
   {
@@ -28,7 +28,7 @@ const createOptions = [
   {
     icon: "person.3.fill" as const,
     label: "Gruppe erstellen",
-    desc: "Starte eine neue Gruppe in MV",
+    desc: "Starte deine eigene Z Gruppe",
     route: "/(main)/create-group" as const,
   },
 ];
