@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Platform, ScrollView,
@@ -16,7 +16,7 @@ import { SymbolView } from "@/components/Icon";
 import { LivestreamCard } from "@/components/LivestreamCard";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from "react-native-reanimated";
 
 type Tab = "groups" | "people";
 
@@ -79,6 +79,13 @@ export default function GroupsScreen() {
   const [tab, setTab] = useState<Tab>("groups");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Fetch which groups are currently live
+  const liveGroupIds = useQuery(
+    api.livestreams.liveGroupIds,
+    isAuthenticated ? {} : "skip",
+  );
+  const liveGroupSet = new Set(liveGroupIds ?? []);
+
   const {
     results: groups,
     status: groupsStatus,
@@ -128,9 +135,22 @@ export default function GroupsScreen() {
             <SymbolView name="person.3.fill" size={22} tintColor={colors.gray300} />
           </View>
         )}
+        {liveGroupSet.has(item._id) && (
+          <View style={styles.liveThumbBadge}>
+            <View style={styles.liveThumbDot} />
+            <Text style={styles.liveThumbText}>LIVE</Text>
+          </View>
+        )}
       </View>
       <View style={styles.cardBody}>
-        <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.cardNameRow}>
+          <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+          {liveGroupSet.has(item._id) && (
+            <View style={styles.liveInlineBadge}>
+              <View style={styles.liveInlineDot} />
+            </View>
+          )}
+        </View>
         <Text style={styles.cardMeta} numberOfLines={1}>
           {[item.city || item.county, item.topic].filter(Boolean).join(" · ")}
         </Text>
@@ -487,6 +507,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
+  /* Live badges on group cards */
+  liveThumbBadge: {
+    position: "absolute",
+    bottom: 3,
+    left: 3,
+    right: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: colors.danger,
+    borderRadius: 4,
+    paddingVertical: 2,
+  },
+  liveThumbDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.white,
+  },
+  liveThumbText: {
+    color: colors.white,
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  cardNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  liveInlineBadge: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  liveInlineDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.white,
+  },
+
   avatarWrap: {
     width: 50,
     height: 50,

@@ -220,30 +220,47 @@ export default function GoLiveScreen() {
 
   return (
     <View style={styles.fullScreen}>
-      {/* Main video: local camera or split view */}
+      {/* Video area: 50/50 split or solo */}
       {hasRemotePeer ? (
-        /* Split screen: local top-right PiP, remote full */
-        <>
-          {RTCView && remoteStreamUrl && (
-            <RTCView
-              streamURL={remoteStreamUrl}
-              style={StyleSheet.absoluteFill}
-              objectFit="cover"
-              zOrder={0}
-            />
-          )}
-          {localStreamUrl && RTCView && !isVideoOff && (
-            <View style={styles.pipContainer}>
+        <View style={styles.splitContainer}>
+          {/* Top half: local camera */}
+          <View style={styles.splitHalf}>
+            {localStreamUrl && RTCView && !isVideoOff ? (
               <RTCView
                 streamURL={localStreamUrl}
-                style={styles.pipVideo}
+                style={StyleSheet.absoluteFill}
                 objectFit="cover"
                 mirror
-                zOrder={1}
+                zOrder={0}
               />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
+                <SymbolView name="video.slash" size={32} tintColor={colors.gray500} />
+              </View>
+            )}
+            <View style={styles.splitLabel}>
+              <Text style={styles.splitLabelText}>{isCoHost ? stream?.hostName ?? "Host" : "Du"}</Text>
             </View>
-          )}
-        </>
+          </View>
+          {/* Divider */}
+          <View style={styles.splitDivider} />
+          {/* Bottom half: remote camera */}
+          <View style={styles.splitHalf}>
+            {RTCView && remoteStreamUrl && (
+              <RTCView
+                streamURL={remoteStreamUrl}
+                style={StyleSheet.absoluteFill}
+                objectFit="cover"
+                zOrder={0}
+              />
+            )}
+            <View style={styles.splitLabel}>
+              <Text style={styles.splitLabelText}>
+                {isCoHost ? "Du" : stream?.coHostName ?? "Gast"}
+              </Text>
+            </View>
+          </View>
+        </View>
       ) : (
         /* Solo: local camera fullscreen */
         <>
@@ -420,6 +437,36 @@ const styles = StyleSheet.create({
   pipVideo: {
     width: "100%",
     height: "100%",
+  },
+
+  /* 50/50 split */
+  splitContainer: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "column",
+  },
+  splitHalf: {
+    flex: 1,
+    backgroundColor: colors.gray900,
+    overflow: "hidden",
+  },
+  splitDivider: {
+    height: 2,
+    backgroundColor: colors.black,
+    zIndex: 2,
+  },
+  splitLabel: {
+    position: "absolute",
+    bottom: 10,
+    left: 14,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  splitLabelText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   /* Top bar */

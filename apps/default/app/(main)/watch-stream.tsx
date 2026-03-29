@@ -185,6 +185,19 @@ export default function WatchStreamScreen() {
         </View>
       )}
 
+      {/* Participant overlay when 2 are live */}
+      {stream.participantCount === 2 && stream.coHostName && (
+        <View style={styles.participantOverlay}>
+          <View style={styles.participantAvatarRow}>
+            <Avatar uri={stream.hostAvatarUrl} name={stream.hostName} size={28} />
+            <Avatar uri={stream.coHostAvatarUrl} name={stream.coHostName} size={28} />
+          </View>
+          <Text style={styles.participantNames}>
+            {stream.hostName} & {stream.coHostName}
+          </Text>
+        </View>
+      )}
+
       <SafeAreaView style={styles.overlay}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           {/* Top bar */}
@@ -412,6 +425,31 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  /* Participant overlay */
+  participantOverlay: {
+    position: "absolute",
+    top: 110,
+    alignSelf: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+    zIndex: 10,
+    gap: 6,
+  },
+  participantAvatarRow: {
+    flexDirection: "row",
+    gap: -8,
+  },
+  participantNames: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: -0.2,
   },
 
   /* Stream info */

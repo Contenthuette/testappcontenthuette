@@ -77,6 +77,20 @@ export const listActive = authQuery({
   },
 });
 
+/** Return Set of group IDs that currently have a live stream */
+export const liveGroupIds = authQuery({
+  args: {},
+  returns: v.array(v.id("groups")),
+  handler: async (ctx) => {
+    const streams = await ctx.db
+      .query("livestreams")
+      .withIndex("by_status", (q) => q.eq("status", "live"))
+      .take(50);
+    const ids = new Set(streams.map((s) => s.groupId));
+    return [...ids];
+  },
+});
+
 /** Get a single livestream by ID */
 export const getById = query({
   args: { livestreamId: v.id("livestreams") },
