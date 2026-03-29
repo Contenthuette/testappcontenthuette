@@ -40,7 +40,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "\u2022 Foto- und Videobeitr\u00e4ge im Feed\n\u2022 Bildunterschriften (Captions)\n\u2022 Kommentare und Reaktionen (Likes)\n\u2022 Nachrichten (Text, Bild, Video, Sprachnachrichten)\n\u2022 Gruppenerstellungen und -beitritte",
       "Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserf\u00fcllung).",
       "4.4 Kommunikationsdaten",
-      "\u2022 Direktnachrichten (Text, Medien, Sprachnachrichten)\n\u2022 Audio- und Videoanrufe (Signalisierungsdaten)\n\u2022 Anrufprotokolle (Zeitpunkt, Dauer, Teilnehmer)",
+      "\u2022 Direktnachrichten (Text, Medien, Sprachnachrichten)\n\u2022 Audio- und Videoanrufe (Signalisierungsdaten)\n\u2022 Anrufprotokolle (Zeitpunkt, Dauer, Teilnehmer)\n\u2022 Live-Stream-Metadaten (Titel, Startzeitpunkt, Teilnehmerzahl, Zuschauerzahl)\n\u2022 Chat-Nachrichten w\u00e4hrend Live-Streams",
       "Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserf\u00fcllung).",
       "4.5 Event- und Ticketdaten",
       "\u2022 Eventteilnahmen\n\u2022 Ticketk\u00e4ufe und -status\n\u2022 QR-Code-Daten zur Einlassverifizierung\n\u2022 Check-in-Zeitpunkte",
@@ -61,7 +61,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "5.1 Convex, Inc. (USA)\nZweck: Datenbank, Serverinfrastruktur, Dateispeicherung, Echtzeit-Datensynchronisation\nStandort: AWS-Rechenzentrum, USA\nGrundlage f\u00fcr Drittlandtransfer: EU-US Data Privacy Framework (DPF) sowie Standardvertragsklauseln (SCC) gem\u00e4\u00df Art. 46 Abs. 2 lit. c DSGVO.",
       "5.2 Stripe, Inc. (USA)\nZweck: Zahlungsabwicklung f\u00fcr Abonnements und Event-Tickets\nStandort: USA / Irland\nGrundlage: EU-US Data Privacy Framework (DPF). Zahlungsdaten werden direkt von Stripe verarbeitet. Der Anbieter speichert ausschlie\u00dflich die Stripe-Kunden-ID und den Abonnementstatus.",
       "5.3 Expo / The Expo Project (USA)\nZweck: Push-Benachrichtigungen an mobile Ger\u00e4te\nStandort: USA\nGrundlage: EU-US Data Privacy Framework (DPF) sowie SCC.",
-      "5.4 WebRTC (Peer-to-Peer)\nAudio- und Videoanrufe werden \u00fcber das WebRTC-Protokoll realisiert. Nach dem Verbindungsaufbau laufen Medienstr\u00f6me direkt zwischen den Endger\u00e4ten. Lediglich Signalisierungsdaten werden \u00fcber unsere Server vermittelt.",
+      "5.4 Metered Networks Inc. (Kanada)\nZweck: Bereitstellung von TURN/STUN-Relayservern f\u00fcr WebRTC-Verbindungen (Audio-/Videoanrufe und Live-Streams), wenn eine direkte Peer-to-Peer-Verbindung zwischen den Endger\u00e4ten nicht m\u00f6glich ist.\nVerarbeitete Daten: IP-Adressen der Verbindungsteilnehmer, verschl\u00fcsselte Medienstr\u00f6me (Inhalt bleibt durch DTLS-SRTP-Verschl\u00fcsselung gesch\u00fctzt).\nStandort: Kanada / weltweit verteilte Serverinfrastruktur\nGrundlage f\u00fcr Drittlandtransfer: Angemessenheitsbeschluss der EU-Kommission f\u00fcr Kanada (Art. 45 DSGVO) sowie Standardvertragsklauseln (SCC) f\u00fcr Server au\u00dferhalb Kanadas.",
+      "5.5 WebRTC (Peer-to-Peer)\nAudio- und Videoanrufe sowie Live-Streams werden \u00fcber das WebRTC-Protokoll realisiert. Nach dem Verbindungsaufbau laufen Medienstr\u00f6me nach M\u00f6glichkeit direkt zwischen den Endger\u00e4ten. Ist eine direkte Verbindung nicht m\u00f6glich, werden die Daten \u00fcber TURN-Relayserver (Metered Networks, siehe 5.4) geleitet. Signalisierungsdaten werden \u00fcber die Server des Anbieters (Convex, siehe 5.1) vermittelt.",
       "Eine Weitergabe personenbezogener Daten an sonstige Dritte erfolgt nur:",
       "\u2022 Wenn eine gesetzliche Verpflichtung besteht (Art. 6 Abs. 1 lit. c DSGVO)\n\u2022 Wenn der Nutzer ausdr\u00fccklich eingewilligt hat (Art. 6 Abs. 1 lit. a DSGVO)\n\u2022 Wenn dies zur Geltendmachung von Rechtsanspr\u00fcchen erforderlich ist",
       "Eine kommerzielle Weitergabe oder ein Verkauf personenbezogener Daten an Dritte findet nicht statt.",
@@ -80,6 +81,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "\u2022 Zahlungs- und Rechnungsdaten: 10 Jahre nach Ende des Kalenderjahres der Transaktion (\u00a7 147 AO).",
       "\u2022 Kommunikationsdaten: Bis zur L\u00f6schung des Kontos oder der Konversation.",
       "\u2022 Anrufprotokolle: 90 Tage nach Beendigung des Anrufs.",
+      "\u2022 Live-Stream-Metadaten: Bis zur L\u00f6schung des Kontos oder 90 Tage nach Ende des Streams.",
       "\u2022 Meldungen und Moderationsdaten: Bis zur Erledigung bzw. f\u00fcr die Dauer etwaiger Rechtsstreitigkeiten.",
       "\u2022 Anonymisierte Analysedaten: Unbefristet, da kein Personenbezug besteht.",
     ].join("\n\n"),
@@ -115,7 +117,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     heading: "11. Datensicherheit",
     body: [
       "Wir setzen technische und organisatorische Ma\u00dfnahmen ein, um Ihre Daten zu sch\u00fctzen:",
-      "\u2022 Verschl\u00fcsselte Daten\u00fcbertragung (TLS/SSL)\n\u2022 Verschl\u00fcsselte Speicherung von Passw\u00f6rtern (Hashing)\n\u2022 Zugriffsbeschr\u00e4nkungen auf personenbezogene Daten\n\u2022 Regelm\u00e4\u00dfige \u00dcberpr\u00fcfung der Sicherheitsma\u00dfnahmen",
+      "\u2022 Verschl\u00fcsselte Daten\u00fcbertragung (TLS/SSL)\n\u2022 Ende-zu-Ende-Verschl\u00fcsselung der Medienstr\u00f6me bei Anrufen und Live-Streams (DTLS-SRTP)\n\u2022 Verschl\u00fcsselte Speicherung von Passw\u00f6rtern (Hashing)\n\u2022 Zugriffsbeschr\u00e4nkungen auf personenbezogene Daten\n\u2022 Regelm\u00e4\u00dfige \u00dcberpr\u00fcfung der Sicherheitsma\u00dfnahmen",
       "Unsere Sicherheitsma\u00dfnahmen werden dem Stand der Technik entsprechend fortlaufend angepasst.",
     ].join("\n\n"),
   },
@@ -125,7 +127,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   },
   {
     heading: "13. \u00c4nderungen dieser Datenschutzerkl\u00e4rung",
-    body: "Wir behalten uns vor, diese Datenschutzerkl\u00e4rung anzupassen, um sie an ge\u00e4nderte Rechtslagen, neue Funktionen oder ver\u00e4nderte Datenverarbeitungsprozesse anzupassen.\n\nBei wesentlichen \u00c4nderungen werden die Nutzer per E-Mail oder In-App-Benachrichtigung informiert. Die jeweils aktuelle Fassung ist jederzeit innerhalb der App im Privacy Center einsehbar.\n\nStand: M\u00e4rz 2025",
+    body: "Wir behalten uns vor, diese Datenschutzerkl\u00e4rung anzupassen, um sie an ge\u00e4nderte Rechtslagen, neue Funktionen oder ver\u00e4nderte Datenverarbeitungsprozesse anzupassen.\n\nBei wesentlichen \u00c4nderungen werden die Nutzer per E-Mail oder In-App-Benachrichtigung informiert. Die jeweils aktuelle Fassung ist jederzeit innerhalb der App im Privacy Center einsehbar.\n\nStand: M\u00e4rz 2026",
   },
 ];
 

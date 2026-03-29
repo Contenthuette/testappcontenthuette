@@ -22,7 +22,7 @@ export const AGB_SECTIONS: LegalSection[] = [
     heading: "\u00a7 2 Vertragsgegenstand",
     body: [
       "(1) Die App \u201eZ\u201c ist eine regionale Social-Media-Plattform f\u00fcr Mecklenburg-Vorpommern. Sie bietet den Nutzern folgende Funktionen:",
-      "\u2022 Erstellung und Verwaltung eines pers\u00f6nlichen Profils\n\u2022 Ver\u00f6ffentlichung von Foto- und Videobeitr\u00e4gen im Community-Feed\n\u2022 Direkte Nachrichten (Text, Bild, Video, Sprachnachrichten)\n\u2022 Audio- und Videoanrufe zwischen Nutzern\n\u2022 Erstellung und Teilnahme an Gruppen\n\u2022 Entdecken und Teilnahme an regionalen Events\n\u2022 Erwerb von Event-Tickets\n\u2022 Freundschaftsanfragen und soziale Vernetzung",
+      "\u2022 Erstellung und Verwaltung eines pers\u00f6nlichen Profils\n\u2022 Ver\u00f6ffentlichung von Foto- und Videobeitr\u00e4gen im Community-Feed\n\u2022 Direkte Nachrichten (Text, Bild, Video, Sprachnachrichten)\n\u2022 Audio- und Videoanrufe zwischen Nutzern\n\u2022 Live-Streaming (\u00dcbertragung von Audio und Video in Echtzeit an andere Nutzer)\n\u2022 Erstellung und Teilnahme an Gruppen\n\u2022 Entdecken und Teilnahme an regionalen Events\n\u2022 Erwerb von Event-Tickets\n\u2022 Freundschaftsanfragen und soziale Vernetzung",
       "(2) Der Anbieter stellt die technische Infrastruktur zur Verf\u00fcgung und gew\u00e4hrt dem Nutzer ein nicht-exklusives, nicht \u00fcbertragbares Recht zur Nutzung der App im Rahmen dieser AGB.",
     ].join("\n\n"),
   },
@@ -77,12 +77,17 @@ export const AGB_SECTIONS: LegalSection[] = [
     ].join("\n\n"),
   },
   {
-    heading: "\u00a7 8 Kommunikation und Anrufe",
+    heading: "\u00a7 8 Kommunikation, Anrufe und Live-Streaming",
     body: [
-      "(1) Die App bietet Funktionen f\u00fcr Direktnachrichten sowie Audio- und Videoanrufe.",
+      "(1) Die App bietet Funktionen f\u00fcr Direktnachrichten, Audio- und Videoanrufe sowie Live-Streaming.",
       "(2) Nachrichten werden verschl\u00fcsselt \u00fcbertragen und auf den Servern des Anbieters gespeichert.",
-      "(3) Audio- und Videoanrufe werden \u00fcber WebRTC realisiert. Medienstr\u00f6me laufen nach M\u00f6glichkeit direkt zwischen den Ger\u00e4ten (Peer-to-Peer).",
-      "(4) Der Anbieter hat keinen Zugriff auf die Inhalte laufender Audio- oder Videoanrufe.",
+      "(3) Audio- und Videoanrufe sowie Live-Streams werden \u00fcber das WebRTC-Protokoll realisiert. Medienstr\u00f6me laufen nach M\u00f6glichkeit direkt zwischen den Ger\u00e4ten der Teilnehmer (Peer-to-Peer). Ist eine direkte Verbindung nicht m\u00f6glich, werden die Medienstr\u00f6me \u00fcber sogenannte TURN-Relayserver des Drittanbieters Metered Networks Inc. (Kanada) geleitet, um die Verbindung herzustellen.",
+      "(4) Bei der Nutzung von TURN-Relayservern werden die IP-Adressen der beteiligten Ger\u00e4te sowie die verschl\u00fcsselten Medienstr\u00f6me \u00fcber die Server von Metered Networks Inc. geleitet. Der Inhalt der Kommunikation bleibt durch die WebRTC-eigene Verschl\u00fcsselung (DTLS-SRTP) gesch\u00fctzt.",
+      "(5) Lediglich Signalisierungsdaten (Verbindungsaufbau, SDP-Angebote) werden \u00fcber die Server des Anbieters vermittelt.",
+      "(6) Live-Streams sind \u00f6ffentlich f\u00fcr alle eingeloggten Nutzer der App sichtbar. Der streamende Nutzer ist f\u00fcr die von ihm \u00fcbertragenen Inhalte selbst verantwortlich. Es gelten die Verhaltensregeln gem\u00e4\u00df \u00a7 6 dieser AGB.",
+      "(7) Der Anbieter kann Live-Streams ohne vorherige Ank\u00fcndigung beenden, wenn Verst\u00f6\u00dfe gegen diese AGB oder geltendes Recht festgestellt werden.",
+      "(8) Live-Streams werden nicht vom Anbieter aufgezeichnet oder gespeichert. Das unbefugte Aufzeichnen von Live-Streams durch Zuschauer ist untersagt.",
+      "(9) Der Anbieter hat keinen Zugriff auf die Inhalte laufender Audio- oder Videoanrufe und Live-Streams.",
     ].join("\n\n"),
   },
   {
@@ -149,7 +154,7 @@ export const AGB_SECTIONS: LegalSection[] = [
       "(3) Ist der Nutzer Kaufmann, ist ausschlie\u00dflicher Gerichtsstand der Sitz des Anbieters.",
       "(4) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der \u00fcbrigen Bestimmungen unber\u00fchrt.",
       "(5) Die Europ\u00e4ische Kommission stellt eine Plattform zur Online-Streitbeilegung bereit: https://ec.europa.eu/consumers/odr\n\nDer Anbieter ist zur Teilnahme an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle weder verpflichtet noch bereit.",
-      "Stand: M\u00e4rz 2025",
+      "Stand: M\u00e4rz 2026",
     ].join("\n\n"),
   },
 ];
