@@ -215,22 +215,6 @@ export default function GroupDetailScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Go Live Button (member, no active stream) */}
-          {isMember && !activeStream && (
-            <TouchableOpacity
-              style={styles.goLiveRow}
-              onPress={() => {
-                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push({ pathname: "/(main)/go-live", params: { groupId: id! } });
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.goLiveDot} />
-              <Text style={styles.goLiveText}>Go Live</Text>
-              <SymbolView name="chevron.right" size={13} tintColor={colors.gray300} />
-            </TouchableOpacity>
-          )}
-
           {/* Pending Requests (Admin only) */}
           {isAdmin && pendingRequests && pendingRequests.length > 0 && (
             <View style={styles.section}>

@@ -428,8 +428,8 @@ export default defineSchema({
 
   // ── Livestreams ────────────────────────────────────────────────
   livestreams: defineTable({
-    groupId: v.id("groups"),
-    groupName: v.string(),
+    groupId: v.optional(v.id("groups")),
+    groupName: v.optional(v.string()),
     hostId: v.id("users"),
     hostName: v.string(),
     hostAvatarUrl: v.optional(v.string()),

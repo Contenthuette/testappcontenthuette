@@ -17,7 +17,7 @@ interface LivestreamCardProps {
   hostAvatarUrl?: string;
   coHostName?: string;
   coHostAvatarUrl?: string;
-  groupName: string;
+  groupName?: string;
   participantCount: number;
   viewerCount: number;
 }
@@ -78,7 +78,9 @@ export function LivestreamCard({
       </View>
 
       {/* Group */}
-      <Text style={styles.groupName} numberOfLines={1}>{groupName}</Text>
+      {groupName ? (
+        <Text style={styles.groupName} numberOfLines={1}>{groupName}</Text>
+      ) : null}
     </TouchableOpacity>
   );
 }

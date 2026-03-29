@@ -20,6 +20,12 @@ const createOptions = [
     route: "/(main)/create-post?type=video" as const,
   },
   {
+    icon: "video.badge.waveform" as const,
+    label: "Live gehen",
+    desc: "Starte einen Livestream für deine Community",
+    route: "/(main)/go-live" as const,
+  },
+  {
     icon: "person.3.fill" as const,
     label: "Gruppe erstellen",
     desc: "Starte eine neue Gruppe in MV",

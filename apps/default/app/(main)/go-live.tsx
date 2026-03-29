@@ -21,7 +21,7 @@ import Animated, {
 
 export default function GoLiveScreen() {
   const { groupId, livestreamId: existingId, mode } = useLocalSearchParams<{
-    groupId: string;
+    groupId?: string;
     livestreamId?: string;
     mode?: string;
   }>();
@@ -54,7 +54,7 @@ export default function GoLiveScreen() {
     localStreamUrl, remoteStreamUrl, peerConnected,
     isMuted, isVideoOff,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
-  } = useLivestreamHost({ livestreamId, enabled: !!livestreamId });
+  } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true });
 
   const isLive = !!livestreamId;
 
@@ -102,11 +102,14 @@ export default function GoLiveScreen() {
   );
 
   const handleGoLive = useCallback(async () => {
-    if (!groupId || !title.trim()) return;
+    if (!title.trim()) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setIsStarting(true);
     try {
-      const id = await goLive({ groupId: groupId as Id<"groups">, title: title.trim() });
+      const id = await goLive({
+        groupId: groupId ? (groupId as Id<"groups">) : undefined,
+        title: title.trim(),
+      });
       setLivestreamId(id);
     } catch (e) {
       console.error("Go live failed:", e);
@@ -166,7 +169,7 @@ export default function GoLiveScreen() {
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
             <ActivityIndicator color={colors.white} size="large" />
-            <Text style={styles.cameraPlaceholderText}>Kamera wird geladen\u2026</Text>
+            <Text style={styles.cameraPlaceholderText}>Kamera & Mikro werden aktiviert</Text>
           </View>
         )}
 
@@ -186,7 +189,7 @@ export default function GoLiveScreen() {
             <Text style={styles.setupSubtitle}>Gib deinem Livestream einen Titel</Text>
             <TextInput
               style={styles.titleInput}
-              placeholder="Wor\u00fcber streamst du?"
+              placeholder="Welches Thema hat dein Stream?"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={title}
               onChangeText={setTitle}

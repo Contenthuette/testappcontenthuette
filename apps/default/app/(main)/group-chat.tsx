@@ -49,27 +49,6 @@ export default function GroupChatScreen() {
   const generateUploadUrl = useMutation(api.messaging.generateUploadUrl);
   const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const group = useQuery(api.groups.getById, isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip");
-  const initiateGroupCall = useMutation(api.calls.initiateGroupCall);
-  const [isCallStarting, setIsCallStarting] = useState(false);
-
-  const handleGroupCall = useCallback(async (type: "audio" | "video") => {
-    if (!id || isCallStarting) return;
-    setIsCallStarting(true);
-    try {
-      const callId = await initiateGroupCall({
-        groupId: id as Id<"groups">,
-        type,
-      });
-      router.push({ pathname: "/(main)/call" as "/", params: { id: callId } });
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Gruppenanruf fehlgeschlagen";
-      if (Platform.OS !== "web") {
-        Alert.alert("Anruf fehlgeschlagen", message);
-      }
-    } finally {
-      setIsCallStarting(false);
-    }
-  }, [id, initiateGroupCall, isCallStarting]);
 
   const handleSend = async (msg: string) => {
     if (!id) return;
@@ -216,12 +195,6 @@ export default function GroupChatScreen() {
             {group?.memberCount ?? 0} Mitglieder
           </Text>
         </View>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("audio")} disabled={isCallStarting}>
-          <SymbolView name="phone" size={20} tintColor={isCallStarting ? "#999" : colors.black} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8} onPress={() => handleGroupCall("video")} disabled={isCallStarting}>
-          <SymbolView name="video" size={20} tintColor={isCallStarting ? "#999" : colors.black} />
-        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView

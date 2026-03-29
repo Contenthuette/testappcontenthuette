@@ -38,8 +38,8 @@ export const listActive = authQuery({
   returns: v.array(
     v.object({
       _id: v.id("livestreams"),
-      groupId: v.id("groups"),
-      groupName: v.string(),
+      groupId: v.optional(v.id("groups")),
+      groupName: v.optional(v.string()),
       hostId: v.id("users"),
       hostName: v.string(),
       hostAvatarUrl: v.optional(v.string()),
@@ -86,7 +86,11 @@ export const liveGroupIds = authQuery({
       .query("livestreams")
       .withIndex("by_status", (q) => q.eq("status", "live"))
       .take(50);
-    const ids = new Set(streams.map((s) => s.groupId));
+    const ids = new Set(
+      streams
+        .map((s) => s.groupId)
+        .filter((id): id is Id<"groups"> => id !== undefined),
+    );
     return [...ids];
   },
 });
@@ -97,8 +101,8 @@ export const getById = query({
   returns: v.union(
     v.object({
       _id: v.id("livestreams"),
-      groupId: v.id("groups"),
-      groupName: v.string(),
+      groupId: v.optional(v.id("groups")),
+      groupName: v.optional(v.string()),
       hostId: v.id("users"),
       hostName: v.string(),
       hostAvatarUrl: v.optional(v.string()),
@@ -280,10 +284,10 @@ export const getSignals = authQuery({
 
 // ── Mutations ────────────────────────────────────────────────────
 
-/** Start a livestream in a group */
+/** Start a livestream */
 export const goLive = authMutation({
   args: {
-    groupId: v.id("groups"),
+    groupId: v.optional(v.id("groups")),
     title: v.string(),
   },
   returns: v.id("livestreams"),
@@ -291,35 +295,18 @@ export const goLive = authMutation({
     const userId = await requireUserId(ctx);
     await rateLimiter.limit(ctx, "goLive", { key: userId });
 
-    const membership = await ctx.db
-      .query("groupMembers")
-      .withIndex("by_groupId_and_userId", (q) =>
-        q.eq("groupId", args.groupId).eq("userId", userId),
-      )
-      .unique();
-    if (!membership || membership.status !== "active") {
-      throw new Error("Du musst Mitglied der Gruppe sein, um live zu gehen.");
-    }
-
-    const existing = await ctx.db
-      .query("livestreams")
-      .withIndex("by_groupId_and_status", (q) =>
-        q.eq("groupId", args.groupId).eq("status", "live"),
-      )
-      .first();
-    if (existing) {
-      throw new Error("Es gibt bereits einen aktiven Livestream in dieser Gruppe.");
-    }
-
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
 
-    const group = await ctx.db.get(args.groupId);
-    if (!group) throw new Error("Group not found");
+    let groupName: string | undefined;
+    if (args.groupId) {
+      const group = await ctx.db.get(args.groupId);
+      groupName = group?.name;
+    }
 
     return await ctx.db.insert("livestreams", {
       groupId: args.groupId,
-      groupName: group.name,
+      groupName,
       hostId: userId,
       hostName: user.name,
       hostAvatarUrl: user.avatarUrl,

@@ -76,14 +76,16 @@ const SIGNAL_ACK_DEBOUNCE_MS = 400;
 interface UseLivestreamHostOptions {
   livestreamId: Id<"livestreams"> | null;
   enabled: boolean;
+  enablePreview?: boolean;
 }
 
 /**
  * Hook for a livestream participant (host or coHost).
  * Captures local media, establishes P2P with the other participant,
  * and streams media to viewers who send offers.
+ * Set enablePreview=true to start camera before going live.
  */
-export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOptions) {
+export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseLivestreamHostOptions) {
   const [localStreamUrl, setLocalStreamUrl] = useState<string | null>(null);
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -137,7 +139,7 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
 
   /* -- Load ICE servers -- */
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled && !enablePreview) return;
     let cancelled = false;
     getIceServers({}).then((servers) => {
       if (cancelled) return;
@@ -149,11 +151,11 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
       setIceReady(true);
     }).catch(() => { if (!cancelled) setIceReady(true); });
     return () => { cancelled = true; };
-  }, [enabled, getIceServers]);
+  }, [enabled, enablePreview, getIceServers]);
 
   /* -- Capture local media -- */
   useEffect(() => {
-    if (!enabled || !RTC || !iceReady) return;
+    if ((!enabled && !enablePreview) || !RTC || !iceReady) return;
     let cancelled = false;
     const rtc = RTC;
 
