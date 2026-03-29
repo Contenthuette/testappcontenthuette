@@ -87,7 +87,6 @@ import {
   Crown,
   CircleAlert,
   Handshake,
-  Circle,
   type LucideProps,
 } from "lucide-react-native";
 
