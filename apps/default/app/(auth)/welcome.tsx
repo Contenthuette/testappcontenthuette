@@ -27,7 +27,7 @@ const FEATURES = [
   },
   {
     icon: "sparkles" as const,
-    label: "Exklusive Events\nin MV",
+    label: "Exklusive Events\nnur für Z Member",
   },
   {
     icon: "person.2" as const,
