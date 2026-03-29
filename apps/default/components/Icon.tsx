@@ -11,6 +11,7 @@ import {
   XCircle,
   Check,
   CheckCircle,
+  Circle,
   Search,
   SlidersHorizontal,
   Bell,
@@ -86,6 +87,7 @@ import {
   Crown,
   CircleAlert,
   Handshake,
+  Circle,
   type LucideProps,
 } from "lucide-react-native";
 
@@ -107,6 +109,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "xmark.circle.fill": XCircle,
   checkmark: Check,
   "checkmark.circle.fill": CheckCircle,
+  circle: Circle,
   ellipsis: MoreHorizontal,
   "square.and.arrow.up": Share,
   "square.and.pencil": SquarePen,

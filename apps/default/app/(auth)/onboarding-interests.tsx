@@ -59,9 +59,9 @@ export default function OnboardingInterestsScreen() {
           <View style={[styles.progressBar, { width: "75%" }]} />
         </View>
         <Text style={styles.step}>Schritt 3 von 4</Text>
-        <Text style={styles.title}>W\u00e4hle deine Interessen</Text>
+        <Text style={styles.title}>Wähle deine Interessen</Text>
         <Text style={styles.subtitle}>
-          {selected.length} ausgew\u00e4hlt \u2022 W\u00e4hle mindestens 3
+          Wähle mindestens 3 Interessen aus
         </Text>
       </View>
 
@@ -73,7 +73,7 @@ export default function OnboardingInterestsScreen() {
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
-            placeholder="Eigenes Interesse hinzuf\u00fcgen\u2026"
+            placeholder="Eigenes Interesse hinzufügen"
             placeholderTextColor={colors.gray400}
             value={customInput}
             onChangeText={setCustomInput}
