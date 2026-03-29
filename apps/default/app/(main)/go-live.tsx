@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { useLivestreamHost } from "@/lib/useLivestreamHost";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
+import { setSpeakerOn } from "@/lib/audioRouting";
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
   Easing, FadeIn, FadeInUp,
@@ -55,7 +56,7 @@ export default function GoLiveScreen() {
     isMuted, isVideoOff,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
     isFrontCamera,
-  } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true });
+  } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true, isCoHost });
 
   const isLive = !!livestreamId;
 
@@ -95,6 +96,13 @@ export default function GoLiveScreen() {
     }
   }, [isLive, pulseOpacity]);
   const pulseDotStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
+
+  // Force audio to loudspeaker for livestream
+  useEffect(() => {
+    if (!isLive) return;
+    setSpeakerOn(true);
+    return () => { setSpeakerOn(false); };
+  }, [isLive]);
 
   // Reversed comments for inverted FlatList (newest at bottom)
   const reversedComments = useMemo(
@@ -621,7 +629,7 @@ const styles = StyleSheet.create({
 
   /* Comments */
   commentsList: {
-    maxHeight: 200,
+    maxHeight: 120,
     marginHorizontal: spacing.lg,
     flexGrow: 0,
   },

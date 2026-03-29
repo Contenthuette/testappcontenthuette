@@ -77,6 +77,7 @@ interface UseLivestreamHostOptions {
   livestreamId: Id<"livestreams"> | null;
   enabled: boolean;
   enablePreview?: boolean;
+  isCoHost?: boolean;
 }
 
 /**
@@ -85,7 +86,7 @@ interface UseLivestreamHostOptions {
  * and streams media to viewers who send offers.
  * Set enablePreview=true to start camera before going live.
  */
-export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseLivestreamHostOptions) {
+export function useLivestreamHost({ livestreamId, enabled, enablePreview, isCoHost }: UseLivestreamHostOptions) {
   const [localStreamUrl, setLocalStreamUrl] = useState<string | null>(null);
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -192,10 +193,11 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
     const rtc = RTC;
     const localStream = localStreamRef.current;
 
-    const coHostId = stream.coHostId;
+    // Determine the peer: if we're cohost, connect to the host; if we're host, connect to the cohost
+    const peerId = isCoHost ? stream.hostId : stream.coHostId;
 
-    // If coHost left, tear down the connection
-    if (!coHostId) {
+    // If no peer, tear down the connection
+    if (!peerId) {
       if (pcRef.current) {
         pcRef.current.close();
         pcRef.current = null;
@@ -208,8 +210,8 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
       return;
     }
 
-    // Peer already set up for this coHost
-    if (currentPeerId.current === coHostId) return;
+    // Peer already set up for this peer
+    if (currentPeerId.current === peerId) return;
 
     // Tear down old PC if peer changed
     if (pcRef.current) {
@@ -222,7 +224,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
       setPeerConnected(false);
     }
 
-    currentPeerId.current = coHostId;
+    currentPeerId.current = peerId;
 
     const pc = new rtc.RTCPeerConnection({ iceServers });
     pcRef.current = pc;
@@ -237,7 +239,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
       if (!e.candidate || !livestreamId) return;
       sendSignal({
         livestreamId,
-        recipientId: coHostId,
+        recipientId: peerId,
         type: "ice-candidate",
         payload: JSON.stringify(e.candidate),
       }).catch(() => {});
@@ -251,8 +253,8 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
       }
     };
 
-    // HOST creates the offer to coHost
-    if (!hasCreatedOffer.current) {
+    // Only HOST creates the offer; coHost waits for the offer from the host
+    if (!isCoHost && !hasCreatedOffer.current) {
       hasCreatedOffer.current = true;
       (async () => {
         try {
@@ -260,7 +262,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
           await pc.setLocalDescription(offer);
           await sendSignal({
             livestreamId,
-            recipientId: coHostId,
+            recipientId: peerId,
             type: "offer",
             payload: JSON.stringify(offer),
           });
@@ -270,7 +272,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
         }
       })();
     }
-  }, [stream, livestreamId, iceServers, sendSignal, mediaReady]);
+  }, [stream, livestreamId, iceServers, sendSignal, mediaReady, isCoHost]);
 
   /* -- Process incoming signals (coHost + viewers) -- */
   useEffect(() => {
@@ -283,11 +285,11 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
         if (processedSignalIds.current.has(signal._id)) continue;
         processedSignalIds.current.add(signal._id);
 
-        const isFromCoHost = signal.senderId === currentPeerId.current;
+        const isFromPeer = signal.senderId === currentPeerId.current;
 
         try {
-          if (isFromCoHost) {
-            /* ── CoHost signals ── */
+          if (isFromPeer) {
+            /* ── Peer signals (host <-> coHost) ── */
             const pc = pcRef.current;
             if (!pc) { scheduleAck(signal._id); continue; }
 

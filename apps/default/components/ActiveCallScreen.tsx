@@ -19,6 +19,7 @@ import { router } from "expo-router";
 import { useCallContext } from "@/lib/call-context";
 import { useSound } from "@/lib/sounds";
 import { useWebRTC } from "@/lib/useWebRTC";
+import { setSpeakerOn } from "@/lib/audioRouting";
 
 interface CallParticipant { _id: string; userId: string; userName: string; userAvatarUrl?: string }
 
@@ -43,6 +44,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 
   const hangingUpRef = useRef(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
 
   const isVideoCall = call?.type === "video";
   const isInitiator = !!(call && me && call.callerId === me._id);
@@ -112,6 +114,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (phase === "ended") {
       stopSound("ringback");
       cleanupWebRTC();
+      setSpeakerOn(false);
       const timeout = setTimeout(() => {
         if (router.canGoBack()) router.back();
       }, 500);
@@ -135,6 +138,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     cleanupWebRTC();
+    setSpeakerOn(false);
     endCallMutation({ callId }).catch(() => {});
     setTimeout(() => {
       if (router.canGoBack()) router.back();
@@ -161,6 +165,15 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     flipCamera();
   }, [playSound, flipCamera]);
+
+  const handleToggleSpeaker = useCallback(() => {
+    playSound("tap");
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = !isSpeakerOn;
+    setIsSpeakerOn(next);
+    setSpeakerOn(next);
+  }, [playSound, isSpeakerOn]);
 
   const handleMinimize = useCallback(() => {
     playSound("tap");
@@ -383,6 +396,28 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             </Pressable>
             <Text style={styles.controlLabel}>
               {isMuted ? "Stumm" : "Mikro"}
+            </Text>
+          </View>
+
+          {/* Speaker toggle */}
+          <View style={styles.controlGroup}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.controlBtn,
+                isSpeakerOn && styles.controlBtnActive,
+                pressed && styles.btnPressed,
+              ]}
+              onPress={handleToggleSpeaker}
+              hitSlop={8}
+            >
+              <SymbolView
+                name={isSpeakerOn ? "speaker.wave.3.fill" : "speaker.fill"}
+                size={22}
+                tintColor={isSpeakerOn ? "#111" : "#FFF"}
+              />
+            </Pressable>
+            <Text style={styles.controlLabel}>
+              {isSpeakerOn ? "Laut" : "Leise"}
             </Text>
           </View>
 

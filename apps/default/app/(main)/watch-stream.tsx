@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { useLivestreamViewer } from "@/lib/useLivestreamViewer";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
+import { setSpeakerOn } from "@/lib/audioRouting";
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
   Easing, FadeIn, FadeInUp,
@@ -64,9 +65,12 @@ export default function WatchStreamScreen() {
     if (!livestreamId || hasJoined) return;
     setHasJoined(true);
     joinStream({ livestreamId }).catch(() => {});
+    // Force audio to loudspeaker for viewer
+    setSpeakerOn(true);
     return () => {
       leaveStream({ livestreamId }).catch(() => {});
       cleanup();
+      setSpeakerOn(false);
     };
   }, [livestreamId, hasJoined, joinStream, leaveStream, cleanup]);
 
@@ -501,7 +505,7 @@ const styles = StyleSheet.create({
 
   /* Comments */
   commentsList: {
-    maxHeight: 220,
+    maxHeight: 120,
     marginHorizontal: spacing.lg,
     flexGrow: 0,
   },

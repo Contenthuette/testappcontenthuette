@@ -91,7 +91,7 @@ export function PartnerList() {
         <View style={styles.partnerHeader}>
           <Text style={styles.partnerHeaderTitle}>Partner aus MV</Text>
           <Text style={styles.partnerHeaderSub}>
-            Hier seht ihr Unternehmen aus MV, die Z supporten:
+            Hier seht ihr Unternehmen, die Z supporten.
           </Text>
         </View>
       }
