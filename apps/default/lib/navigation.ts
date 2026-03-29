@@ -28,6 +28,8 @@ const FALLBACK_ROUTES: Record<string, string> = {
   "user-profile": "/(main)/(tabs)/groups",
   "partner-detail": "/(main)/(tabs)/groups",
   "filters": "/(main)/(tabs)/groups",
+  "go-live": "/(main)/(tabs)/groups",
+  "watch-stream": "/(main)/(tabs)/groups",
 
   // Admin → Dashboard
   "dashboard": "/(main)/(tabs)/profile",

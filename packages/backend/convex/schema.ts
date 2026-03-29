@@ -422,6 +422,57 @@ export default defineSchema({
     .index("by_callId", ["callId"])
     .index("by_callId_and_recipientId", ["callId", "recipientId"]),
 
+  // ── Livestreams ────────────────────────────────────────────────
+  livestreams: defineTable({
+    groupId: v.id("groups"),
+    groupName: v.string(),
+    hostId: v.id("users"),
+    hostName: v.string(),
+    hostAvatarUrl: v.optional(v.string()),
+    title: v.string(),
+    status: v.union(v.literal("live"), v.literal("ended")),
+    viewerCount: v.number(),
+    peakViewerCount: v.number(),
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+  })
+    .index("by_status", ["status"])
+    .index("by_groupId_and_status", ["groupId", "status"])
+    .index("by_hostId", ["hostId"]),
+
+  livestreamViewers: defineTable({
+    livestreamId: v.id("livestreams"),
+    userId: v.id("users"),
+    userName: v.string(),
+    userAvatarUrl: v.optional(v.string()),
+    joinedAt: v.number(),
+  })
+    .index("by_livestreamId", ["livestreamId"])
+    .index("by_livestreamId_and_userId", ["livestreamId", "userId"]),
+
+  livestreamComments: defineTable({
+    livestreamId: v.id("livestreams"),
+    userId: v.id("users"),
+    userName: v.string(),
+    userAvatarUrl: v.optional(v.string()),
+    text: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_livestreamId_and_createdAt", ["livestreamId", "createdAt"]),
+
+  livestreamSignaling: defineTable({
+    livestreamId: v.id("livestreams"),
+    senderId: v.id("users"),
+    recipientId: v.id("users"),
+    type: v.union(
+      v.literal("offer"),
+      v.literal("answer"),
+      v.literal("ice-candidate")
+    ),
+    payload: v.string(),
+  })
+    .index("by_livestreamId_and_recipientId", ["livestreamId", "recipientId"]),
+
   // ── Announcements ──────────────────────────────────────────────
   announcements: defineTable({
     text: v.string(),

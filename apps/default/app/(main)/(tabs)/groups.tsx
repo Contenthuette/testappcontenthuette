@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ActivityIndicator, Platform,
+  TextInput, ActivityIndicator, Platform, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -13,6 +13,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { ZLogo } from "@/components/ZLogo";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
+import { LivestreamCard } from "@/components/LivestreamCard";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -33,6 +34,39 @@ function AnnouncementBanner() {
       <Text style={styles.announceText} numberOfLines={2}>
         {announcement.text}
       </Text>
+    </Animated.View>
+  );
+}
+
+/* ─── Live Now Section ─── */
+function LiveNowSection() {
+  const { isAuthenticated } = useConvexAuth();
+  const streams = useQuery(api.livestreams.listActive, isAuthenticated ? {} : "skip");
+  if (!streams || streams.length === 0) return null;
+
+  return (
+    <Animated.View entering={FadeIn.duration(300)} style={styles.liveSection}>
+      <View style={styles.liveSectionHeader}>
+        <View style={styles.liveSectionDot} />
+        <Text style={styles.liveSectionTitle}>Live jetzt</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.liveScroll}
+      >
+        {streams.map((s) => (
+          <LivestreamCard
+            key={s._id}
+            _id={s._id}
+            title={s.title}
+            hostName={s.hostName}
+            hostAvatarUrl={s.hostAvatarUrl}
+            groupName={s.groupName}
+            viewerCount={s.viewerCount}
+          />
+        ))}
+      </ScrollView>
     </Animated.View>
   );
 }
@@ -165,6 +199,9 @@ export default function GroupsScreen() {
 
       {/* Announcement Banner */}
       <AnnouncementBanner />
+
+      {/* Live Now */}
+      <LiveNowSection />
 
       {/* Tab Toggle */}
       <View style={styles.tabRow}>
@@ -306,6 +343,34 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.white,
     letterSpacing: -0.1,
+  },
+
+  /* Live Now Section */
+  liveSection: {
+    marginBottom: spacing.md,
+  },
+  liveSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    gap: 6,
+  },
+  liveSectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
+  liveSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.black,
+    letterSpacing: -0.2,
+  },
+  liveScroll: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.sm,
   },
 
   header: {

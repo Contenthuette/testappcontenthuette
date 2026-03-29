@@ -56,4 +56,22 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: SECOND,
     capacity: 3,
   },
+  goLive: {
+    kind: "token bucket",
+    rate: 2,
+    period: MINUTE,
+    capacity: 3,
+  },
+  livestreamComment: {
+    kind: "token bucket",
+    rate: 10,
+    period: MINUTE,
+    capacity: 15,
+  },
+  livestreamSignal: {
+    kind: "token bucket",
+    rate: 18,
+    period: SECOND,
+    capacity: 30,
+  },
 });

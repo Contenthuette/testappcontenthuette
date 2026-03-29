@@ -1,0 +1,516 @@
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import {
+  View, Text, StyleSheet, TouchableOpacity, TextInput,
+  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams } from "expo-router";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { colors, spacing, radius } from "@/lib/theme";
+import { SymbolView } from "@/components/Icon";
+import { useLivestreamHost } from "@/lib/useLivestreamHost";
+import { safeBack } from "@/lib/navigation";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  useSharedValue, useAnimatedStyle, withRepeat, withTiming,
+  Easing, FadeIn, FadeInUp,
+} from "react-native-reanimated";
+
+export default function GoLiveScreen() {
+  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const [title, setTitle] = useState("");
+  const [livestreamId, setLivestreamId] = useState<Id<"livestreams"> | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const commentsRef = useRef<FlatList>(null);
+
+  const goLive = useMutation(api.livestreams.goLive);
+  const endStreamMut = useMutation(api.livestreams.endStream);
+  const sendComment = useMutation(api.livestreams.sendComment);
+
+  const stream = useQuery(
+    api.livestreams.getById,
+    livestreamId ? { livestreamId } : "skip",
+  );
+  const comments = useQuery(
+    api.livestreams.getComments,
+    livestreamId ? { livestreamId } : "skip",
+  );
+
+  const {
+    localStreamUrl, isMuted, isVideoOff,
+    toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
+  } = useLivestreamHost({ livestreamId, enabled: !!groupId });
+
+  const isLive = !!livestreamId;
+
+  // Pulsing LIVE dot
+  const pulseOpacity = useSharedValue(1);
+  useEffect(() => {
+    if (isLive) {
+      pulseOpacity.value = withRepeat(
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
+    }
+  }, [isLive, pulseOpacity]);
+  const pulseDotStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
+
+  // Auto-scroll comments
+  useEffect(() => {
+    if (comments && comments.length > 0) {
+      setTimeout(() => commentsRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [comments]);
+
+  const handleGoLive = useCallback(async () => {
+    if (!groupId || !title.trim()) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setIsStarting(true);
+    try {
+      const id = await goLive({ groupId: groupId as Id<"groups">, title: title.trim() });
+      setLivestreamId(id);
+    } catch (e) {
+      console.error("Go live failed:", e);
+    } finally {
+      setIsStarting(false);
+    }
+  }, [groupId, title, goLive]);
+
+  const handleEndStream = useCallback(async () => {
+    if (!livestreamId) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await endStreamMut({ livestreamId });
+    } catch { /* already ended */ }
+    cleanup();
+    safeBack("go-live");
+  }, [livestreamId, endStreamMut, cleanup]);
+
+  const handleSendComment = useCallback(async () => {
+    if (!livestreamId || !commentText.trim()) return;
+    try {
+      await sendComment({ livestreamId, text: commentText.trim() });
+      setCommentText("");
+    } catch { /* rate limited */ }
+  }, [livestreamId, commentText, sendComment]);
+
+  if (!isSupported) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.unsupported}>
+          <SymbolView name="video.slash" size={48} tintColor={colors.gray400} />
+          <Text style={styles.unsupportedText}>Livestreaming ist nur in der App verfügbar.</Text>
+          <TouchableOpacity style={styles.backPill} onPress={() => safeBack("go-live")}>
+            <Text style={styles.backPillText}>Zurück</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /* ── Pre-Live Setup ── */
+  if (!isLive) {
+    return (
+      <View style={styles.fullScreen}>
+        {/* Camera preview */}
+        {localStreamUrl && RTCView ? (
+          <RTCView
+            streamURL={localStreamUrl}
+            style={StyleSheet.absoluteFill}
+            objectFit="cover"
+            mirror
+            zOrder={0}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
+            <ActivityIndicator color={colors.white} size="large" />
+            <Text style={styles.cameraPlaceholderText}>Kamera wird geladen…</Text>
+          </View>
+        )}
+
+        {/* Gradient overlay */}
+        <View style={styles.gradientOverlay} />
+
+        <SafeAreaView style={styles.overlay}>
+          {/* Top bar */}
+          <View style={styles.topBar}>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => { cleanup(); safeBack("go-live"); }}>
+              <SymbolView name="xmark" size={18} tintColor={colors.white} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Bottom setup */}
+          <Animated.View entering={FadeInUp.duration(400)} style={styles.setupArea}>
+            <Text style={styles.setupTitle}>Go Live</Text>
+            <Text style={styles.setupSubtitle}>Gib deinem Livestream einen Titel</Text>
+            <TextInput
+              style={styles.titleInput}
+              placeholder="Worüber streamst du?"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={title}
+              onChangeText={setTitle}
+              maxLength={80}
+              returnKeyType="done"
+            />
+            <TouchableOpacity
+              style={[styles.goLiveBtn, (!title.trim() || isStarting) && styles.goLiveBtnDisabled]}
+              onPress={handleGoLive}
+              disabled={!title.trim() || isStarting}
+              activeOpacity={0.8}
+            >
+              {isStarting ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.goLiveBtnText}>Live gehen</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  /* ── Live Mode ── */
+  return (
+    <View style={styles.fullScreen}>
+      {/* Camera feed */}
+      {localStreamUrl && RTCView && !isVideoOff ? (
+        <RTCView
+          streamURL={localStreamUrl}
+          style={StyleSheet.absoluteFill}
+          objectFit="cover"
+          mirror
+          zOrder={0}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
+          <SymbolView name="video.slash" size={48} tintColor={colors.gray500} />
+        </View>
+      )}
+
+      <View style={styles.gradientOverlay} />
+
+      <SafeAreaView style={styles.overlay}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          {/* Top bar */}
+          <View style={styles.topBar}>
+            <View style={styles.liveBadge}>
+              <Animated.View style={[styles.liveBadgeDot, pulseDotStyle]} />
+              <Text style={styles.liveBadgeText}>LIVE</Text>
+            </View>
+            <View style={styles.viewerBadge}>
+              <SymbolView name="eye" size={12} tintColor={colors.white} />
+              <Text style={styles.viewerBadgeText}>{stream?.viewerCount ?? 0}</Text>
+            </View>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity style={styles.endBtn} onPress={handleEndStream} activeOpacity={0.8}>
+              <Text style={styles.endBtnText}>Beenden</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Stream info */}
+          <Animated.View entering={FadeIn.duration(300)} style={styles.streamInfo}>
+            <Text style={styles.streamTitle} numberOfLines={1}>{title}</Text>
+          </Animated.View>
+
+          {/* Comments */}
+          <View style={{ flex: 1 }} />
+          <FlatList
+            ref={commentsRef}
+            data={comments ?? []}
+            keyExtractor={(item) => item._id}
+            style={styles.commentsList}
+            contentContainerStyle={styles.commentsContent}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <View style={styles.commentBubble}>
+                <Text style={styles.commentAuthor}>{item.userName}</Text>
+                <Text style={styles.commentText}>{item.text}</Text>
+              </View>
+            )}
+          />
+
+          {/* Comment input */}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Kommentar…"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={commentText}
+              onChangeText={setCommentText}
+              returnKeyType="send"
+              onSubmitEditing={handleSendComment}
+              maxLength={200}
+            />
+            <TouchableOpacity onPress={handleSendComment} disabled={!commentText.trim()}>
+              <SymbolView
+                name="paperplane.fill"
+                size={20}
+                tintColor={commentText.trim() ? colors.white : "rgba(255,255,255,0.3)"}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Controls */}
+          <View style={styles.controlRow}>
+            <TouchableOpacity style={styles.controlBtn} onPress={toggleMute}>
+              <SymbolView
+                name={isMuted ? "mic.slash.fill" : "mic.fill"}
+                size={20}
+                tintColor={colors.white}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlBtn} onPress={toggleVideo}>
+              <SymbolView
+                name={isVideoOff ? "video.slash.fill" : "video.fill"}
+                size={20}
+                tintColor={colors.white}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlBtn} onPress={flipCamera}>
+              <SymbolView name="camera.rotate" size={20} tintColor={colors.white} />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.black },
+  fullScreen: { flex: 1, backgroundColor: colors.black },
+  overlay: { flex: 1 },
+  gradientOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+    // Bottom gradient for readability
+    borderBottomWidth: 0,
+  },
+  cameraPlaceholder: {
+    backgroundColor: colors.gray900,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  cameraPlaceholderText: { color: colors.gray400, fontSize: 14 },
+  videoOffBg: {
+    backgroundColor: colors.gray900,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unsupported: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xl,
+    gap: 16,
+  },
+  unsupportedText: { color: colors.gray400, fontSize: 16, textAlign: "center" },
+  backPill: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray800,
+  },
+  backPillText: { color: colors.white, fontSize: 15, fontWeight: "600" },
+
+  /* Top bar */
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: 8,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  liveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.danger,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+  },
+  liveBadgeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.white,
+  },
+  liveBadgeText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  viewerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  viewerBadgeText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  endBtn: {
+    backgroundColor: colors.danger,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+  },
+  endBtnText: { color: colors.white, fontSize: 14, fontWeight: "700" },
+
+  /* Stream info */
+  streamInfo: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  streamTitle: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+
+  /* Setup area */
+  setupArea: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
+    gap: 14,
+  },
+  setupTitle: {
+    color: colors.white,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  setupSubtitle: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 15,
+  },
+  titleInput: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: colors.white,
+    letterSpacing: -0.2,
+  },
+  goLiveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.danger,
+    paddingVertical: 16,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+  },
+  goLiveBtnDisabled: { opacity: 0.4 },
+  goLiveBtnText: {
+    color: colors.white,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.white,
+  },
+
+  /* Comments */
+  commentsList: {
+    maxHeight: 200,
+    marginHorizontal: spacing.lg,
+  },
+  commentsContent: {
+    paddingBottom: spacing.sm,
+    gap: 6,
+  },
+  commentBubble: {
+    flexDirection: "row",
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  commentAuthor: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  commentText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    flex: 1,
+  },
+
+  /* Comment input */
+  commentInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  commentInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.white,
+    letterSpacing: -0.1,
+  },
+
+  /* Controls */
+  controlRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    paddingBottom: spacing.md,
+  },
+  controlBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

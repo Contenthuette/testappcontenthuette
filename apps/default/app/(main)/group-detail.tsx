@@ -13,6 +13,8 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from "react-native-reanimated";
+import { useEffect } from "react";
 
 interface GroupMember { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; role: string; status: string }
 interface PendingRequest { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; requestedAt: number }
@@ -23,6 +25,7 @@ export default function GroupDetailScreen() {
   const membership = useQuery(api.groups.getMyMembership, id ? { groupId: id as Id<"groups"> } : "skip");
   const members = useQuery(api.groups.getMembers, id ? { groupId: id as Id<"groups"> } : "skip");
   const pendingRequests = useQuery(api.groups.getPendingRequests, id ? { groupId: id as Id<"groups"> } : "skip");
+  const activeStream = useQuery(api.livestreams.getActiveForGroup, id ? { groupId: id as Id<"groups"> } : "skip");
   const joinGroup = useMutation(api.groups.join);
   const acceptRequest = useMutation(api.groups.acceptRequest);
   const rejectRequest = useMutation(api.groups.rejectRequest);
@@ -39,6 +42,18 @@ export default function GroupDetailScreen() {
   const isPending = membership?.status === "pending";
   const isAdmin = membership?.role === "admin";
   const isRequestGroup = group.visibility === "request" || group.visibility === "invite_only";
+
+  // Pulse for live badge
+  const livePulse = useSharedValue(1);
+  useEffect(() => {
+    if (activeStream) {
+      livePulse.value = withRepeat(
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1, true,
+      );
+    }
+  }, [activeStream, livePulse]);
+  const liveDotStyle = useAnimatedStyle(() => ({ opacity: livePulse.value }));
 
   const handleJoin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -176,6 +191,43 @@ export default function GroupDetailScreen() {
               <SymbolView name="square.and.arrow.up" size={16} tintColor={colors.black} />
             </TouchableOpacity>
           </View>
+
+          {/* Live Stream Banner */}
+          {activeStream && (
+            <TouchableOpacity
+              style={styles.liveBanner}
+              onPress={() => router.push({ pathname: "/(main)/watch-stream", params: { id: activeStream._id } })}
+              activeOpacity={0.75}
+            >
+              <View style={styles.liveBannerBadge}>
+                <Animated.View style={[styles.liveBannerDot, liveDotStyle]} />
+                <Text style={styles.liveBannerBadgeText}>LIVE</Text>
+              </View>
+              <View style={styles.liveBannerInfo}>
+                <Text style={styles.liveBannerTitle} numberOfLines={1}>{activeStream.title}</Text>
+                <Text style={styles.liveBannerSub}>
+                  {activeStream.hostName} · {activeStream.viewerCount} Zuschauer
+                </Text>
+              </View>
+              <SymbolView name="chevron.right" size={14} tintColor={colors.white} />
+            </TouchableOpacity>
+          )}
+
+          {/* Go Live Button (member, no active stream) */}
+          {isMember && !activeStream && (
+            <TouchableOpacity
+              style={styles.goLiveRow}
+              onPress={() => {
+                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push({ pathname: "/(main)/go-live", params: { groupId: id! } });
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.goLiveDot} />
+              <Text style={styles.goLiveText}>Go Live</Text>
+              <SymbolView name="chevron.right" size={13} tintColor={colors.gray300} />
+            </TouchableOpacity>
+          )}
 
           {/* Pending Requests (Admin only) */}
           {isAdmin && pendingRequests && pendingRequests.length > 0 && (
@@ -400,6 +452,73 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  /* Live Banner */
+  liveBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: spacing.md,
+    backgroundColor: colors.black,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+    padding: spacing.md,
+  },
+  liveBannerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  liveBannerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.white,
+  },
+  liveBannerBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  liveBannerInfo: { flex: 1, gap: 2 },
+  liveBannerTitle: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  liveBannerSub: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+  },
+  goLiveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
+  },
+  goLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+  },
+  goLiveText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
   },
 
   // Pending requests
