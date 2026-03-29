@@ -142,12 +142,12 @@ export default function WatchStreamScreen() {
       <View style={styles.fullScreen}>
         <SafeAreaView style={styles.centerContent}>
           <SymbolView name="video.slash" size={48} tintColor={colors.gray500} />
-          <Text style={styles.endedText}>Der Livestream ist beendet.</Text>
+          <Text style={styles.endedText}>Der Z Livestream wurde beendet</Text>
           <Text style={styles.endedSub}>
             {stream.peakViewerCount} Zuschauer insgesamt
           </Text>
           <TouchableOpacity style={styles.backPill} onPress={() => safeBack("watch-stream")}>
-            <Text style={styles.backPillText}>Zur\u00fcck</Text>
+            <Text style={styles.backPillText}>Zurück</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </View>

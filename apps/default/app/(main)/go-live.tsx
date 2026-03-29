@@ -185,42 +185,48 @@ export default function GoLiveScreen() {
         <View style={styles.gradientOverlay} />
 
         <SafeAreaView style={styles.overlay}>
-          <View style={styles.topBar}>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => { cleanup(); safeBack("go-live"); }}>
-              <SymbolView name="xmark" size={18} tintColor={colors.white} />
-            </TouchableOpacity>
-          </View>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+          >
+            <View style={styles.topBar}>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => { cleanup(); safeBack("go-live"); }}>
+                <SymbolView name="xmark" size={18} tintColor={colors.white} />
+              </TouchableOpacity>
+            </View>
 
-          <View style={{ flex: 1 }} />
+            <View style={{ flex: 1 }} />
 
-          <Animated.View entering={FadeInUp.duration(400)} style={styles.setupArea}>
-            <Text style={styles.setupTitle}>Go Live</Text>
-            <Text style={styles.setupSubtitle}>Gib deinem Livestream einen Titel</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="Welches Thema hat dein Stream?"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={title}
-              onChangeText={setTitle}
-              maxLength={80}
-              returnKeyType="done"
-            />
-            <TouchableOpacity
-              style={[styles.goLiveBtn, (!title.trim() || isStarting) && styles.goLiveBtnDisabled]}
-              onPress={handleGoLive}
-              disabled={!title.trim() || isStarting}
-              activeOpacity={0.8}
-            >
-              {isStarting ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.goLiveBtnText}>Live gehen</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
+            <Animated.View entering={FadeInUp.duration(400)} style={styles.setupArea}>
+              <Text style={styles.setupTitle}>Go Live</Text>
+              <Text style={styles.setupSubtitle}>Gib deinem Livestream einen Titel</Text>
+              <TextInput
+                style={styles.titleInput}
+                placeholder="Welches Thema hat dein Stream?"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={title}
+                onChangeText={setTitle}
+                maxLength={80}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[styles.goLiveBtn, (!title.trim() || isStarting) && styles.goLiveBtnDisabled]}
+                onPress={handleGoLive}
+                disabled={!title.trim() || isStarting}
+                activeOpacity={0.8}
+              >
+                {isStarting ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.goLiveBtnText}>Live gehen</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </View>
     );
