@@ -8,6 +8,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 /* ---- Conditional RTC import (native only) ---- */
 interface RTCPeerConnectionLike {
   close: () => void;
+  createOffer: (opts?: unknown) => Promise<unknown>;
   createAnswer: () => Promise<unknown>;
   setLocalDescription: (d: unknown) => Promise<void>;
   setRemoteDescription: (d: unknown) => Promise<void>;
@@ -71,8 +72,8 @@ interface UseLivestreamViewerOptions {
 
 /**
  * Viewer hook: watches the livestream (receive-only, no local media).
- * Viewers subscribe to signals but don't participate in the call.
- * They see the host's video stream via P2P.
+ * The viewer initiates the connection by sending an offer to the host.
+ * The host responds with an answer and streams media back.
  */
 export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivestreamViewerOptions) {
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
@@ -83,7 +84,7 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
   const pcRef = useRef<RTCPeerConnectionLike | null>(null);
   const processedIds = useRef<Set<string>>(new Set());
   const pendingCandidates = useRef<Array<unknown>>([]);
-  const hasHandledOffer = useRef(false);
+  const hasCreatedOffer = useRef(false);
   const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAckIds = useRef<Array<Id<"livestreamSignaling">>>([]);
 
@@ -131,14 +132,74 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
 
   /* -- Reset state on new stream -- */
   useEffect(() => {
-    hasHandledOffer.current = false;
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+    hasCreatedOffer.current = false;
     processedIds.current.clear();
     pendingCandidates.current = [];
+    setRemoteStreamUrl(null);
+    setConnectionState("new");
   }, [livestreamId]);
 
-  /* -- Process incoming signals from host -- */
+  /* -- Create PC and send offer to host -- */
   useEffect(() => {
-    if (!signals || !RTC || !iceReady || !livestreamId || !hostId) return;
+    if (!RTC || !iceReady || !livestreamId || !hostId || !enabled || hasCreatedOffer.current) return;
+    const rtc = RTC;
+    const lsId = livestreamId;
+    const hId = hostId;
+
+    hasCreatedOffer.current = true;
+
+    const pc = new rtc.RTCPeerConnection({ iceServers });
+    pcRef.current = pc;
+
+    pc.ontrack = (e) => {
+      if (e.streams?.[0]) setRemoteStreamUrl(e.streams[0].toURL());
+    };
+
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) return;
+      sendSignal({
+        livestreamId: lsId,
+        recipientId: hId,
+        type: "ice-candidate",
+        payload: JSON.stringify(e.candidate),
+      }).catch(() => {});
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState ?? "new";
+      if (state === "connected" || state === "completed") setConnectionState("connected");
+      else if (state === "failed") setConnectionState("failed");
+      else if (state === "disconnected") setConnectionState("disconnected");
+    };
+
+    // Create a receive-only offer and send to host
+    (async () => {
+      try {
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await pc.setLocalDescription(offer);
+        await sendSignal({
+          livestreamId: lsId,
+          recipientId: hId,
+          type: "offer",
+          payload: JSON.stringify(offer),
+        });
+      } catch (err) {
+        console.error("[LiveViewer] Offer creation failed:", err);
+        hasCreatedOffer.current = false;
+      }
+    })();
+  }, [iceReady, livestreamId, hostId, enabled, iceServers, sendSignal]);
+
+  /* -- Process incoming signals from host (answer + ICE candidates) -- */
+  useEffect(() => {
+    if (!signals || !RTC) return;
     const rtc = RTC;
 
     (async () => {
@@ -146,58 +207,25 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
         if (processedIds.current.has(signal._id)) continue;
         processedIds.current.add(signal._id);
 
+        const pc = pcRef.current;
+        if (!pc) { scheduleAck(signal._id); continue; }
+
         try {
-          if (signal.type === "offer" && !hasHandledOffer.current) {
-            hasHandledOffer.current = true;
-
-            if (!pcRef.current) {
-              const pc = new rtc.RTCPeerConnection({ iceServers });
-              pcRef.current = pc;
-
-              pc.ontrack = (e) => {
-                if (e.streams?.[0]) setRemoteStreamUrl(e.streams[0].toURL());
-              };
-
-              pc.onicecandidate = (e) => {
-                if (!e.candidate || !livestreamId) return;
-                sendSignal({
-                  livestreamId,
-                  recipientId: hostId,
-                  type: "ice-candidate",
-                  payload: JSON.stringify(e.candidate),
-                }).catch(() => {});
-              };
-
-              pc.oniceconnectionstatechange = () => {
-                const state = pc.iceConnectionState ?? "new";
-                if (state === "connected" || state === "completed") setConnectionState("connected");
-                else if (state === "failed") setConnectionState("failed");
-                else if (state === "disconnected") setConnectionState("disconnected");
-              };
-            }
-
-            const pc = pcRef.current;
-            await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
-
+          if (signal.type === "answer") {
+            await pc.setRemoteDescription(
+              new rtc.RTCSessionDescription(JSON.parse(signal.payload)),
+            );
+            // Flush pending ICE candidates
             for (const c of pendingCandidates.current) {
               await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
             }
             pendingCandidates.current = [];
-
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            await sendSignal({
-              livestreamId,
-              recipientId: hostId,
-              type: "answer",
-              payload: JSON.stringify(answer),
-            });
           }
 
           if (signal.type === "ice-candidate") {
             const candidate = JSON.parse(signal.payload);
-            if (pcRef.current?.remoteDescription) {
-              await pcRef.current.addIceCandidate(new rtc.RTCIceCandidate(candidate));
+            if (pc.remoteDescription) {
+              await pc.addIceCandidate(new rtc.RTCIceCandidate(candidate));
             } else {
               pendingCandidates.current.push(candidate);
             }
@@ -209,7 +237,7 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
         scheduleAck(signal._id);
       }
     })();
-  }, [signals, iceServers, iceReady, livestreamId, hostId, sendSignal, scheduleAck]);
+  }, [signals, scheduleAck]);
 
   /* -- Cleanup -- */
   const cleanup = useCallback(() => {
@@ -219,7 +247,7 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
     pcRef.current = null;
     processedIds.current.clear();
     pendingCandidates.current = [];
-    hasHandledOffer.current = false;
+    hasCreatedOffer.current = false;
     pendingAckIds.current = [];
     setRemoteStreamUrl(null);
     setConnectionState("closed");

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
@@ -70,12 +70,11 @@ export default function WatchStreamScreen() {
     };
   }, [livestreamId, hasJoined, joinStream, leaveStream, cleanup]);
 
-  // Auto-scroll comments
-  useEffect(() => {
-    if (comments && comments.length > 0) {
-      setTimeout(() => commentsRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  }, [comments]);
+  // Reversed comments for inverted FlatList (newest at bottom)
+  const reversedComments = useMemo(
+    () => [...(comments ?? [])].reverse(),
+    [comments],
+  );
 
   const handleClose = useCallback(() => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -212,7 +211,7 @@ export default function WatchStreamScreen() {
             </View>
             {stream.participantCount > 0 && (
               <View style={styles.participantBadge}>
-                <SymbolView name="person.2.fill" size={12} tintColor={colors.white} />
+                <SymbolView name="person.fill" size={12} tintColor={colors.white} />
                 <Text style={styles.viewerBadgeText}>{stream.participantCount}</Text>
               </View>
             )}
@@ -260,11 +259,12 @@ export default function WatchStreamScreen() {
           {/* Comments */}
           <FlatList
             ref={commentsRef}
-            data={comments ?? []}
+            data={reversedComments}
             keyExtractor={(item) => item._id}
             style={styles.commentsList}
             contentContainerStyle={styles.commentsContent}
             showsVerticalScrollIndicator={false}
+            inverted
             renderItem={({ item }) => (
               <View style={styles.commentBubble}>
                 <Text style={styles.commentAuthor}>{item.userName}</Text>
@@ -277,7 +277,7 @@ export default function WatchStreamScreen() {
           <View style={styles.commentInputRow}>
             <TextInput
               style={styles.commentInput}
-              placeholder="Kommentar\u2026"
+              placeholder="Nachricht schreiben..."
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={commentText}
               onChangeText={setCommentText}
@@ -503,6 +503,7 @@ const styles = StyleSheet.create({
   commentsList: {
     maxHeight: 220,
     marginHorizontal: spacing.lg,
+    flexGrow: 0,
   },
   commentsContent: {
     paddingBottom: spacing.sm,

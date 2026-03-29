@@ -80,8 +80,8 @@ interface UseLivestreamHostOptions {
 
 /**
  * Hook for a livestream participant (host or coHost).
- * Captures local media and establishes a P2P connection with the other participant.
- * Max 2 participants total.
+ * Captures local media, establishes P2P with the other participant,
+ * and streams media to viewers who send offers.
  */
 export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOptions) {
   const [localStreamUrl, setLocalStreamUrl] = useState<string | null>(null);
@@ -101,6 +101,9 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
   const hasCreatedOffer = useRef(false);
   const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAckIds = useRef<Array<Id<"livestreamSignaling">>>([]);
+
+  /** Viewer peer connections (host broadcasts to each viewer) */
+  const viewerPcsRef = useRef<Map<string, RTCPeerConnectionLike>>(new Map());
 
   const sendSignal = useMutation(api.livestreams.sendSignal);
   const ackSignals = useMutation(api.livestreams.ackSignals);
@@ -180,18 +183,13 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     };
   }, [enabled, iceReady]);
 
-  /* -- Create/manage peer connection to the other participant -- */
+  /* -- Create/manage peer connection to the other participant (coHost) -- */
   useEffect(() => {
     if (!stream || !localStreamRef.current || !livestreamId || !RTC || !mediaReady) return;
     const rtc = RTC;
     const localStream = localStreamRef.current;
 
-    // Determine peer: if I'm host, peer is coHost; if I'm coHost, peer is host
-    // We don't know "who am I" from this hook, so we react to coHost changes:
-    // The HOST creates an offer when coHost joins.
-    // The coHost waits for an offer via signals.
     const coHostId = stream.coHostId;
-    const hostId = stream.hostId;
 
     // If coHost left, tear down the connection
     if (!coHostId) {
@@ -234,11 +232,9 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
 
     pc.onicecandidate = (e) => {
       if (!e.candidate || !livestreamId) return;
-      // Send to the other participant
-      const recipientId = coHostId;
       sendSignal({
         livestreamId,
-        recipientId,
+        recipientId: coHostId,
         type: "ice-candidate",
         payload: JSON.stringify(e.candidate),
       }).catch(() => {});
@@ -253,8 +249,6 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     };
 
     // HOST creates the offer to coHost
-    // Only the host should create the offer (lower ID creates offer to avoid collision)
-    // Simple rule: host always offers
     if (!hasCreatedOffer.current) {
       hasCreatedOffer.current = true;
       (async () => {
@@ -275,62 +269,122 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     }
   }, [stream, livestreamId, iceServers, sendSignal, mediaReady]);
 
-  /* -- Process incoming signals -- */
+  /* -- Process incoming signals (coHost + viewers) -- */
   useEffect(() => {
-    if (!signals || !RTC) return;
+    if (!signals || !RTC || !livestreamId) return;
     const rtc = RTC;
+    const lsId = livestreamId;
 
     (async () => {
       for (const signal of signals) {
         if (processedSignalIds.current.has(signal._id)) continue;
         processedSignalIds.current.add(signal._id);
 
-        const pc = pcRef.current;
+        const isFromCoHost = signal.senderId === currentPeerId.current;
 
         try {
-          if (signal.type === "offer" && pc) {
-            await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
-            for (const c of pendingCandidates.current) {
-              await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
-            }
-            pendingCandidates.current = [];
+          if (isFromCoHost) {
+            /* ── CoHost signals ── */
+            const pc = pcRef.current;
+            if (!pc) { scheduleAck(signal._id); continue; }
 
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            if (livestreamId) {
+            if (signal.type === "offer") {
+              await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
+              for (const c of pendingCandidates.current) {
+                await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
+              }
+              pendingCandidates.current = [];
+
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
               await sendSignal({
-                livestreamId,
+                livestreamId: lsId,
                 recipientId: signal.senderId,
                 type: "answer",
                 payload: JSON.stringify(answer),
               });
             }
-          }
 
-          if (signal.type === "answer" && pc) {
-            await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
-            for (const c of pendingCandidates.current) {
-              await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
+            if (signal.type === "answer") {
+              await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
+              for (const c of pendingCandidates.current) {
+                await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
+              }
+              pendingCandidates.current = [];
             }
-            pendingCandidates.current = [];
-          }
 
-          if (signal.type === "ice-candidate") {
-            const candidate = JSON.parse(signal.payload);
-            if (pc?.remoteDescription) {
-              await pc.addIceCandidate(new rtc.RTCIceCandidate(candidate));
-            } else {
-              pendingCandidates.current.push(candidate);
+            if (signal.type === "ice-candidate") {
+              const candidate = JSON.parse(signal.payload);
+              if (pc.remoteDescription) {
+                await pc.addIceCandidate(new rtc.RTCIceCandidate(candidate));
+              } else {
+                pendingCandidates.current.push(candidate);
+              }
+            }
+          } else {
+            /* ── Viewer signals ── */
+            const viewerId = signal.senderId as string;
+
+            if (signal.type === "offer") {
+              // Viewer is requesting to watch — create a PC for them
+              const localStream = localStreamRef.current;
+              if (!localStream) { scheduleAck(signal._id); continue; }
+
+              // Close existing connection for this viewer if any
+              const existingPc = viewerPcsRef.current.get(viewerId);
+              if (existingPc) {
+                existingPc.close();
+                viewerPcsRef.current.delete(viewerId);
+              }
+
+              const vpc = new rtc.RTCPeerConnection({ iceServers });
+              viewerPcsRef.current.set(viewerId, vpc);
+
+              // Add local media tracks so viewer receives the stream
+              localStream.getTracks().forEach((track) => vpc.addTrack(track, localStream));
+
+              vpc.onicecandidate = (e) => {
+                if (!e.candidate) return;
+                sendSignal({
+                  livestreamId: lsId,
+                  recipientId: signal.senderId,
+                  type: "ice-candidate",
+                  payload: JSON.stringify(e.candidate),
+                }).catch(() => {});
+              };
+
+              // Set the viewer's offer as remote description
+              await vpc.setRemoteDescription(
+                new rtc.RTCSessionDescription(JSON.parse(signal.payload)),
+              );
+
+              // Create and send answer
+              const answer = await vpc.createAnswer();
+              await vpc.setLocalDescription(answer);
+              await sendSignal({
+                livestreamId: lsId,
+                recipientId: signal.senderId,
+                type: "answer",
+                payload: JSON.stringify(answer),
+              });
+            }
+
+            if (signal.type === "ice-candidate") {
+              const vpc = viewerPcsRef.current.get(viewerId);
+              if (vpc?.remoteDescription) {
+                const candidate = JSON.parse(signal.payload);
+                await vpc.addIceCandidate(new rtc.RTCIceCandidate(candidate));
+              }
             }
           }
         } catch (err) {
-          console.error("[LiveHost] Signal error:", signal.type, err);
+          console.error("[LiveHost] Signal error:", signal.type, "from:", signal.senderId, err);
         }
 
         scheduleAck(signal._id);
       }
     })();
-  }, [signals, scheduleAck, livestreamId, sendSignal]);
+  }, [signals, scheduleAck, livestreamId, sendSignal, iceServers]);
 
   /* -- Cleanup -- */
   const cleanup = useCallback(() => {
@@ -340,6 +394,11 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     localStreamRef.current = null;
     pcRef.current?.close();
     pcRef.current = null;
+    // Close all viewer PCs
+    for (const vpc of viewerPcsRef.current.values()) {
+      vpc.close();
+    }
+    viewerPcsRef.current.clear();
     currentPeerId.current = null;
     processedSignalIds.current.clear();
     pendingCandidates.current = [];
