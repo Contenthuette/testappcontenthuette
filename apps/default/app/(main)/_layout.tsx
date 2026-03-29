@@ -39,7 +39,7 @@ export default function MainLayout() {
     }
   }, [isAuthenticated, isLoading]);
 
-  if (isLoading && !wasAuthenticatedRef.current) {
+  if ((isLoading || !isAuthenticated) && !wasAuthenticatedRef.current && !shouldRedirect) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={colors.gray400} />
