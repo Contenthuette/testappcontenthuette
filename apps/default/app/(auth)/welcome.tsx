@@ -22,8 +22,8 @@ const FEATURES = [
     label: "Nur Leute aus\ndeiner Gegend",
   },
   {
-    icon: "lock.shield" as const,
-    label: "Private\nCommunity",
+    icon: "hands.sparkles" as const,
+    label: "Wir bewegen etwas,\ngemeinsam.",
   },
   {
     icon: "sparkles" as const,

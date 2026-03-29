@@ -238,6 +238,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   crown: Crown,
   "crown.fill": Crown,
   handshake: Handshake,
+  "hands.sparkles": Handshake,
   "handshake.fill": Handshake,
 };
 
