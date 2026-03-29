@@ -22,7 +22,7 @@ const createOptions = [
   {
     icon: "video.badge.waveform" as const,
     label: "Live gehen",
-    desc: "Starte einen Livestream für deine Community",
+    desc: "Starte einen Z Livestream",
     route: "/(main)/go-live" as const,
   },
   {

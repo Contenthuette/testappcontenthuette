@@ -513,32 +513,32 @@ const styles = StyleSheet.create({
 
   /* Comments */
   commentsList: {
-    maxHeight: 120,
+    maxHeight: 76,
     marginHorizontal: spacing.lg,
     flexGrow: 0,
   },
   commentsContent: {
     paddingBottom: spacing.sm,
-    gap: 6,
+    gap: 4,
   },
   commentBubble: {
     flexDirection: "row",
-    backgroundColor: "rgba(0,0,0,0.4)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: radius.md,
     borderCurve: "continuous",
-    gap: 6,
+    gap: 5,
     flexWrap: "wrap",
   },
   commentAuthor: {
-    color: colors.white,
-    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
     fontWeight: "700",
   },
   commentText: {
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 13,
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 12,
     flex: 1,
   },
 
