@@ -55,7 +55,7 @@ function LiveNowSection() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.liveScroll}
       >
-        {streams.map((s) => (
+        {streams.map((s: { _id: Id<"livestreams">; title: string; hostName: string; hostAvatarUrl?: string; coHostName?: string; coHostAvatarUrl?: string; groupName?: string; participantCount: number; viewerCount: number }) => (
           <LivestreamCard
             key={s._id}
             _id={s._id}
