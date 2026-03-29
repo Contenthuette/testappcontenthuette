@@ -54,6 +54,7 @@ export default function GoLiveScreen() {
     localStreamUrl, remoteStreamUrl, peerConnected,
     isMuted, isVideoOff,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
+    isFrontCamera,
   } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true });
 
   const isLive = !!livestreamId;
@@ -163,7 +164,7 @@ export default function GoLiveScreen() {
             streamURL={localStreamUrl}
             style={StyleSheet.absoluteFill}
             objectFit="cover"
-            mirror
+            mirror={isFrontCamera}
             zOrder={0}
           />
         ) : (
@@ -232,7 +233,7 @@ export default function GoLiveScreen() {
                 streamURL={localStreamUrl}
                 style={StyleSheet.absoluteFill}
                 objectFit="cover"
-                mirror
+                mirror={isFrontCamera}
                 zOrder={0}
               />
             ) : (
@@ -271,7 +272,7 @@ export default function GoLiveScreen() {
               streamURL={localStreamUrl}
               style={StyleSheet.absoluteFill}
               objectFit="cover"
-              mirror
+              mirror={isFrontCamera}
               zOrder={0}
             />
           ) : (

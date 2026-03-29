@@ -94,6 +94,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
   const [iceReady, setIceReady] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
   const [peerConnected, setPeerConnected] = useState(false);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
   const localStreamRef = useRef<MediaStreamLike | null>(null);
   const pcRef = useRef<RTCPeerConnectionLike | null>(null);
@@ -431,6 +432,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
 
   const flipCamera = useCallback(() => {
     localStreamRef.current?.getVideoTracks()?.[0]?._switchCamera?.();
+    setIsFrontCamera((prev) => !prev);
   }, []);
 
   return {
@@ -442,6 +444,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview }: UseL
     toggleMute,
     toggleVideo,
     flipCamera,
+    isFrontCamera,
     cleanup,
     isSupported: !!RTC,
     RTCView: (RTC?.RTCView as RTCViewComponent | null) ?? null,
