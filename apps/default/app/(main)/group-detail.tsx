@@ -30,6 +30,20 @@ export default function GroupDetailScreen() {
   const acceptRequest = useMutation(api.groups.acceptRequest);
   const rejectRequest = useMutation(api.groups.rejectRequest);
 
+  // Pulse for live badge — hooks MUST be before any early returns
+  const livePulse = useSharedValue(1);
+  useEffect(() => {
+    if (activeStream) {
+      livePulse.value = withRepeat(
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1, true,
+      );
+    } else {
+      livePulse.value = 1;
+    }
+  }, [activeStream, livePulse]);
+  const liveDotStyle = useAnimatedStyle(() => ({ opacity: livePulse.value }));
+
   if (!group) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -42,18 +56,6 @@ export default function GroupDetailScreen() {
   const isPending = membership?.status === "pending";
   const isAdmin = membership?.role === "admin";
   const isRequestGroup = group.visibility === "request" || group.visibility === "invite_only";
-
-  // Pulse for live badge
-  const livePulse = useSharedValue(1);
-  useEffect(() => {
-    if (activeStream) {
-      livePulse.value = withRepeat(
-        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        -1, true,
-      );
-    }
-  }, [activeStream, livePulse]);
-  const liveDotStyle = useAnimatedStyle(() => ({ opacity: livePulse.value }));
 
   const handleJoin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

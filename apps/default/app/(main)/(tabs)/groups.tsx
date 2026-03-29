@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Platform, ScrollView,
@@ -16,7 +16,7 @@ import { SymbolView } from "@/components/Icon";
 import { LivestreamCard } from "@/components/LivestreamCard";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 type Tab = "groups" | "people";
 
