@@ -145,6 +145,7 @@ export default defineSchema({
     cropOffsetX: v.optional(v.number()),
     cropZoom: v.optional(v.number()),
     mediaAspectRatio: v.optional(v.number()),
+    location: v.optional(v.string()),
     likeCount: v.number(),
     commentCount: v.number(),
     isPinned: v.boolean(),
@@ -324,9 +325,12 @@ export default defineSchema({
     targetId: v.string(),
     reason: v.string(),
     status: v.union(v.literal("pending"), v.literal("reviewed"), v.literal("resolved")),
+    resolvedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_type_and_status", ["type", "status"])
+    .index("by_reporterId_and_targetId", ["reporterId", "targetId"]),
 
   blockedUsers: defineTable({
     blockerId: v.id("users"),

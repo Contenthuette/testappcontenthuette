@@ -74,6 +74,7 @@ const feedItemValidator = v.object({
   cropOffsetX: v.optional(v.number()),
   cropZoom: v.optional(v.number()),
   mediaAspectRatio: v.optional(v.number()),
+  location: v.optional(v.string()),
   likeCount: v.number(),
   commentCount: v.number(),
   isLiked: v.boolean(),
@@ -161,6 +162,7 @@ export const feed = authQuery({
           cropOffsetX: post.cropOffsetX,
           cropZoom: post.cropZoom,
           mediaAspectRatio: post.mediaAspectRatio,
+          location: post.location,
           likeCount: post.likeCount,
           commentCount: post.commentCount,
           isLiked: !!likeChecks[index],
@@ -194,6 +196,7 @@ export const getById = authQuery({
       cropOffsetX: v.optional(v.number()),
       cropZoom: v.optional(v.number()),
       mediaAspectRatio: v.optional(v.number()),
+      location: v.optional(v.string()),
       likeCount: v.number(),
       commentCount: v.number(),
       isLiked: v.boolean(),
@@ -245,6 +248,7 @@ export const getById = authQuery({
       cropOffsetX: post.cropOffsetX,
       cropZoom: post.cropZoom,
       mediaAspectRatio: post.mediaAspectRatio,
+      location: post.location,
       likeCount: post.likeCount,
       commentCount: post.commentCount,
       isLiked: !!like,
@@ -269,6 +273,7 @@ export const create = authMutation({
     cropOffsetX: v.optional(v.number()),
     cropZoom: v.optional(v.number()),
     mediaAspectRatio: v.optional(v.number()),
+    location: v.optional(v.string()),
     isAnnouncement: v.optional(v.boolean()),
   },
   returns: v.id("posts"),
@@ -294,6 +299,7 @@ export const create = authMutation({
       cropOffsetX: args.cropOffsetX,
       cropZoom: args.cropZoom,
       mediaAspectRatio: args.mediaAspectRatio,
+      location: args.location,
       likeCount: 0,
       commentCount: 0,
       isPinned: isAnnouncement ?? false,
@@ -354,6 +360,130 @@ export const deletePost = authMutation({
     }
 
     await ctx.db.delete(args.postId);
+    return null;
+  },
+});
+
+// Report post
+export const reportPost = authMutation({
+  args: {
+    postId: v.id("posts"),
+    reason: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+    if (!args.reason || args.reason.trim().length < 3) {
+      throw new Error("Bitte gib einen Grund an");
+    }
+    const existing = await ctx.db
+      .query("reports")
+      .withIndex("by_reporterId_and_targetId", (q) =>
+        q.eq("reporterId", myUserId).eq("targetId", args.postId as string),
+      )
+      .first();
+    if (existing) throw new Error("Du hast diesen Beitrag bereits gemeldet");
+    await ctx.db.insert("reports", {
+      reporterId: myUserId,
+      type: "post",
+      targetId: args.postId as string,
+      reason: args.reason.trim(),
+      status: "pending",
+      createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Admin: list post reports
+export const listReports = authQuery({
+  args: { status: v.optional(v.union(v.literal("pending"), v.literal("reviewed"), v.literal("resolved"))) },
+  returns: v.array(
+    v.object({
+      _id: v.id("reports"),
+      postId: v.string(),
+      reporterName: v.string(),
+      reason: v.string(),
+      status: v.union(v.literal("pending"), v.literal("reviewed"), v.literal("resolved")),
+      postCaption: v.optional(v.string()),
+      postAuthorName: v.string(),
+      postMediaUrl: v.optional(v.string()),
+      postType: v.union(v.literal("photo"), v.literal("video")),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const authId = ctx.user._id;
+    const me = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
+    if (!me || me.role !== "admin") return [];
+    const statusFilter = args.status ?? "pending";
+    const reports = await ctx.db
+      .query("reports")
+      .withIndex("by_type_and_status", (q) => q.eq("type", "post").eq("status", statusFilter))
+      .order("desc")
+      .take(100);
+    if (reports.length === 0) return [];
+    const results = await Promise.all(
+      reports.map(async (r) => {
+        const reporter = await ctx.db.get(r.reporterId);
+        const postId = r.targetId as Id<"posts">;
+        const post = await ctx.db.get(postId);
+        const author = post ? await ctx.db.get(post.authorId) : null;
+        const mediaUrl = post?.mediaStorageId ? await ctx.storage.getUrl(post.mediaStorageId) : null;
+        return {
+          _id: r._id,
+          postId: r.targetId,
+          reporterName: reporter?.name ?? "Unbekannt",
+          reason: r.reason,
+          status: r.status,
+          postCaption: post?.caption,
+          postAuthorName: author?.name ?? "Geloescht",
+          postMediaUrl: mediaUrl ?? undefined,
+          postType: post?.type ?? ("photo" as const),
+          createdAt: r.createdAt,
+        };
+      }),
+    );
+    return results;
+  },
+});
+
+// Admin: resolve a report
+export const resolveReport = authMutation({
+  args: {
+    reportId: v.id("reports"),
+    action: v.union(v.literal("dismiss"), v.literal("remove")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const authId = ctx.user._id;
+    const me = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", authId)).unique();
+    if (!me || me.role !== "admin") throw new Error("Nur Admins");
+    const report = await ctx.db.get(args.reportId);
+    if (!report) throw new Error("Meldung nicht gefunden");
+    const postId = report.targetId as Id<"posts">;
+    if (args.action === "remove") {
+      const post = await ctx.db.get(postId);
+      if (post) {
+        const [likes, comments, savedPosts] = await Promise.all([
+          ctx.db.query("likes").withIndex("by_postId", (q) => q.eq("postId", postId)).collect(),
+          ctx.db.query("comments").withIndex("by_postId", (q) => q.eq("postId", postId)).collect(),
+          ctx.db.query("savedPosts").withIndex("by_postId_and_userId", (q) => q.eq("postId", postId)).collect(),
+        ]);
+        await Promise.all([
+          ...likes.map((l) => ctx.db.delete(l._id)),
+          ...savedPosts.map((s) => ctx.db.delete(s._id)),
+          ...comments.map((c) => ctx.db.delete(c._id)),
+        ]);
+        if (post.mediaStorageId) await ctx.storage.delete(post.mediaStorageId);
+        if (post.thumbnailStorageId) await ctx.storage.delete(post.thumbnailStorageId);
+        await ctx.db.delete(postId);
+      }
+      await ctx.db.patch(args.reportId, { status: "resolved" as const, resolvedAt: Date.now() });
+    } else {
+      await ctx.db.patch(args.reportId, { status: "reviewed" as const, resolvedAt: Date.now() });
+    }
     return null;
   },
 });

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useMemo, memo } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   useWindowDimensions, ActivityIndicator, ViewToken,
-  Alert, Platform, ActionSheetIOS,
+  Alert, Platform, ActionSheetIOS, Modal, TextInput, Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -39,6 +39,7 @@ interface FeedItem {
   cropOffsetX?: number;
   cropZoom?: number;
   mediaAspectRatio?: number;
+  location?: string;
   likeCount: number;
   commentCount: number;
   isLiked: boolean;
@@ -92,11 +93,12 @@ interface FeedPostProps {
   onToggleSave: (postId: Id<"posts">) => void;
   onShare: (postId: Id<"posts">) => void;
   onDelete: (postId: Id<"posts">) => void;
+  onReport: (postId: Id<"posts">) => void;
 }
 
 const FeedPost = memo(function FeedPost({
   item, screenWidth, feedMediaHeight, isVideoPlaying,
-  onToggleLike, onToggleSave, onShare, onDelete,
+  onToggleLike, onToggleSave, onShare, onDelete, onReport,
 }: FeedPostProps) {
   if (item.isAnnouncement) {
     return (
@@ -217,26 +219,50 @@ const FeedPost = memo(function FeedPost({
           <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
         </View>
         <TouchableOpacity hitSlop={12} onPress={() => {
-          if (!item.isOwn) return;
           if (Platform.OS === "ios") {
-            ActionSheetIOS.showActionSheetWithOptions(
-              {
-                options: ["Abbrechen", "Beitrag l\u00f6schen"],
-                destructiveButtonIndex: 1,
-                cancelButtonIndex: 0,
-              },
-              (idx) => { if (idx === 1) onDelete(item._id); },
-            );
+            if (item.isOwn) {
+              ActionSheetIOS.showActionSheetWithOptions(
+                {
+                  options: ["Abbrechen", "Beitrag loeschen"],
+                  destructiveButtonIndex: 1,
+                  cancelButtonIndex: 0,
+                },
+                (idx) => { if (idx === 1) onDelete(item._id); },
+              );
+            } else {
+              ActionSheetIOS.showActionSheetWithOptions(
+                {
+                  options: ["Abbrechen", "Beitrag melden"],
+                  destructiveButtonIndex: 1,
+                  cancelButtonIndex: 0,
+                },
+                (idx) => { if (idx === 1) onReport(item._id); },
+              );
+            }
           } else {
-            Alert.alert("Beitrag l\u00f6schen?", "Dieser Beitrag wird unwiderruflich gel\u00f6scht.", [
-              { text: "Abbrechen", style: "cancel" },
-              { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
-            ]);
+            if (item.isOwn) {
+              Alert.alert("Beitrag loeschen?", "Dieser Beitrag wird unwiderruflich geloescht.", [
+                { text: "Abbrechen", style: "cancel" },
+                { text: "Loeschen", style: "destructive", onPress: () => onDelete(item._id) },
+              ]);
+            } else {
+              Alert.alert("Beitrag melden", "Moechtest du diesen Beitrag melden?", [
+                { text: "Abbrechen", style: "cancel" },
+                { text: "Melden", style: "destructive", onPress: () => onReport(item._id) },
+              ]);
+            }
           }
         }}>
-          <SymbolView name="ellipsis" size={18} tintColor={item.isOwn ? colors.black : colors.gray300} />
+          <SymbolView name="ellipsis" size={18} tintColor={colors.black} />
         </TouchableOpacity>
       </TouchableOpacity>
+
+      {item.location && (
+        <View style={styles.locationBadge}>
+          <SymbolView name="mappin" size={12} tintColor={colors.gray500} />
+          <Text style={styles.locationText}>{item.location}</Text>
+        </View>
+      )}
 
       {renderMedia()}
 
@@ -329,6 +355,15 @@ export default function FeedScreen() {
     }
   }, [deletePost]);
 
+  const reportPost = useMutation(api.posts.reportPost);
+  const [reportPostId, setReportPostId] = useState<Id<"posts"> | null>(null);
+  const [reportReason, setReportReason] = useState("");
+
+  const handleReport = useCallback((postId: Id<"posts">) => {
+    setReportPostId(postId);
+    setReportReason("");
+  }, []);
+
   // Viewability: only tracks video ID, doesn't depend on feed
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
@@ -371,8 +406,9 @@ export default function FeedScreen() {
       onToggleSave={handleToggleSave}
       onShare={handleShare}
       onDelete={handleDelete}
+      onReport={handleReport}
     />
-  ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
+  ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete, handleReport]);
 
   const listEmpty = useMemo(() => {
     if (feedStatus === "LoadingFirstPage") {
@@ -467,6 +503,48 @@ export default function FeedScreen() {
           />
 
           <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
+
+          {/* Report Modal */}
+          <Modal visible={reportPostId !== null} transparent animationType="fade">
+            <Pressable style={styles.reportOverlay} onPress={() => { setReportPostId(null); setReportReason(""); }}>
+              <Pressable style={styles.reportSheet} onPress={(e) => e.stopPropagation()}>
+                <Text style={styles.reportTitle}>Beitrag melden</Text>
+                <Text style={styles.reportSub}>Warum moechtest du diesen Beitrag melden?</Text>
+                <TextInput
+                  style={styles.reportInput}
+                  value={reportReason}
+                  onChangeText={setReportReason}
+                  placeholder="Grund angeben..."
+                  placeholderTextColor="#999"
+                  multiline
+                  numberOfLines={3}
+                />
+                <View style={styles.reportActions}>
+                  <TouchableOpacity style={styles.reportCancel} onPress={() => { setReportPostId(null); setReportReason(""); }}>
+                    <Text style={styles.reportCancelText}>Abbrechen</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.reportSubmitBtn, reportReason.trim().length < 3 && { opacity: 0.4 }]}
+                    disabled={reportReason.trim().length < 3}
+                    onPress={async () => {
+                      if (!reportPostId) return;
+                      try {
+                        await reportPost({ postId: reportPostId, reason: reportReason.trim() });
+                        setReportPostId(null);
+                        setReportReason("");
+                        if (Platform.OS !== "web") Alert.alert("Gemeldet", "Deine Meldung wurde eingereicht.");
+                      } catch (e: unknown) {
+                        const msg = e instanceof Error ? e.message : "Fehler";
+                        if (Platform.OS !== "web") Alert.alert("Fehler", msg);
+                      }
+                    }}
+                  >
+                    <Text style={styles.reportSubmitText}>Melden</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
         </>
       )}
     </SafeAreaView>
@@ -622,5 +700,83 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  // Location badge
+  locationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 6,
+  },
+  locationText: {
+    fontSize: 12,
+    color: colors.gray500,
+  },
+
+  // Report modal
+  reportOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  reportSheet: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 400,
+    gap: 12,
+    borderCurve: "continuous",
+  },
+  reportTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.black,
+  },
+  reportSub: {
+    fontSize: 14,
+    color: colors.gray500,
+  },
+  reportInput: {
+    backgroundColor: colors.gray100,
+    borderRadius: 12,
+    padding: spacing.md,
+    fontSize: 15,
+    color: colors.black,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  reportActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  reportCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+  },
+  reportCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  reportSubmitBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+  },
+  reportSubmitText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.white,
   },
 });

@@ -194,6 +194,10 @@ export default function AdminDashboard() {
   const [announceEditing, setAnnounceEditing] = useState(false);
   const [announceSaving, setAnnounceSaving] = useState(false);
 
+  /* ── Reports ── */
+  const reports = useQuery(api.posts.listReports, isAuthenticated ? {} : "skip");
+  const resolveReport = useMutation(api.posts.resolveReport);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshAnalyticsSnapshot({}).catch(() => {
@@ -428,6 +432,60 @@ export default function AdminDashboard() {
             iconBg="#EC4899"
           />
         </ScrollView>
+
+        {/* ── Gemeldete Beitraege ─────────────────── */}
+        <Card title="Gemeldete Beitraege" icon="exclamationmark.triangle.fill">
+          {reports === undefined ? (
+            <ActivityIndicator color={colors.gray300} />
+          ) : reports.length === 0 ? (
+            <View style={styles.emptyReports}>
+              <SymbolView name="checkmark.shield" size={24} tintColor={colors.gray300} />
+              <Text style={styles.emptyReportsText}>Keine offenen Meldungen</Text>
+            </View>
+          ) : (
+            reports.map((r: { _id: Id<"reports">; postAuthorName: string; postType: string; postCaption?: string; reason: string; reporterName: string }) => (
+              <View key={r._id} style={styles.reportCard}>
+                <View style={styles.reportCardHeader}>
+                  <Text style={styles.reportCardAuthor}>{r.postAuthorName}</Text>
+                  <Text style={styles.reportCardType}>{r.postType === "video" ? "Video" : "Foto"}</Text>
+                </View>
+                {r.postCaption ? (
+                  <Text style={styles.reportCardCaption} numberOfLines={2}>{r.postCaption}</Text>
+                ) : null}
+                <View style={styles.reportCardReason}>
+                  <SymbolView name="flag.fill" size={12} tintColor={"#FF3B30"} />
+                  <Text style={styles.reportCardReasonText}>{r.reason}</Text>
+                </View>
+                <Text style={styles.reportCardReporter}>Gemeldet von: {r.reporterName}</Text>
+                <View style={styles.reportCardActions}>
+                  <TouchableOpacity
+                    style={styles.reportDismissBtn}
+                    onPress={() => resolveReport({ reportId: r._id, action: "dismiss" })}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.reportDismissText}>Ablehnen</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.reportRemoveBtn}
+                    onPress={() => {
+                      Alert.alert(
+                        "Beitrag loeschen?",
+                        "Der Beitrag wird unwiderruflich geloescht.",
+                        [
+                          { text: "Abbrechen", style: "cancel" },
+                          { text: "Loeschen", style: "destructive", onPress: () => resolveReport({ reportId: r._id, action: "remove" }) },
+                        ],
+                      );
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.reportRemoveText}>Loeschen</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
 
         {/* ── Abo-Einnahmen ───────────────────────── */}
         <Card title="Abo-Einnahmen" icon="creditcard">
@@ -1039,5 +1097,93 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: colors.gray700,
+  },
+
+  /* Reports */
+  emptyReports: {
+    alignItems: "center",
+    paddingVertical: 24,
+    gap: 8,
+  },
+  emptyReportsText: {
+    fontSize: 14,
+    color: colors.gray400,
+  },
+  reportCard: {
+    backgroundColor: colors.gray100,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    gap: 8,
+    borderCurve: "continuous",
+  },
+  reportCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  reportCardAuthor: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  reportCardType: {
+    fontSize: 12,
+    color: colors.gray400,
+    fontWeight: "500",
+  },
+  reportCardCaption: {
+    fontSize: 13,
+    color: colors.gray600,
+    lineHeight: 18,
+  },
+  reportCardReason: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  reportCardReasonText: {
+    fontSize: 13,
+    color: "#DC2626",
+    flex: 1,
+  },
+  reportCardReporter: {
+    fontSize: 12,
+    color: colors.gray400,
+  },
+  reportCardActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  reportDismissBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray300,
+  },
+  reportDismissText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  reportRemoveBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+  },
+  reportRemoveText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.white,
   },
 });

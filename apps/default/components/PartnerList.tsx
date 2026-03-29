@@ -87,6 +87,14 @@ export function PartnerList() {
       keyExtractor={item => item._id}
       contentContainerStyle={styles.list}
       showsVerticalScrollIndicator={false}
+      ListHeaderComponent={
+        <View style={styles.partnerHeader}>
+          <Text style={styles.partnerHeaderTitle}>Partner aus MV</Text>
+          <Text style={styles.partnerHeaderSub}>
+            Hier seht ihr Unternehmen aus MV, die Z supporten:
+          </Text>
+        </View>
+      }
       ListEmptyComponent={
         <EmptyState
           icon="building.2"
@@ -101,6 +109,23 @@ export function PartnerList() {
 const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
+
+  partnerHeader: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: 6,
+  },
+  partnerHeaderTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.black,
+    letterSpacing: -0.5,
+  },
+  partnerHeaderSub: {
+    fontSize: 15,
+    color: colors.gray500,
+    lineHeight: 22,
+  },
 
   card: {
     backgroundColor: colors.white,

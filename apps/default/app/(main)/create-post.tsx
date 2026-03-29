@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Alert,
   useWindowDimensions,
+  Pressable,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "convex/react";
@@ -69,6 +71,27 @@ export default function CreatePostScreen() {
   // Thumbnail state
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [thumbnailIsCustom, setThumbnailIsCustom] = useState(false);
+
+  // Location state
+  const [location, setLocation] = useState<string | null>(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationSearch, setLocationSearch] = useState("");
+
+  // MV Locations
+  const MV_LOCATIONS = [
+    "Rostock", "Schwerin", "Neubrandenburg", "Stralsund", "Greifswald",
+    "Wismar", "Guestrow", "Waren (Mueritz)", "Anklam", "Bergen auf Ruegen",
+    "Bad Doberan", "Parchim", "Demmin", "Ribnitz-Damgarten", "Pasewalk",
+    "Wolgast", "Sassnitz", "Barth", "Teterow", "Malchin",
+    "Ludwigslust", "Hagenow", "Boizenburg", "Ueckermuende",
+    "Landkreis Rostock", "Landkreis Vorpommern-Ruegen",
+    "Landkreis Nordwestmecklenburg", "Landkreis Mecklenburgische Seenplatte",
+    "Landkreis Vorpommern-Greifswald", "Landkreis Ludwigslust-Parchim",
+  ];
+
+  const filteredLocations = locationSearch.trim()
+    ? MV_LOCATIONS.filter((l) => l.toLowerCase().includes(locationSearch.toLowerCase()))
+    : MV_LOCATIONS;
 
   // Crop state (stored as JS values for saving)
   const [cropState, setCropState] = useState({ x: 0, y: 0, zoom: 1 });
@@ -274,6 +297,7 @@ export default function CreatePostScreen() {
         cropOffsetY: cropState.y,
         cropZoom: cropState.zoom,
         mediaAspectRatio: mediaDims ? mediaDims.width / mediaDims.height : undefined,
+        location: location ?? undefined,
       });
 
       if (Platform.OS !== "web") {
@@ -474,6 +498,83 @@ export default function CreatePostScreen() {
               editable={!publishing}
             />
           </View>
+
+          {/* Location Picker */}
+          <View style={styles.captionSection}>
+            <Text style={styles.sectionLabel}>Standort</Text>
+            <Pressable
+              style={styles.locationButton}
+              onPress={() => setShowLocationPicker(true)}
+            >
+              <Icon name="mappin.circle.fill" size={20} tintColor={location ? colors.black : colors.gray400} />
+              <Text style={[styles.locationButtonText, !location && { color: colors.gray400 }]}>
+                {location ?? "Standort hinzufuegen"}
+              </Text>
+              {location && (
+                <Pressable
+                  onPress={() => setLocation(null)}
+                  hitSlop={12}
+                  style={styles.locationClear}
+                >
+                  <Icon name="xmark.circle.fill" size={16} tintColor={colors.gray400} />
+                </Pressable>
+              )}
+            </Pressable>
+          </View>
+
+          {/* Location Picker Modal */}
+          <Modal
+            visible={showLocationPicker}
+            animationType="slide"
+            presentationStyle="pageSheet"
+          >
+            <View style={styles.locationModal}>
+              <View style={styles.locationModalHeader}>
+                <Text style={styles.locationModalTitle}>Standort waehlen</Text>
+                <Pressable onPress={() => { setShowLocationPicker(false); setLocationSearch(""); }}>
+                  <Icon name="xmark.circle.fill" size={28} tintColor={colors.gray400} />
+                </Pressable>
+              </View>
+              <TextInput
+                style={styles.locationSearchInput}
+                placeholder="Suchen oder eigenen Ort eingeben..."
+                placeholderTextColor={colors.gray400}
+                value={locationSearch}
+                onChangeText={setLocationSearch}
+                autoFocus
+              />
+              {locationSearch.trim().length > 0 && !MV_LOCATIONS.some((l) => l.toLowerCase() === locationSearch.toLowerCase()) && (
+                <Pressable
+                  style={styles.locationCustomRow}
+                  onPress={() => {
+                    setLocation(locationSearch.trim());
+                    setShowLocationPicker(false);
+                    setLocationSearch("");
+                  }}
+                >
+                  <Icon name="plus.circle.fill" size={20} tintColor={colors.black} />
+                  <Text style={styles.locationCustomText}>"{locationSearch.trim()}" verwenden</Text>
+                </Pressable>
+              )}
+              <ScrollView style={{ flex: 1 }}>
+                {filteredLocations.map((loc) => (
+                  <Pressable
+                    key={loc}
+                    style={[styles.locationRow, location === loc && styles.locationRowActive]}
+                    onPress={() => {
+                      setLocation(loc);
+                      setShowLocationPicker(false);
+                      setLocationSearch("");
+                    }}
+                  >
+                    <Icon name="mappin" size={16} tintColor={location === loc ? colors.black : colors.gray400} />
+                    <Text style={[styles.locationRowText, location === loc && { fontWeight: "700" }]}>{loc}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </Modal>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </GestureHandlerRootView>
@@ -624,4 +725,83 @@ const styles = StyleSheet.create({
   successBadge: { marginBottom: 8 },
   successTitle: { fontSize: 22, fontWeight: "700", color: colors.black },
   successSub: { fontSize: 15, color: colors.gray500 },
+
+  // Location picker
+  locationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  locationButtonText: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.black,
+    fontWeight: "500",
+  },
+  locationClear: {
+    padding: 4,
+  },
+  locationModal: {
+    flex: 1,
+    backgroundColor: colors.white,
+    paddingTop: 16,
+  },
+  locationModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  locationModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.black,
+  },
+  locationSearchInput: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.black,
+    marginBottom: spacing.md,
+  },
+  locationCustomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    backgroundColor: colors.gray100,
+    marginHorizontal: spacing.lg,
+    borderRadius: radius.sm,
+    marginBottom: spacing.sm,
+  },
+  locationCustomText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  locationRowActive: {
+    backgroundColor: colors.gray100,
+  },
+  locationRowText: {
+    fontSize: 15,
+    color: colors.black,
+  },
 });
