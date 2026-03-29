@@ -408,7 +408,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       </TouchableOpacity>
       <View style={styles.center}>
         <View style={styles.preparingDot} />
-        <Text style={styles.preparingText}>Aufnahme wird vorbereitet\u2026</Text>
+        <Text style={styles.preparingText}>Audioaufnahme wird vorbereitet</Text>
       </View>
     </View>
   );

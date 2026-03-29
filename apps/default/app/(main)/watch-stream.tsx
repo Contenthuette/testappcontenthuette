@@ -172,6 +172,7 @@ export default function WatchStreamScreen() {
           streamURL={remoteStreamUrl}
           style={StyleSheet.absoluteFill}
           objectFit="cover"
+          mirror={true}
           zOrder={0}
         />
       ) : (

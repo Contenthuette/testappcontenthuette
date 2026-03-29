@@ -15,6 +15,7 @@ import type { MediaPickResult } from "@/components/ChatInputBar";
 import { SharedPostBubble } from "@/components/SharedPostBubble";
 import { VoiceMessageBubble } from "@/components/VoiceMessageBubble";
 import { MediaMessageBubble } from "@/components/MediaMessageBubble";
+import { Avatar } from "@/components/Avatar";
 import * as Haptics from "expo-haptics";
 
 export default function ChatScreen() {
@@ -244,6 +245,9 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => safeBack("chat")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
+        {partner && (
+          <Avatar uri={partner.avatarUrl} name={partner.name} size={32} />
+        )}
         <Text style={styles.headerTitle}>{partner?.name ?? "Chat"}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerAction} onPress={() => handleCall("audio")}>

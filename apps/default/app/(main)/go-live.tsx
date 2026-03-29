@@ -172,7 +172,7 @@ export default function GoLiveScreen() {
             streamURL={localStreamUrl}
             style={StyleSheet.absoluteFill}
             objectFit="cover"
-            mirror={false}
+            mirror={true}
             zOrder={0}
           />
         ) : (
@@ -247,7 +247,7 @@ export default function GoLiveScreen() {
                 streamURL={localStreamUrl}
                 style={StyleSheet.absoluteFill}
                 objectFit="cover"
-                mirror={false}
+                mirror={true}
                 zOrder={0}
               />
             ) : (
@@ -286,7 +286,7 @@ export default function GoLiveScreen() {
               streamURL={localStreamUrl}
               style={StyleSheet.absoluteFill}
               objectFit="cover"
-              mirror={false}
+              mirror={true}
               zOrder={0}
             />
           ) : (
