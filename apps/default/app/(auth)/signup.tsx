@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { authClient } from "@/lib/auth-client";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
@@ -9,50 +9,23 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { ZLogo } from "@/components/ZLogo";
 import { SymbolView } from "@/components/Icon";
-import { useConvexAuth, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import { useConvexAuth } from "convex/react";
 
 export default function SignupScreen() {
   const { isAuthenticated } = useConvexAuth();
-  const params = useLocalSearchParams<{ sessionToken?: string }>();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [awaitingAuth, setAwaitingAuth] = useState(false);
-  const claimSubscription = useMutation(api.stripeHelpers.claimSubscription);
-  const claimAttempted = useRef(false);
 
-  // Once Convex confirms auth, claim the subscription if we have a token
+  // Once Convex confirms auth, navigate to onboarding
   useEffect(() => {
-    if (!awaitingAuth || !isAuthenticated) return;
-    if (claimAttempted.current) return;
-    claimAttempted.current = true;
-
-    const token = params.sessionToken;
-    if (token) {
-      // Retry claiming a few times since user record may still be creating
-      const attemptClaim = async (retries: number): Promise<void> => {
-        try {
-          const result = await claimSubscription({ sessionToken: token });
-          if (result === "no_user" && retries > 0) {
-            await new Promise((r) => setTimeout(r, 1500));
-            return attemptClaim(retries - 1);
-          }
-        } catch {
-          if (retries > 0) {
-            await new Promise((r) => setTimeout(r, 1500));
-            return attemptClaim(retries - 1);
-          }
-        }
-        router.replace("/");
-      };
-      attemptClaim(3);
-    } else {
+    if (awaitingAuth && isAuthenticated) {
       router.replace("/");
     }
-  }, [awaitingAuth, isAuthenticated, params.sessionToken, claimSubscription]);
+  }, [awaitingAuth, isAuthenticated]);
 
   // Timeout fallback
   useEffect(() => {
@@ -64,7 +37,6 @@ export default function SignupScreen() {
       }
       setAwaitingAuth(false);
       setLoading(false);
-      claimAttempted.current = false;
       setError("Registrierung dauert zu lange. Bitte versuche es erneut.");
     }, 15000);
     return () => clearTimeout(timer);
@@ -112,12 +84,6 @@ export default function SignupScreen() {
           <ZLogo size={40} />
           <Text style={styles.title}>Konto erstellen</Text>
           <Text style={styles.subtitle}>Werde Teil der Z Community in MV</Text>
-          {params.sessionToken && (
-            <View style={styles.paidBadge}>
-              <SymbolView name="checkmark.seal.fill" size={16} tintColor={colors.black} />
-              <Text style={styles.paidBadgeText}>Zahlung bestätigt — Erstelle jetzt dein Konto</Text>
-            </View>
-          )}
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -133,13 +99,7 @@ export default function SignupScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Bereits ein Konto? </Text>
-          <TouchableOpacity
-            onPress={() =>
-              params.sessionToken
-                ? router.replace({ pathname: "/(auth)/login", params: { sessionToken: params.sessionToken } })
-                : router.replace("/(auth)/login")
-            }
-          >
+          <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
             <Text style={styles.footerLink}>Anmelden</Text>
           </TouchableOpacity>
         </View>
@@ -155,23 +115,6 @@ const styles = StyleSheet.create({
   header: { gap: spacing.sm, marginBottom: spacing.xxl },
   title: { fontSize: 28, fontWeight: "700", color: colors.black },
   subtitle: { fontSize: 16, color: colors.gray500 },
-  paidBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.gray50,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderCurve: "continuous",
-    marginTop: spacing.sm,
-  },
-  paidBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.black,
-    flex: 1,
-  },
   error: { fontSize: 14, color: colors.danger, marginBottom: spacing.lg, padding: spacing.md, backgroundColor: "#FEF2F2", borderRadius: radius.sm, overflow: "hidden" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xxl },
   footerText: { fontSize: 15, color: colors.gray500 },

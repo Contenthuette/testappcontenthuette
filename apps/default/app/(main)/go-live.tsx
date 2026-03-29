@@ -55,7 +55,6 @@ export default function GoLiveScreen() {
     localStreamUrl, remoteStreamUrl, peerConnected,
     isMuted, isVideoOff,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
-    isFrontCamera,
   } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true, isCoHost });
 
   const isLive = !!livestreamId;

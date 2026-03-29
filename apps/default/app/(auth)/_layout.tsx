@@ -7,7 +7,6 @@ export default function AuthLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="paywall" />
       <Stack.Screen name="onboarding-profile" />
       <Stack.Screen name="onboarding-interests" />
       <Stack.Screen name="onboarding-notifications" />
