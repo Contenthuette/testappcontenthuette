@@ -5,7 +5,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-/* ─── Conditional RTC import (native only) ─── */
+/* ---- Conditional RTC import (native only) ---- */
 interface RTCPeerConnectionLike {
   close: () => void;
   createAnswer: () => Promise<unknown>;
@@ -69,6 +69,11 @@ interface UseLivestreamViewerOptions {
   enabled: boolean;
 }
 
+/**
+ * Viewer hook: watches the livestream (receive-only, no local media).
+ * Viewers subscribe to signals but don't participate in the call.
+ * They see the host's video stream via P2P.
+ */
 export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivestreamViewerOptions) {
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState("new");
@@ -91,7 +96,7 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
     livestreamId && enabled ? { livestreamId } : "skip",
   );
 
-  /* ── Debounced ack ── */
+  /* -- Debounced ack -- */
   const flushAcks = useCallback(() => {
     if (pendingAckIds.current.length === 0) return;
     const ids = [...pendingAckIds.current];
@@ -108,7 +113,7 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
     [flushAcks],
   );
 
-  /* ── Load ICE servers ── */
+  /* -- Load ICE servers -- */
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -124,14 +129,14 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
     return () => { cancelled = true; };
   }, [enabled, getIceServers]);
 
-  /* ── Reset state on new stream ── */
+  /* -- Reset state on new stream -- */
   useEffect(() => {
     hasHandledOffer.current = false;
     processedIds.current.clear();
     pendingCandidates.current = [];
   }, [livestreamId]);
 
-  /* ── Process incoming signals from host ── */
+  /* -- Process incoming signals from host -- */
   useEffect(() => {
     if (!signals || !RTC || !iceReady || !livestreamId || !hostId) return;
     const rtc = RTC;
@@ -145,7 +150,6 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
           if (signal.type === "offer" && !hasHandledOffer.current) {
             hasHandledOffer.current = true;
 
-            // Create PC lazily on first offer
             if (!pcRef.current) {
               const pc = new rtc.RTCPeerConnection({ iceServers });
               pcRef.current = pc;
@@ -175,7 +179,6 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
             const pc = pcRef.current;
             await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
 
-            // Drain pending ICE
             for (const c of pendingCandidates.current) {
               await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
             }
@@ -208,7 +211,7 @@ export function useLivestreamViewer({ livestreamId, hostId, enabled }: UseLivest
     })();
   }, [signals, iceServers, iceReady, livestreamId, hostId, sendSignal, scheduleAck]);
 
-  /* ── Cleanup ── */
+  /* -- Cleanup -- */
   const cleanup = useCallback(() => {
     if (ackTimerRef.current) { clearTimeout(ackTimerRef.current); ackTimerRef.current = null; }
     flushAcks();

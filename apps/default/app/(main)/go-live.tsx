@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
+  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
+import { Avatar } from "@/components/Avatar";
 import { useLivestreamHost } from "@/lib/useLivestreamHost";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
@@ -19,15 +20,25 @@ import Animated, {
 } from "react-native-reanimated";
 
 export default function GoLiveScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { groupId, livestreamId: existingId, mode } = useLocalSearchParams<{
+    groupId: string;
+    livestreamId?: string;
+    mode?: string;
+  }>();
   const [title, setTitle] = useState("");
-  const [livestreamId, setLivestreamId] = useState<Id<"livestreams"> | null>(null);
+  const [livestreamId, setLivestreamId] = useState<Id<"livestreams"> | null>(
+    existingId ? (existingId as Id<"livestreams">) : null,
+  );
   const [isStarting, setIsStarting] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [commentText, setCommentText] = useState("");
   const commentsRef = useRef<FlatList>(null);
+  const isCoHost = mode === "cohost";
 
   const goLive = useMutation(api.livestreams.goLive);
   const endStreamMut = useMutation(api.livestreams.endStream);
+  const joinAsParticipant = useMutation(api.livestreams.joinAsParticipant);
+  const leaveAsParticipant = useMutation(api.livestreams.leaveAsParticipant);
   const sendComment = useMutation(api.livestreams.sendComment);
 
   const stream = useQuery(
@@ -40,11 +51,36 @@ export default function GoLiveScreen() {
   );
 
   const {
-    localStreamUrl, isMuted, isVideoOff,
+    localStreamUrl, remoteStreamUrl, peerConnected,
+    isMuted, isVideoOff,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
-  } = useLivestreamHost({ livestreamId, enabled: !!groupId });
+  } = useLivestreamHost({ livestreamId, enabled: !!livestreamId });
 
   const isLive = !!livestreamId;
+
+  // Auto-join as participant if entering as cohost
+  useEffect(() => {
+    if (isCoHost && livestreamId && !isJoining) {
+      setIsJoining(true);
+      joinAsParticipant({ livestreamId }).then((result) => {
+        if (result === "full") {
+          if (Platform.OS !== "web") {
+            Alert.alert(
+              "Livestream voll",
+              "Mehr als 2 Personen live sind derzeit nicht m\u00f6glich. Warte bis jemand den Call verl\u00e4sst.",
+              [{ text: "OK", onPress: () => { cleanup(); safeBack("go-live"); } }],
+            );
+          } else {
+            cleanup();
+            safeBack("go-live");
+          }
+        }
+      }).catch(() => {
+        cleanup();
+        safeBack("go-live");
+      });
+    }
+  }, [isCoHost, livestreamId, isJoining, joinAsParticipant, cleanup]);
 
   // Pulsing LIVE dot
   const pulseOpacity = useSharedValue(1);
@@ -84,11 +120,15 @@ export default function GoLiveScreen() {
     if (!livestreamId) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await endStreamMut({ livestreamId });
+      if (isCoHost) {
+        await leaveAsParticipant({ livestreamId });
+      } else {
+        await endStreamMut({ livestreamId });
+      }
     } catch { /* already ended */ }
     cleanup();
     safeBack("go-live");
-  }, [livestreamId, endStreamMut, cleanup]);
+  }, [livestreamId, endStreamMut, leaveAsParticipant, cleanup, isCoHost]);
 
   const handleSendComment = useCallback(async () => {
     if (!livestreamId || !commentText.trim()) return;
@@ -103,20 +143,19 @@ export default function GoLiveScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.unsupported}>
           <SymbolView name="video.slash" size={48} tintColor={colors.gray400} />
-          <Text style={styles.unsupportedText}>Livestreaming ist nur in der App verfügbar.</Text>
+          <Text style={styles.unsupportedText}>Livestreaming ist nur in der App verf\u00fcgbar.</Text>
           <TouchableOpacity style={styles.backPill} onPress={() => safeBack("go-live")}>
-            <Text style={styles.backPillText}>Zurück</Text>
+            <Text style={styles.backPillText}>Zur\u00fcck</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  /* ── Pre-Live Setup ── */
+  /* ---- Pre-Live Setup (host only) ---- */
   if (!isLive) {
     return (
       <View style={styles.fullScreen}>
-        {/* Camera preview */}
         {localStreamUrl && RTCView ? (
           <RTCView
             streamURL={localStreamUrl}
@@ -128,28 +167,27 @@ export default function GoLiveScreen() {
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
             <ActivityIndicator color={colors.white} size="large" />
-            <Text style={styles.cameraPlaceholderText}>Kamera wird geladen…</Text>
+            <Text style={styles.cameraPlaceholderText}>Kamera wird geladen\u2026</Text>
           </View>
         )}
 
-        {/* Gradient overlay */}
         <View style={styles.gradientOverlay} />
 
         <SafeAreaView style={styles.overlay}>
-          {/* Top bar */}
           <View style={styles.topBar}>
             <TouchableOpacity style={styles.closeBtn} onPress={() => { cleanup(); safeBack("go-live"); }}>
               <SymbolView name="xmark" size={18} tintColor={colors.white} />
             </TouchableOpacity>
           </View>
 
-          {/* Bottom setup */}
+          <View style={{ flex: 1 }} />
+
           <Animated.View entering={FadeInUp.duration(400)} style={styles.setupArea}>
             <Text style={styles.setupTitle}>Go Live</Text>
             <Text style={styles.setupSubtitle}>Gib deinem Livestream einen Titel</Text>
             <TextInput
               style={styles.titleInput}
-              placeholder="Worüber streamst du?"
+              placeholder="Wor\u00fcber streamst du?"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={title}
               onChangeText={setTitle}
@@ -177,22 +215,52 @@ export default function GoLiveScreen() {
     );
   }
 
-  /* ── Live Mode ── */
+  /* ---- Live Mode ---- */
+  const hasRemotePeer = !!remoteStreamUrl && peerConnected;
+
   return (
     <View style={styles.fullScreen}>
-      {/* Camera feed */}
-      {localStreamUrl && RTCView && !isVideoOff ? (
-        <RTCView
-          streamURL={localStreamUrl}
-          style={StyleSheet.absoluteFill}
-          objectFit="cover"
-          mirror
-          zOrder={0}
-        />
+      {/* Main video: local camera or split view */}
+      {hasRemotePeer ? (
+        /* Split screen: local top-right PiP, remote full */
+        <>
+          {RTCView && remoteStreamUrl && (
+            <RTCView
+              streamURL={remoteStreamUrl}
+              style={StyleSheet.absoluteFill}
+              objectFit="cover"
+              zOrder={0}
+            />
+          )}
+          {localStreamUrl && RTCView && !isVideoOff && (
+            <View style={styles.pipContainer}>
+              <RTCView
+                streamURL={localStreamUrl}
+                style={styles.pipVideo}
+                objectFit="cover"
+                mirror
+                zOrder={1}
+              />
+            </View>
+          )}
+        </>
       ) : (
-        <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
-          <SymbolView name="video.slash" size={48} tintColor={colors.gray500} />
-        </View>
+        /* Solo: local camera fullscreen */
+        <>
+          {localStreamUrl && RTCView && !isVideoOff ? (
+            <RTCView
+              streamURL={localStreamUrl}
+              style={StyleSheet.absoluteFill}
+              objectFit="cover"
+              mirror
+              zOrder={0}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
+              <SymbolView name="video.slash" size={48} tintColor={colors.gray500} />
+            </View>
+          )}
+        </>
       )}
 
       <View style={styles.gradientOverlay} />
@@ -209,15 +277,29 @@ export default function GoLiveScreen() {
               <SymbolView name="eye" size={12} tintColor={colors.white} />
               <Text style={styles.viewerBadgeText}>{stream?.viewerCount ?? 0}</Text>
             </View>
+            {stream && stream.participantCount > 0 && (
+              <View style={styles.participantBadge}>
+                <SymbolView name="person.2.fill" size={12} tintColor={colors.white} />
+                <Text style={styles.viewerBadgeText}>{stream.participantCount}</Text>
+              </View>
+            )}
             <View style={{ flex: 1 }} />
             <TouchableOpacity style={styles.endBtn} onPress={handleEndStream} activeOpacity={0.8}>
-              <Text style={styles.endBtnText}>Beenden</Text>
+              <Text style={styles.endBtnText}>{isCoHost ? "Verlassen" : "Beenden"}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Stream info */}
           <Animated.View entering={FadeIn.duration(300)} style={styles.streamInfo}>
-            <Text style={styles.streamTitle} numberOfLines={1}>{title}</Text>
+            <Text style={styles.streamTitle} numberOfLines={1}>
+              {stream?.title ?? title}
+            </Text>
+            {hasRemotePeer && stream?.coHostName && (
+              <View style={styles.coHostRow}>
+                <Avatar uri={stream.coHostAvatarUrl} name={stream.coHostName} size={20} />
+                <Text style={styles.coHostLabel}>{stream.coHostName} ist live dabei</Text>
+              </View>
+            )}
           </Animated.View>
 
           {/* Comments */}
@@ -241,7 +323,7 @@ export default function GoLiveScreen() {
           <View style={styles.commentInputRow}>
             <TextInput
               style={styles.commentInput}
-              placeholder="Kommentar…"
+              placeholder="Kommentar\u2026"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={commentText}
               onChangeText={setCommentText}
@@ -291,8 +373,6 @@ const styles = StyleSheet.create({
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "transparent",
-    // Bottom gradient for readability
-    borderBottomWidth: 0,
   },
   cameraPlaceholder: {
     backgroundColor: colors.gray900,
@@ -321,6 +401,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray800,
   },
   backPillText: { color: colors.white, fontSize: 15, fontWeight: "600" },
+
+  /* PiP (picture-in-picture for split view) */
+  pipContainer: {
+    position: "absolute",
+    top: 60,
+    right: 16,
+    width: 120,
+    height: 160,
+    borderRadius: radius.lg,
+    borderCurve: "continuous",
+    overflow: "hidden",
+    zIndex: 10,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+  },
+  pipVideo: {
+    width: "100%",
+    height: "100%",
+  },
 
   /* Top bar */
   topBar: {
@@ -369,6 +469,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.full,
   },
+  participantBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
   viewerBadgeText: {
     color: colors.white,
     fontSize: 12,
@@ -388,6 +497,7 @@ const styles = StyleSheet.create({
   streamInfo: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+    gap: 6,
   },
   streamTitle: {
     color: colors.white,
@@ -397,6 +507,16 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
+  },
+  coHostRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  coHostLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 13,
+    fontWeight: "500",
   },
 
   /* Setup area */

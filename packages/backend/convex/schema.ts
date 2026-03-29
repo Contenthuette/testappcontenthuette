@@ -429,8 +429,12 @@ export default defineSchema({
     hostId: v.id("users"),
     hostName: v.string(),
     hostAvatarUrl: v.optional(v.string()),
+    coHostId: v.optional(v.id("users")),
+    coHostName: v.optional(v.string()),
+    coHostAvatarUrl: v.optional(v.string()),
     title: v.string(),
     status: v.union(v.literal("live"), v.literal("ended")),
+    participantCount: v.number(),
     viewerCount: v.number(),
     peakViewerCount: v.number(),
     startedAt: v.number(),
@@ -438,7 +442,8 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_groupId_and_status", ["groupId", "status"])
-    .index("by_hostId", ["hostId"]),
+    .index("by_hostId", ["hostId"])
+    .index("by_coHostId", ["coHostId"]),
 
   livestreamViewers: defineTable({
     livestreamId: v.id("livestreams"),

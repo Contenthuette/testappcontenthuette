@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { rateLimiter } from "./rateLimit";
 
+const MAX_PARTICIPANTS = 2;
 const MAX_VIEWERS_PER_STREAM = 50;
 const COMMENTS_PAGE_SIZE = 40;
 const SIGNAL_FETCH_LIMIT = 100;
@@ -42,7 +43,11 @@ export const listActive = authQuery({
       hostId: v.id("users"),
       hostName: v.string(),
       hostAvatarUrl: v.optional(v.string()),
+      coHostId: v.optional(v.id("users")),
+      coHostName: v.optional(v.string()),
+      coHostAvatarUrl: v.optional(v.string()),
       title: v.string(),
+      participantCount: v.number(),
       viewerCount: v.number(),
       startedAt: v.number(),
     }),
@@ -61,7 +66,11 @@ export const listActive = authQuery({
       hostId: s.hostId,
       hostName: s.hostName,
       hostAvatarUrl: s.hostAvatarUrl,
+      coHostId: s.coHostId,
+      coHostName: s.coHostName,
+      coHostAvatarUrl: s.coHostAvatarUrl,
       title: s.title,
+      participantCount: s.participantCount,
       viewerCount: s.viewerCount,
       startedAt: s.startedAt,
     }));
@@ -79,8 +88,12 @@ export const getById = query({
       hostId: v.id("users"),
       hostName: v.string(),
       hostAvatarUrl: v.optional(v.string()),
+      coHostId: v.optional(v.id("users")),
+      coHostName: v.optional(v.string()),
+      coHostAvatarUrl: v.optional(v.string()),
       title: v.string(),
       status: v.union(v.literal("live"), v.literal("ended")),
+      participantCount: v.number(),
       viewerCount: v.number(),
       peakViewerCount: v.number(),
       startedAt: v.number(),
@@ -98,8 +111,12 @@ export const getById = query({
       hostId: stream.hostId,
       hostName: stream.hostName,
       hostAvatarUrl: stream.hostAvatarUrl,
+      coHostId: stream.coHostId,
+      coHostName: stream.coHostName,
+      coHostAvatarUrl: stream.coHostAvatarUrl,
       title: stream.title,
       status: stream.status,
+      participantCount: stream.participantCount,
       viewerCount: stream.viewerCount,
       peakViewerCount: stream.peakViewerCount,
       startedAt: stream.startedAt,
@@ -117,7 +134,11 @@ export const getActiveForGroup = query({
       hostId: v.id("users"),
       hostName: v.string(),
       hostAvatarUrl: v.optional(v.string()),
+      coHostId: v.optional(v.id("users")),
+      coHostName: v.optional(v.string()),
+      coHostAvatarUrl: v.optional(v.string()),
       title: v.string(),
+      participantCount: v.number(),
       viewerCount: v.number(),
       startedAt: v.number(),
     }),
@@ -136,7 +157,11 @@ export const getActiveForGroup = query({
       hostId: stream.hostId,
       hostName: stream.hostName,
       hostAvatarUrl: stream.hostAvatarUrl,
+      coHostId: stream.coHostId,
+      coHostName: stream.coHostName,
+      coHostAvatarUrl: stream.coHostAvatarUrl,
       title: stream.title,
+      participantCount: stream.participantCount,
       viewerCount: stream.viewerCount,
       startedAt: stream.startedAt,
     };
@@ -193,7 +218,6 @@ export const getComments = query({
       .order("desc")
       .take(COMMENTS_PAGE_SIZE);
 
-    // Return in chronological order (oldest first)
     return comments.reverse().map((c) => ({
       _id: c._id,
       userId: c.userId,
@@ -253,7 +277,6 @@ export const goLive = authMutation({
     const userId = await requireUserId(ctx);
     await rateLimiter.limit(ctx, "goLive", { key: userId });
 
-    // Verify group membership
     const membership = await ctx.db
       .query("groupMembers")
       .withIndex("by_groupId_and_userId", (q) =>
@@ -264,7 +287,6 @@ export const goLive = authMutation({
       throw new Error("Du musst Mitglied der Gruppe sein, um live zu gehen.");
     }
 
-    // Check no existing live stream in this group
     const existing = await ctx.db
       .query("livestreams")
       .withIndex("by_groupId_and_status", (q) =>
@@ -289,6 +311,7 @@ export const goLive = authMutation({
       hostAvatarUrl: user.avatarUrl,
       title: args.title,
       status: "live",
+      participantCount: 1,
       viewerCount: 0,
       peakViewerCount: 0,
       startedAt: Date.now(),
@@ -296,7 +319,87 @@ export const goLive = authMutation({
   },
 });
 
-/** End a livestream */
+/** Join a livestream as a live participant (max 2) */
+export const joinAsParticipant = authMutation({
+  args: { livestreamId: v.id("livestreams") },
+  returns: v.union(v.literal("joined"), v.literal("full")),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const stream = await ctx.db.get(args.livestreamId);
+    if (!stream) throw new Error("Livestream not found");
+    if (stream.status !== "live") throw new Error("Dieser Livestream ist beendet.");
+
+    // Already a participant?
+    if (stream.hostId === userId || stream.coHostId === userId) {
+      return "joined" as const;
+    }
+
+    // Check if slot is free
+    if (stream.participantCount >= MAX_PARTICIPANTS) {
+      return "full" as const;
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    await ctx.db.patch(args.livestreamId, {
+      coHostId: userId,
+      coHostName: user.name,
+      coHostAvatarUrl: user.avatarUrl,
+      participantCount: 2,
+    });
+
+    // Remove from viewers if they were watching
+    const viewerDoc = await ctx.db
+      .query("livestreamViewers")
+      .withIndex("by_livestreamId_and_userId", (q) =>
+        q.eq("livestreamId", args.livestreamId).eq("userId", userId),
+      )
+      .unique();
+    if (viewerDoc) {
+      await ctx.db.delete(viewerDoc._id);
+      await ctx.db.patch(args.livestreamId, {
+        viewerCount: Math.max(0, stream.viewerCount - 1),
+      });
+    }
+
+    return "joined" as const;
+  },
+});
+
+/** Leave the livestream as a participant (coHost leaves, stream continues) */
+export const leaveAsParticipant = authMutation({
+  args: { livestreamId: v.id("livestreams") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const stream = await ctx.db.get(args.livestreamId);
+    if (!stream || stream.status !== "live") return null;
+
+    if (stream.coHostId === userId) {
+      // CoHost leaves -> clear coHost slot
+      await ctx.db.patch(args.livestreamId, {
+        coHostId: undefined,
+        coHostName: undefined,
+        coHostAvatarUrl: undefined,
+        participantCount: 1,
+      });
+
+      // Clean up their signals
+      const sigs = await ctx.db
+        .query("livestreamSignaling")
+        .withIndex("by_livestreamId_and_recipientId", (q) =>
+          q.eq("livestreamId", args.livestreamId).eq("recipientId", userId),
+        )
+        .collect();
+      for (const s of sigs) await ctx.db.delete(s._id);
+    }
+
+    return null;
+  },
+});
+
+/** End a livestream (only host can end) */
 export const endStream = authMutation({
   args: { livestreamId: v.id("livestreams") },
   returns: v.null(),
@@ -310,6 +413,10 @@ export const endStream = authMutation({
     await ctx.db.patch(args.livestreamId, {
       status: "ended",
       endedAt: Date.now(),
+      coHostId: undefined,
+      coHostName: undefined,
+      coHostAvatarUrl: undefined,
+      participantCount: 0,
     });
 
     // Clean up viewers
@@ -317,9 +424,7 @@ export const endStream = authMutation({
       .query("livestreamViewers")
       .withIndex("by_livestreamId", (q) => q.eq("livestreamId", args.livestreamId))
       .collect();
-    for (const viewer of viewers) {
-      await ctx.db.delete(viewer._id);
-    }
+    for (const viewer of viewers) await ctx.db.delete(viewer._id);
 
     // Clean up signals
     const signals = await ctx.db
@@ -328,15 +433,13 @@ export const endStream = authMutation({
         q.eq("livestreamId", args.livestreamId),
       )
       .collect();
-    for (const signal of signals) {
-      await ctx.db.delete(signal._id);
-    }
+    for (const signal of signals) await ctx.db.delete(signal._id);
 
     return null;
   },
 });
 
-/** Join a livestream as a viewer */
+/** Join a livestream as a viewer (watch only) */
 export const joinStream = authMutation({
   args: { livestreamId: v.id("livestreams") },
   returns: v.null(),
@@ -346,10 +449,9 @@ export const joinStream = authMutation({
     if (!stream) throw new Error("Livestream not found");
     if (stream.status !== "live") throw new Error("Dieser Livestream ist beendet.");
 
-    // Don't add host as viewer
-    if (stream.hostId === userId) return null;
+    // Don't add participants as viewers
+    if (stream.hostId === userId || stream.coHostId === userId) return null;
 
-    // Check if already viewing
     const existing = await ctx.db
       .query("livestreamViewers")
       .withIndex("by_livestreamId_and_userId", (q) =>
@@ -383,7 +485,7 @@ export const joinStream = authMutation({
   },
 });
 
-/** Leave a livestream */
+/** Leave a livestream (viewer) */
 export const leaveStream = authMutation({
   args: { livestreamId: v.id("livestreams") },
   returns: v.null(),
@@ -397,9 +499,7 @@ export const leaveStream = authMutation({
         q.eq("livestreamId", args.livestreamId).eq("userId", userId),
       )
       .unique();
-    if (viewer) {
-      await ctx.db.delete(viewer._id);
-    }
+    if (viewer) await ctx.db.delete(viewer._id);
 
     if (stream && stream.status === "live" && viewer) {
       await ctx.db.patch(args.livestreamId, {
@@ -414,9 +514,7 @@ export const leaveStream = authMutation({
         q.eq("livestreamId", args.livestreamId).eq("recipientId", userId),
       )
       .collect();
-    for (const s of sigs) {
-      await ctx.db.delete(s._id);
-    }
+    for (const s of sigs) await ctx.db.delete(s._id);
 
     return null;
   },

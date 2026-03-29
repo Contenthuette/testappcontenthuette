@@ -62,7 +62,10 @@ function LiveNowSection() {
             title={s.title}
             hostName={s.hostName}
             hostAvatarUrl={s.hostAvatarUrl}
+            coHostName={s.coHostName}
+            coHostAvatarUrl={s.coHostAvatarUrl}
             groupName={s.groupName}
+            participantCount={s.participantCount}
             viewerCount={s.viewerCount}
           />
         ))}

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
+  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -24,10 +24,12 @@ export default function WatchStreamScreen() {
   const livestreamId = id as Id<"livestreams"> | undefined;
   const [commentText, setCommentText] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
+  const [isJoiningCall, setIsJoiningCall] = useState(false);
   const commentsRef = useRef<FlatList>(null);
 
   const joinStream = useMutation(api.livestreams.joinStream);
   const leaveStream = useMutation(api.livestreams.leaveStream);
+  const joinAsParticipant = useMutation(api.livestreams.joinAsParticipant);
   const sendComment = useMutation(api.livestreams.sendComment);
 
   const stream = useQuery(
@@ -57,7 +59,7 @@ export default function WatchStreamScreen() {
   }, [pulseOpacity]);
   const pulseDotStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
 
-  // Join on mount
+  // Join on mount as viewer
   useEffect(() => {
     if (!livestreamId || hasJoined) return;
     setHasJoined(true);
@@ -90,6 +92,34 @@ export default function WatchStreamScreen() {
     } catch { /* rate limited */ }
   }, [livestreamId, commentText, sendComment]);
 
+  const handleJoinCall = useCallback(async () => {
+    if (!livestreamId) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setIsJoiningCall(true);
+    try {
+      const result = await joinAsParticipant({ livestreamId });
+      if (result === "full") {
+        if (Platform.OS !== "web") {
+          Alert.alert(
+            "Livestream voll",
+            "Mehr als 2 Personen live sind derzeit nicht m\u00f6glich. Warte bis jemand den Call verl\u00e4sst.",
+          );
+        }
+        setIsJoiningCall(false);
+      } else {
+        // Joined! Leave as viewer, navigate to go-live as cohost
+        leaveStream({ livestreamId }).catch(() => {});
+        cleanup();
+        router.replace({
+          pathname: "/(main)/go-live",
+          params: { livestreamId, mode: "cohost" },
+        });
+      }
+    } catch {
+      setIsJoiningCall(false);
+    }
+  }, [livestreamId, joinAsParticipant, leaveStream, cleanup]);
+
   if (!livestreamId) return null;
 
   // Loading
@@ -114,12 +144,14 @@ export default function WatchStreamScreen() {
             {stream.peakViewerCount} Zuschauer insgesamt
           </Text>
           <TouchableOpacity style={styles.backPill} onPress={() => safeBack("watch-stream")}>
-            <Text style={styles.backPillText}>Zurück</Text>
+            <Text style={styles.backPillText}>Zur\u00fcck</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </View>
     );
   }
+
+  const canJoinCall = stream.participantCount < 2;
 
   return (
     <View style={styles.fullScreen}>
@@ -136,8 +168,15 @@ export default function WatchStreamScreen() {
           <View style={styles.hostInfo}>
             <Avatar uri={stream.hostAvatarUrl} name={stream.hostName} size={64} />
             <Text style={styles.hostName}>{stream.hostName}</Text>
+            {stream.coHostName && (
+              <View style={styles.coHostBadge}>
+                <Text style={styles.coHostBadgeText}>
+                  + {stream.coHostName}
+                </Text>
+              </View>
+            )}
             <Text style={styles.waitingText}>
-              {connectionState === "connected" ? "Verbunden" : "Verbinde mit Stream…"}
+              {connectionState === "connected" ? "Verbunden" : "Verbinde mit Stream\u2026"}
             </Text>
             {connectionState !== "connected" && (
               <ActivityIndicator color={colors.white} style={{ marginTop: 8 }} />
@@ -158,6 +197,12 @@ export default function WatchStreamScreen() {
               <SymbolView name="eye" size={12} tintColor={colors.white} />
               <Text style={styles.viewerBadgeText}>{stream.viewerCount}</Text>
             </View>
+            {stream.participantCount > 0 && (
+              <View style={styles.participantBadge}>
+                <SymbolView name="person.2.fill" size={12} tintColor={colors.white} />
+                <Text style={styles.viewerBadgeText}>{stream.participantCount}</Text>
+              </View>
+            )}
             <View style={{ flex: 1 }} />
             <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
               <SymbolView name="xmark" size={18} tintColor={colors.white} />
@@ -170,10 +215,34 @@ export default function WatchStreamScreen() {
             <View style={styles.streamHostRow}>
               <Avatar uri={stream.hostAvatarUrl} name={stream.hostName} size={24} />
               <Text style={styles.streamHostName}>{stream.hostName}</Text>
+              {stream.coHostName && (
+                <Text style={styles.coHostInline}>+ {stream.coHostName}</Text>
+              )}
             </View>
           </Animated.View>
 
           <View style={{ flex: 1 }} />
+
+          {/* Join Call button */}
+          {canJoinCall && (
+            <Animated.View entering={FadeInUp.duration(300)} style={styles.joinCallContainer}>
+              <TouchableOpacity
+                style={styles.joinCallBtn}
+                onPress={handleJoinCall}
+                disabled={isJoiningCall}
+                activeOpacity={0.8}
+              >
+                {isJoiningCall ? (
+                  <ActivityIndicator color={colors.black} size="small" />
+                ) : (
+                  <>
+                    <SymbolView name="video.fill" size={16} tintColor={colors.black} />
+                    <Text style={styles.joinCallText}>Live dazukommen</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
           {/* Comments */}
           <FlatList
@@ -195,7 +264,7 @@ export default function WatchStreamScreen() {
           <View style={styles.commentInputRow}>
             <TextInput
               style={styles.commentInput}
-              placeholder="Kommentar…"
+              placeholder="Kommentar\u2026"
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={commentText}
               onChangeText={setCommentText}
@@ -264,6 +333,24 @@ const styles = StyleSheet.create({
   },
   backPillText: { color: colors.white, fontSize: 15, fontWeight: "600" },
 
+  /* CoHost badge */
+  coHostBadge: {
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  coHostBadgeText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  coHostInline: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+
   /* Top bar */
   topBar: {
     flexDirection: "row",
@@ -299,6 +386,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  participantBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.full,
@@ -342,6 +438,27 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.8)",
     fontSize: 14,
     fontWeight: "600",
+  },
+
+  /* Join Call */
+  joinCallContainer: {
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  joinCallBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.white,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+  },
+  joinCallText: {
+    color: colors.black,
+    fontSize: 15,
+    fontWeight: "700",
   },
 
   /* Comments */

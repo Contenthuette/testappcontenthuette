@@ -15,7 +15,10 @@ interface LivestreamCardProps {
   title: string;
   hostName: string;
   hostAvatarUrl?: string;
+  coHostName?: string;
+  coHostAvatarUrl?: string;
   groupName: string;
+  participantCount: number;
   viewerCount: number;
 }
 
@@ -24,7 +27,9 @@ export function LivestreamCard({
   title,
   hostName,
   hostAvatarUrl,
+  coHostName,
   groupName,
+  participantCount,
   viewerCount,
 }: LivestreamCardProps) {
   const pulse = useSharedValue(1);
@@ -52,6 +57,10 @@ export function LivestreamCard({
           <Text style={styles.liveText}>LIVE</Text>
         </View>
         <View style={styles.viewerPill}>
+          <SymbolView name="person.2.fill" size={10} tintColor={colors.white} />
+          <Text style={styles.viewerText}>{participantCount}</Text>
+        </View>
+        <View style={styles.viewerPill}>
           <SymbolView name="eye" size={10} tintColor={colors.white} />
           <Text style={styles.viewerText}>{viewerCount}</Text>
         </View>
@@ -63,7 +72,9 @@ export function LivestreamCard({
       {/* Host info */}
       <View style={styles.hostRow}>
         <Avatar uri={hostAvatarUrl} name={hostName} size={22} />
-        <Text style={styles.hostName} numberOfLines={1}>{hostName}</Text>
+        <Text style={styles.hostName} numberOfLines={1}>
+          {hostName}{coHostName ? ` + ${coHostName}` : ""}
+        </Text>
       </View>
 
       {/* Group */}

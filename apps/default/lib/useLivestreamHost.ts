@@ -5,11 +5,12 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-/* ─── Conditional RTC import (native only) ─── */
+/* ---- Conditional RTC import (native only) ---- */
 interface RTCPeerConnectionLike {
   addTrack: (track: MediaTrackLike, stream: MediaStreamLike) => void;
   close: () => void;
   createOffer: (opts?: unknown) => Promise<unknown>;
+  createAnswer: () => Promise<unknown>;
   setLocalDescription: (desc: unknown) => Promise<void>;
   setRemoteDescription: (desc: unknown) => Promise<void>;
   addIceCandidate: (c: unknown) => Promise<void>;
@@ -77,30 +78,36 @@ interface UseLivestreamHostOptions {
   enabled: boolean;
 }
 
+/**
+ * Hook for a livestream participant (host or coHost).
+ * Captures local media and establishes a P2P connection with the other participant.
+ * Max 2 participants total.
+ */
 export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOptions) {
   const [localStreamUrl, setLocalStreamUrl] = useState<string | null>(null);
-  const [connectedPeers, setConnectedPeers] = useState(0);
+  const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [iceServers, setIceServers] = useState<Array<IceServerConfig>>(DEFAULT_ICE);
   const [iceReady, setIceReady] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
+  const [peerConnected, setPeerConnected] = useState(false);
 
   const localStreamRef = useRef<MediaStreamLike | null>(null);
-  const peerConnections = useRef<Map<string, RTCPeerConnectionLike>>(new Map());
-  const knownViewerIds = useRef<Set<string>>(new Set());
+  const pcRef = useRef<RTCPeerConnectionLike | null>(null);
+  const currentPeerId = useRef<string | null>(null);
   const processedSignalIds = useRef<Set<string>>(new Set());
-  const pendingCandidates = useRef<Map<string, Array<unknown>>>(new Map());
+  const pendingCandidates = useRef<Array<unknown>>([]);
+  const hasCreatedOffer = useRef(false);
   const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAckIds = useRef<Array<Id<"livestreamSignaling">>>([]);
-  const setupDone = useRef(false);
 
   const sendSignal = useMutation(api.livestreams.sendSignal);
   const ackSignals = useMutation(api.livestreams.ackSignals);
   const getIceServers = useAction(api.callActions.getIceServers);
 
-  const viewers = useQuery(
-    api.livestreams.getViewers,
+  const stream = useQuery(
+    api.livestreams.getById,
     livestreamId && enabled ? { livestreamId } : "skip",
   );
   const signals = useQuery(
@@ -108,7 +115,7 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     livestreamId && enabled && mediaReady ? { livestreamId } : "skip",
   );
 
-  /* ── Debounced ack ── */
+  /* -- Debounced ack -- */
   const flushAcks = useCallback(() => {
     if (pendingAckIds.current.length === 0) return;
     const ids = [...pendingAckIds.current];
@@ -125,7 +132,7 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     [flushAcks],
   );
 
-  /* ── Load ICE servers ── */
+  /* -- Load ICE servers -- */
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -141,7 +148,7 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     return () => { cancelled = true; };
   }, [enabled, getIceServers]);
 
-  /* ── Capture local media ── */
+  /* -- Capture local media -- */
   useEffect(() => {
     if (!enabled || !RTC || !iceReady) return;
     let cancelled = false;
@@ -149,13 +156,13 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
 
     (async () => {
       try {
-        const stream = await rtc.mediaDevices.getUserMedia({
+        const localStream = await rtc.mediaDevices.getUserMedia({
           audio: true,
           video: { facingMode: "user", width: 480, height: 640, frameRate: 24 },
         });
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        localStreamRef.current = stream;
-        setLocalStreamUrl(stream.toURL());
+        if (cancelled) { localStream.getTracks().forEach((t) => t.stop()); return; }
+        localStreamRef.current = localStream;
+        setLocalStreamUrl(localStream.toURL());
         setMediaReady(true);
       } catch (err) {
         console.error("[LiveHost] getUserMedia failed:", err);
@@ -173,81 +180,102 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
     };
   }, [enabled, iceReady]);
 
-  /* ── Manage viewer peer connections ── */
+  /* -- Create/manage peer connection to the other participant -- */
   useEffect(() => {
-    if (!viewers || !localStreamRef.current || !livestreamId || !RTC || !mediaReady) return;
+    if (!stream || !localStreamRef.current || !livestreamId || !RTC || !mediaReady) return;
     const rtc = RTC;
-    const stream = localStreamRef.current;
+    const localStream = localStreamRef.current;
 
-    const activeViewerIds = new Set(viewers.map((v_) => v_.userId));
+    // Determine peer: if I'm host, peer is coHost; if I'm coHost, peer is host
+    // We don't know "who am I" from this hook, so we react to coHost changes:
+    // The HOST creates an offer when coHost joins.
+    // The coHost waits for an offer via signals.
+    const coHostId = stream.coHostId;
+    const hostId = stream.hostId;
 
-    // Remove PCs for viewers who left
-    for (const [vid, pc] of peerConnections.current.entries()) {
-      if (!activeViewerIds.has(vid as Id<"users">)) {
-        pc.close();
-        peerConnections.current.delete(vid);
-        knownViewerIds.current.delete(vid);
-        pendingCandidates.current.delete(vid);
+    // If coHost left, tear down the connection
+    if (!coHostId) {
+      if (pcRef.current) {
+        pcRef.current.close();
+        pcRef.current = null;
+        currentPeerId.current = null;
+        hasCreatedOffer.current = false;
+        pendingCandidates.current = [];
+        setRemoteStreamUrl(null);
+        setPeerConnected(false);
       }
+      return;
     }
 
-    // Create PCs for new viewers
-    for (const viewer of viewers) {
-      const vid = viewer.userId;
-      if (knownViewerIds.current.has(vid)) continue;
-      knownViewerIds.current.add(vid);
+    // Peer already set up for this coHost
+    if (currentPeerId.current === coHostId) return;
 
-      const pc = new rtc.RTCPeerConnection({ iceServers });
-      peerConnections.current.set(vid, pc);
+    // Tear down old PC if peer changed
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+      processedSignalIds.current.clear();
+      pendingCandidates.current = [];
+      hasCreatedOffer.current = false;
+      setRemoteStreamUrl(null);
+      setPeerConnected(false);
+    }
 
-      // Add local tracks
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    currentPeerId.current = coHostId;
 
-      // ICE candidates → viewer
-      pc.onicecandidate = (e) => {
-        if (!e.candidate || !livestreamId) return;
-        sendSignal({
-          livestreamId,
-          recipientId: vid,
-          type: "ice-candidate",
-          payload: JSON.stringify(e.candidate),
-        }).catch(() => {});
-      };
+    const pc = new rtc.RTCPeerConnection({ iceServers });
+    pcRef.current = pc;
 
-      // Track connection state
-      pc.oniceconnectionstatechange = () => {
-        const state = pc.iceConnectionState;
-        if (state === "failed" || state === "closed") {
-          peerConnections.current.delete(vid);
-          knownViewerIds.current.delete(vid);
-        }
-        // Recount connected peers
-        let count = 0;
-        for (const [, p] of peerConnections.current) {
-          if (p.iceConnectionState === "connected" || p.iceConnectionState === "completed") count++;
-        }
-        setConnectedPeers(count);
-      };
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
-      // Create + send offer
+    pc.ontrack = (e) => {
+      if (e.streams?.[0]) setRemoteStreamUrl(e.streams[0].toURL());
+    };
+
+    pc.onicecandidate = (e) => {
+      if (!e.candidate || !livestreamId) return;
+      // Send to the other participant
+      const recipientId = coHostId;
+      sendSignal({
+        livestreamId,
+        recipientId,
+        type: "ice-candidate",
+        payload: JSON.stringify(e.candidate),
+      }).catch(() => {});
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      setPeerConnected(state === "connected" || state === "completed");
+      if (state === "failed" || state === "closed") {
+        setPeerConnected(false);
+      }
+    };
+
+    // HOST creates the offer to coHost
+    // Only the host should create the offer (lower ID creates offer to avoid collision)
+    // Simple rule: host always offers
+    if (!hasCreatedOffer.current) {
+      hasCreatedOffer.current = true;
       (async () => {
         try {
-          const offer = await pc.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: false });
+          const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
           await pc.setLocalDescription(offer);
           await sendSignal({
             livestreamId,
-            recipientId: vid,
+            recipientId: coHostId,
             type: "offer",
             payload: JSON.stringify(offer),
           });
         } catch (err) {
-          console.error("[LiveHost] Offer creation failed for viewer", vid, err);
+          console.error("[LiveHost] Offer creation failed:", err);
+          hasCreatedOffer.current = false;
         }
       })();
     }
-  }, [viewers, livestreamId, iceServers, sendSignal, mediaReady]);
+  }, [stream, livestreamId, iceServers, sendSignal, mediaReady]);
 
-  /* ── Process incoming signals (answers + ICE from viewers) ── */
+  /* -- Process incoming signals -- */
   useEffect(() => {
     if (!signals || !RTC) return;
     const rtc = RTC;
@@ -257,28 +285,42 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
         if (processedSignalIds.current.has(signal._id)) continue;
         processedSignalIds.current.add(signal._id);
 
-        const senderId = signal.senderId;
-        const pc = peerConnections.current.get(senderId);
+        const pc = pcRef.current;
 
         try {
-          if (signal.type === "answer" && pc) {
+          if (signal.type === "offer" && pc) {
             await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
-            // Drain pending ICE candidates
-            const pending = pendingCandidates.current.get(senderId) ?? [];
-            for (const c of pending) {
+            for (const c of pendingCandidates.current) {
               await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
             }
-            pendingCandidates.current.delete(senderId);
+            pendingCandidates.current = [];
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            if (livestreamId) {
+              await sendSignal({
+                livestreamId,
+                recipientId: signal.senderId,
+                type: "answer",
+                payload: JSON.stringify(answer),
+              });
+            }
           }
 
-          if (signal.type === "ice-candidate" && pc) {
+          if (signal.type === "answer" && pc) {
+            await pc.setRemoteDescription(new rtc.RTCSessionDescription(JSON.parse(signal.payload)));
+            for (const c of pendingCandidates.current) {
+              await pc.addIceCandidate(new rtc.RTCIceCandidate(c));
+            }
+            pendingCandidates.current = [];
+          }
+
+          if (signal.type === "ice-candidate") {
             const candidate = JSON.parse(signal.payload);
-            if (pc.remoteDescription) {
+            if (pc?.remoteDescription) {
               await pc.addIceCandidate(new rtc.RTCIceCandidate(candidate));
             } else {
-              const pending = pendingCandidates.current.get(senderId) ?? [];
-              pending.push(candidate);
-              pendingCandidates.current.set(senderId, pending);
+              pendingCandidates.current.push(candidate);
             }
           }
         } catch (err) {
@@ -288,29 +330,30 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
         scheduleAck(signal._id);
       }
     })();
-  }, [signals, scheduleAck]);
+  }, [signals, scheduleAck, livestreamId, sendSignal]);
 
-  /* ── Cleanup ── */
+  /* -- Cleanup -- */
   const cleanup = useCallback(() => {
     if (ackTimerRef.current) { clearTimeout(ackTimerRef.current); ackTimerRef.current = null; }
     flushAcks();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
-    for (const [, pc] of peerConnections.current) pc.close();
-    peerConnections.current.clear();
-    knownViewerIds.current.clear();
+    pcRef.current?.close();
+    pcRef.current = null;
+    currentPeerId.current = null;
     processedSignalIds.current.clear();
-    pendingCandidates.current.clear();
+    pendingCandidates.current = [];
     pendingAckIds.current = [];
-    setupDone.current = false;
+    hasCreatedOffer.current = false;
     setLocalStreamUrl(null);
-    setConnectedPeers(0);
+    setRemoteStreamUrl(null);
+    setPeerConnected(false);
     setMediaReady(false);
   }, [flushAcks]);
 
   useEffect(() => () => cleanup(), [cleanup]);
 
-  /* ── Controls ── */
+  /* -- Controls -- */
   const toggleMute = useCallback(() => {
     const track = localStreamRef.current?.getAudioTracks()?.[0];
     if (!track) return;
@@ -331,7 +374,8 @@ export function useLivestreamHost({ livestreamId, enabled }: UseLivestreamHostOp
 
   return {
     localStreamUrl,
-    connectedPeers,
+    remoteStreamUrl,
+    peerConnected,
     isMuted,
     isVideoOff,
     toggleMute,
