@@ -731,6 +731,28 @@ export const toggleEventBlur = authMutation({
   },
 });
 
+/* ── master toggle: hide/show all event info at once ─────── */
+export const toggleEventInfoHidden = authMutation({
+  args: { eventId: v.id("events") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const event = await ctx.db.get(args.eventId);
+    if (!event) throw new Error("Event nicht gefunden");
+    const isCurrentlyHidden = !!(event.blurDate || event.blurTime || event.blurVenue || event.blurCity || event.blurPrice || event.blurDescription);
+    const newVal = !isCurrentlyHidden;
+    await ctx.db.patch(args.eventId, {
+      blurDate: newVal,
+      blurTime: newVal,
+      blurVenue: newVal,
+      blurCity: newVal,
+      blurPrice: newVal,
+      blurDescription: newVal,
+    });
+    return null;
+  },
+});
+
 export const generateUploadUrl = authMutation({
   args: {},
   returns: v.string(),

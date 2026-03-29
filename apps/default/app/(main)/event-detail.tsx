@@ -13,9 +13,9 @@ import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import { EventVideoPlayer } from "@/components/EventVideoPlayer";
+import { RedactedBar } from "@/components/RedactedBar";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
-import { BlurView } from "expo-blur";
 
 function calcEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
@@ -24,43 +24,6 @@ function calcEndTime(startTime: string, durationMinutes: number): string {
   const endM = totalMin % 60;
   return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 }
-
-/** Replaces each character with a block to make text fully unreadable */
-function redactText(text: string): string {
-  return text.replace(/[^\s]/g, "\u2588");
-}
-
-function BlurredField({ children, isBlurred }: { children: React.ReactNode; isBlurred: boolean }) {
-  if (!isBlurred) return <>{children}</>;
-  return (
-    <View style={blurStyles.wrapper}>
-      {children}
-      <View style={blurStyles.fogLayer}>
-        <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
-        <View style={blurStyles.solidFog} />
-      </View>
-    </View>
-  );
-}
-
-const blurStyles = StyleSheet.create({
-  wrapper: {
-    position: "relative",
-    overflow: "hidden",
-    borderRadius: 10,
-    borderCurve: "continuous",
-  },
-  fogLayer: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 10,
-    borderCurve: "continuous",
-    overflow: "hidden",
-  },
-  solidFog: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(210, 210, 215, 0.75)",
-  },
-});
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -74,30 +37,17 @@ export default function EventDetailScreen() {
     );
   }
 
+  const isInfoHidden = !!(
+    event.blurDate || event.blurTime || event.blurVenue ||
+    event.blurCity || event.blurPrice || event.blurDescription
+  );
   const hasTicketLink = !!event.ticketUrl;
-  const blurDate = event.blurDate === true;
-  const blurTime = event.blurTime === true;
-  const blurVenue = event.blurVenue === true;
-  const blurCity = event.blurCity === true;
-  const blurPrice = event.blurPrice === true;
-  const blurDescription = event.blurDescription === true;
-  const blurDateOrTime = blurDate || blurTime;
 
   const handleTicket = async () => {
     if (!event.ticketUrl) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await WebBrowser.openBrowserAsync(event.ticketUrl);
   };
-
-  const dateText = blurDate ? redactText(event.date) : event.date;
-  const startTimeText = blurTime ? redactText(event.startTime + " Uhr") : event.startTime + " Uhr";
-  const endTimeText = blurTime
-    ? redactText(calcEndTime(event.startTime, event.durationMinutes) + " Uhr")
-    : calcEndTime(event.startTime, event.durationMinutes) + " Uhr";
-  const venueText = blurVenue ? redactText(event.venue) : event.venue;
-  const cityText = blurCity ? redactText(event.city) : event.city;
-  const priceText = blurPrice ? redactText(`€${event.ticketPrice.toFixed(2)}`) : `€${event.ticketPrice.toFixed(2)}`;
-  const descText = blurDescription && event.description ? redactText(event.description) : event.description;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -119,19 +69,35 @@ export default function EventDetailScreen() {
         <View style={styles.content}>
           <Text style={styles.eventName}>{event.name}</Text>
 
-          {/* Info rows */}
+          {/* Hidden-info notice */}
+          {isInfoHidden && (
+            <View style={styles.hiddenBadge}>
+              <SymbolView name="eye.slash" size={13} tintColor={colors.gray400} />
+              <Text style={styles.hiddenBadgeText}>Details werden bald bekannt gegeben</Text>
+            </View>
+          )}
+
+          {/* Info card */}
           <View style={styles.infoCard}>
             {/* Date / Time */}
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
                 <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
               </View>
-              <BlurredField isBlurred={blurDateOrTime}>
+              {isInfoHidden ? (
                 <View style={styles.infoTextWrap}>
-                  <Text style={styles.infoLabel}>{dateText}</Text>
-                  <Text style={styles.infoSub}>Start: {startTimeText} · Ende: {endTimeText}</Text>
+                  <RedactedBar width={110} height={14} />
+                  <View style={{ height: 5 }} />
+                  <RedactedBar width={170} height={11} />
                 </View>
-              </BlurredField>
+              ) : (
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>{event.date}</Text>
+                  <Text style={styles.infoSub}>
+                    Start: {event.startTime} Uhr · Ende: {calcEndTime(event.startTime, event.durationMinutes)} Uhr
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Venue / City */}
@@ -139,12 +105,18 @@ export default function EventDetailScreen() {
               <View style={styles.infoIcon}>
                 <SymbolView name="mappin.and.ellipse" size={18} tintColor={colors.gray500} />
               </View>
-              <BlurredField isBlurred={blurVenue || blurCity}>
+              {isInfoHidden ? (
                 <View style={styles.infoTextWrap}>
-                  <Text style={styles.infoLabel}>{venueText}</Text>
-                  <Text style={styles.infoSub}>{cityText}</Text>
+                  <RedactedBar width={130} height={14} />
+                  <View style={{ height: 5 }} />
+                  <RedactedBar width={80} height={11} />
                 </View>
-              </BlurredField>
+              ) : (
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>{event.venue}</Text>
+                  <Text style={styles.infoSub}>{event.city}</Text>
+                </View>
+              )}
             </View>
 
             {/* Price */}
@@ -153,12 +125,18 @@ export default function EventDetailScreen() {
                 <View style={styles.infoIcon}>
                   <SymbolView name="ticket" size={18} tintColor={colors.gray500} />
                 </View>
-                <BlurredField isBlurred={blurPrice}>
+                {isInfoHidden ? (
                   <View style={styles.infoTextWrap}>
-                    <Text style={styles.infoLabel}>{priceText}</Text>
+                    <RedactedBar width={70} height={14} />
+                    <View style={{ height: 5 }} />
+                    <RedactedBar width={90} height={11} />
+                  </View>
+                ) : (
+                  <View style={styles.infoTextWrap}>
+                    <Text style={styles.infoLabel}>€{event.ticketPrice.toFixed(2)}</Text>
                     <Text style={styles.infoSub}>Ticketpreis</Text>
                   </View>
-                </BlurredField>
+                )}
               </View>
             )}
           </View>
@@ -172,12 +150,16 @@ export default function EventDetailScreen() {
           )}
 
           {/* Description */}
-          {event.description && (
-            <BlurredField isBlurred={blurDescription}>
-              <View style={{ padding: blurDescription ? 8 : 0 }}>
-                <Text style={styles.desc}>{descText}</Text>
-              </View>
-            </BlurredField>
+          {event.description && !isInfoHidden && (
+            <Text style={styles.desc}>{event.description}</Text>
+          )}
+          {isInfoHidden && (
+            <View style={styles.redactedDesc}>
+              <RedactedBar width="90%" height={13} />
+              <RedactedBar width="72%" height={13} />
+              <RedactedBar width="83%" height={13} />
+              <RedactedBar width="55%" height={13} />
+            </View>
           )}
         </View>
       </ScrollView>
@@ -187,11 +169,13 @@ export default function EventDetailScreen() {
         <View style={styles.bottomBar}>
           <View>
             <Text style={styles.priceLabel}>Preis</Text>
-            <BlurredField isBlurred={blurPrice}>
-              <Text style={[styles.price, blurPrice && { paddingHorizontal: 4 }]}>
-                {priceText}
-              </Text>
-            </BlurredField>
+            {isInfoHidden ? (
+              <View style={{ marginTop: 4 }}>
+                <RedactedBar width={60} height={20} />
+              </View>
+            ) : (
+              <Text style={styles.price}>€{event.ticketPrice.toFixed(2)}</Text>
+            )}
           </View>
           <TouchableOpacity
             style={styles.buyBtn}
@@ -233,7 +217,28 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.black,
     letterSpacing: -0.4,
+    marginBottom: spacing.md,
+  },
+
+  hiddenBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.gray50,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+    alignSelf: "flex-start",
     marginBottom: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  hiddenBadgeText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.gray400,
+    letterSpacing: -0.1,
   },
 
   infoCard: {
@@ -267,6 +272,11 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: 15, fontWeight: "600", color: colors.black },
   infoSub: { fontSize: 13, color: colors.gray500, marginTop: 1 },
+
+  redactedDesc: {
+    gap: 8,
+    marginTop: spacing.sm,
+  },
 
   desc: { fontSize: 15, color: colors.gray600, lineHeight: 23, letterSpacing: -0.1 },
 

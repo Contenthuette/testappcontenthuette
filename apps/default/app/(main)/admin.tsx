@@ -19,7 +19,6 @@ import { SymbolView } from "@/components/Icon";
 import { MiniLineChart, MiniBarChart, RevenueRow } from "@/components/admin/MiniChart";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConvexAuth } from "convex/react";
-import { Switch } from "react-native";
 
 const ABO_PRICE = "5,99";
 
@@ -27,7 +26,6 @@ const ABO_PRICE = "5,99";
 interface DayStats { label: string; photos: number; videos: number }
 interface GrowthDay { label: string; count: number }
 
-type BlurField = "blurDate" | "blurTime" | "blurVenue" | "blurCity" | "blurPrice" | "blurDescription";
 interface AdminEvent {
   _id: Id<"events">;
   name: string;
@@ -105,23 +103,16 @@ function EventRow({
   onToggle,
   onEdit,
   onDelete,
-  onBlurToggle,
+  onToggleHidden,
 }: {
   event: AdminEvent;
   expanded: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onBlurToggle: (field: BlurField, value: boolean) => void;
+  onToggleHidden: () => void;
 }) {
-  const blurFields: Array<{ field: BlurField; label: string }> = [
-    { field: "blurDate", label: "Datum" },
-    { field: "blurTime", label: "Uhrzeit" },
-    { field: "blurVenue", label: "Veranstaltungsort" },
-    { field: "blurCity", label: "Stadt" },
-    { field: "blurPrice", label: "Preis" },
-    { field: "blurDescription", label: "Beschreibung" },
-  ];
+  const isHidden = !!(event.blurDate || event.blurTime || event.blurVenue || event.blurCity || event.blurPrice || event.blurDescription);
 
   return (
     <View style={styles.eventCard}>
@@ -132,6 +123,11 @@ function EventRow({
             {event.date} \u00b7 {event.city}
           </Text>
         </View>
+        {isHidden && (
+          <View style={styles.hiddenIndicator}>
+            <SymbolView name="eye.slash" size={11} tintColor={colors.gray400} />
+          </View>
+        )}
         <View style={styles.eventBadge}>
           <Text style={styles.eventBadgeText}>
             {event.status === "active" ? "Live" : "Entwurf"}
@@ -151,6 +147,15 @@ function EventRow({
               <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
               <Text style={styles.eventActionText}>Bearbeiten</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onToggleHidden}
+              style={[styles.eventActionBtn, isHidden && styles.eventHiddenActiveBtn]}
+            >
+              <SymbolView name={isHidden ? "eye" : "eye.slash"} size={13} tintColor={isHidden ? colors.white : colors.gray600} />
+              <Text style={[styles.eventActionText, isHidden && { color: colors.white }]}>
+                {isHidden ? "Infos einblenden" : "Infos verbergen"}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={onDelete} style={[styles.eventActionBtn, styles.eventDeleteBtn]}>
               <SymbolView name="trash" size={13} tintColor={colors.danger} />
               <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
@@ -160,25 +165,6 @@ function EventRow({
           <Text style={styles.eventInfoRow}>
             Preis: {event.ticketPrice.toFixed(2)} {event.currency}
           </Text>
-
-          {/* Blur toggles */}
-          <View style={styles.blurSection}>
-            <View style={styles.blurHeader}>
-              <SymbolView name="eye.slash" size={13} tintColor={colors.gray500} />
-              <Text style={styles.blurTitle}>Daten verbergen</Text>
-            </View>
-            {blurFields.map(({ field, label }) => (
-              <View key={field} style={styles.blurRow}>
-                <Text style={styles.blurLabel}>{label}</Text>
-                <Switch
-                  value={!!event[field]}
-                  onValueChange={(val) => onBlurToggle(field, val)}
-                  trackColor={{ false: colors.gray200, true: colors.black }}
-                  thumbColor={colors.white}
-                />
-              </View>
-            ))}
-          </View>
         </View>
       )}
     </View>
@@ -191,7 +177,7 @@ export default function AdminDashboard() {
   const stats = useQuery(api.admin.getAdminDashboard, isAuthenticated ? {} : "skip");
   const events = useQuery(api.admin.listEventsAdmin, isAuthenticated ? {} : "skip");
   const deleteEvent = useMutation(api.admin.deleteEvent);
-  const toggleEventBlur = useMutation(api.admin.toggleEventBlur);
+  const toggleEventInfoHidden = useMutation(api.admin.toggleEventInfoHidden);
   const refreshAnalyticsSnapshot = useMutation(api.admin.refreshAnalyticsSnapshot);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
@@ -569,8 +555,8 @@ export default function AdminDashboard() {
                 onToggle={() => setExpandedId((prev: Id<"events"> | null) => (prev === ev._id ? null : ev._id))}
                 onEdit={() => router.push(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
-                onBlurToggle={(field, value) => {
-                  toggleEventBlur({ eventId: ev._id, field, value }).catch(() => {});
+                onToggleHidden={() => {
+                  toggleEventInfoHidden({ eventId: ev._id }).catch(() => {});
                 }}
               />
             ))
@@ -877,6 +863,18 @@ const styles = StyleSheet.create({
   },
   eventDeleteBtn: { backgroundColor: "rgba(239,68,68,0.06)" },
   eventActionText: { fontSize: 13, fontWeight: "500", color: colors.gray600 },
+  eventHiddenActiveBtn: {
+    backgroundColor: colors.black,
+  },
+  hiddenIndicator: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
+  },
   eventInfoRow: { fontSize: 13, color: colors.gray600, marginBottom: spacing.md },
 
   emptyEvents: {

@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 import { Image } from "expo-image";
+import { RedactedBar } from "@/components/RedactedBar";
 
 function calcEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
@@ -33,6 +34,8 @@ export default function EventsScreen() {
   });
 
   const renderEvent = ({ item }: { item: NonNullable<typeof events>[number] }) => {
+    const isHidden = item.isInfoHidden === true;
+
     return (
       <TouchableOpacity
         style={styles.card}
@@ -47,19 +50,32 @@ export default function EventsScreen() {
               <SymbolView name="sparkles" size={32} tintColor={colors.gray300} />
             </View>
           )}
-          <View style={styles.priceBadge}>
-            <Text style={styles.priceText}>€{item.ticketPrice.toFixed(0)}</Text>
-          </View>
+          {!isHidden && (
+            <View style={styles.priceBadge}>
+              <Text style={styles.priceText}>€{item.ticketPrice.toFixed(0)}</Text>
+            </View>
+          )}
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardName} numberOfLines={2}>{item.name}</Text>
           <View style={styles.infoRow}>
             <SymbolView name="mappin" size={13} tintColor={colors.gray400} />
-            <Text style={styles.infoText}>{item.venue}, {item.city}</Text>
+            {isHidden ? (
+              <View style={styles.redactedInline}>
+                <RedactedBar width={70} height={12} />
+                <RedactedBar width={50} height={12} />
+              </View>
+            ) : (
+              <Text style={styles.infoText}>{item.venue}, {item.city}</Text>
+            )}
           </View>
           <View style={styles.infoRow}>
             <SymbolView name="calendar" size={13} tintColor={colors.gray400} />
-            <Text style={styles.infoText}>{item.date} · {item.startTime} - {calcEndTime(item.startTime, item.durationMinutes)} Uhr</Text>
+            {isHidden ? (
+              <RedactedBar width={140} height={12} />
+            ) : (
+              <Text style={styles.infoText}>{item.date} · {item.startTime} - {calcEndTime(item.startTime, item.durationMinutes)} Uhr</Text>
+            )}
           </View>
           <View style={styles.cardFooter}>
             <Text style={styles.ticketCount}>
@@ -173,6 +189,7 @@ const styles = StyleSheet.create({
   },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
   infoText: { fontSize: 14, color: colors.gray500, letterSpacing: -0.1, flex: 1 },
+  redactedInline: { flexDirection: "row", gap: 6, flex: 1, alignItems: "center" },
   cardFooter: { marginTop: spacing.sm },
   ticketCount: { fontSize: 13, fontWeight: "600", color: colors.black },
 });

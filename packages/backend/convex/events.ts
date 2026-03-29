@@ -31,6 +31,7 @@ const eventListItemValidator = v.object({
     v.literal("canceled"),
   ),
   createdAt: v.number(),
+  isInfoHidden: v.boolean(),
 });
 
 async function getMyUserId(ctx: AuthCtx): Promise<Id<"users"> | null> {
@@ -88,6 +89,7 @@ export const list = authQuery({
           currency: event.currency,
           status: event.status,
           createdAt: event.createdAt,
+          isInfoHidden: !!(event.blurDate || event.blurTime || event.blurVenue || event.blurCity || event.blurPrice || event.blurDescription),
         })),
       ),
     };
