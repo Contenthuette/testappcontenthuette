@@ -18,6 +18,8 @@ interface VideoPlayerProps {
   contentFit?: "cover" | "contain";
   /** Thumbnail shown until the first video frame renders — eliminates black flash */
   posterUri?: string;
+  /** External pause control — parent can toggle playback */
+  paused?: boolean;
 }
 
 export function VideoPlayer({
@@ -32,6 +34,7 @@ export function VideoPlayer({
   borderRadius = 0,
   contentFit = "cover",
   posterUri,
+  paused = false,
 }: VideoPlayerProps) {
   const isFocused = useIsFocused();
   const appStateRef = useRef(AppState.currentState);
@@ -59,7 +62,7 @@ export function VideoPlayer({
   }, []);
 
   // Master visibility: screen focused + prop visible + app active
-  const shouldPlay = isFocused && isVisible && appActive;
+  const shouldPlay = isFocused && isVisible && appActive && !paused;
 
   useEffect(() => {
     if (shouldPlay && autoPlay) {
@@ -115,18 +118,6 @@ export function VideoPlayer({
     return () => clearInterval(interval);
   }, [player, hideControls]);
 
-  const handlePressIn = useCallback(() => {
-    if (hideControls) {
-      player.pause();
-    }
-  }, [player, hideControls]);
-
-  const handlePressOut = useCallback(() => {
-    if (hideControls && shouldPlay) {
-      player.play();
-    }
-  }, [player, hideControls, shouldPlay]);
-
   const handleBarLayout = useCallback((e: LayoutChangeEvent) => {
     barWidthRef.current = e.nativeEvent.layout.width;
   }, []);
@@ -153,11 +144,7 @@ export function VideoPlayer({
   return (
     <View style={containerStyle}>
       {hideControls ? (
-        <Pressable
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          style={StyleSheet.absoluteFill}
-        >
+        <View style={StyleSheet.absoluteFill}>
           <VideoView
             player={player}
             style={styles.video}
@@ -165,7 +152,7 @@ export function VideoPlayer({
             nativeControls={false}
             onFirstFrameRender={handleFirstFrameRender}
           />
-        </Pressable>
+        </View>
       ) : (
         <Pressable onPress={handleTapToPlay} style={StyleSheet.absoluteFill}>
           <VideoView

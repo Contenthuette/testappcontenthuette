@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, memo } from "react";
+import React, { useCallback, useRef, useState, memo, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   useWindowDimensions, ActivityIndicator, Platform,
@@ -93,13 +93,38 @@ const ReelPost = memo(function ReelPost({
   onToggleLike, onToggleSave, onShare, onDelete, onComment,
 }: ReelPostProps) {
   const [showHeart, setShowHeart] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
+  const pauseIconOpacity = useSharedValue(0);
+  const pauseIconScale = useSharedValue(0);
   const lastTapRef = useRef(0);
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleDoubleTap = useCallback(() => {
+  // Reset pause when video becomes non-visible (scrolled away)
+  useEffect(() => {
+    if (!isVideoPlaying) setIsPaused(false);
+  }, [isVideoPlaying]);
+
+  const showPausePlayIcon = useCallback((_pausing: boolean) => {
+    pauseIconScale.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withDelay(600, withTiming(0, { duration: 250 })),
+    );
+    pauseIconOpacity.value = withSequence(
+      withTiming(0.9, { duration: 100 }),
+      withDelay(600, withTiming(0, { duration: 250 })),
+    );
+  }, [pauseIconScale, pauseIconOpacity]);
+
+  const handleTap = useCallback(() => {
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
+      // Double tap → like
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
       if (!item.isLiked) onToggleLike(item._id);
       if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setShowHeart(true);
@@ -115,12 +140,30 @@ const ReelPost = memo(function ReelPost({
       lastTapRef.current = 0;
     } else {
       lastTapRef.current = now;
+      // Wait to see if it's a double tap
+      singleTapTimerRef.current = setTimeout(() => {
+        singleTapTimerRef.current = null;
+        // Single tap → toggle pause (only for videos)
+        if (item.type === "video" && isVideoPlaying) {
+          setIsPaused((prev) => {
+            const next = !prev;
+            showPausePlayIcon(next);
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            return next;
+          });
+        }
+      }, 300);
     }
-  }, [item._id, item.isLiked, onToggleLike, heartScale, heartOpacity]);
+  }, [item._id, item.isLiked, item.type, isVideoPlaying, onToggleLike, heartScale, heartOpacity, showPausePlayIcon]);
 
   const heartAnim = useAnimatedStyle(() => ({
     transform: [{ scale: heartScale.value }],
     opacity: heartOpacity.value,
+  }));
+
+  const pauseIconAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: pauseIconScale.value }],
+    opacity: pauseIconOpacity.value,
   }));
 
   const handleMore = useCallback(() => {
@@ -148,7 +191,7 @@ const ReelPost = memo(function ReelPost({
       {/* Fullscreen media */}
       <TouchableOpacity
         activeOpacity={1}
-        onPress={handleDoubleTap}
+        onPress={handleTap}
         style={StyleSheet.absoluteFill}
       >
         {item.mediaUrl ? (
@@ -163,6 +206,7 @@ const ReelPost = memo(function ReelPost({
                 hideControls
                 isVisible
                 posterUri={thumbUri}
+                paused={isPaused}
               />
             ) : (
               <View style={StyleSheet.absoluteFill}>
@@ -207,6 +251,17 @@ const ReelPost = memo(function ReelPost({
           <SymbolView name="heart.fill" size={90} tintColor="#fff" />
         </Animated.View>
       )}
+
+      {/* Tap-to-pause/play icon */}
+      <Animated.View style={[styles.heartOverlay, pauseIconAnim]} pointerEvents="none">
+        <View style={styles.pausePlayCircle}>
+          <SymbolView
+            name={isPaused ? "play.fill" : "pause.fill"}
+            size={32}
+            tintColor="#fff"
+          />
+        </View>
+      </Animated.View>
 
       {/* Bottom gradient for readability */}
       <LinearGradient
@@ -596,6 +651,14 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pausePlayCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "center",
     alignItems: "center",
   },
