@@ -419,7 +419,7 @@ export default function FeedLoopScreen() {
           <TouchableOpacity onPress={() => safeBack("feed-loop")} style={styles.backBtn}>
             <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
-          <Text style={styles.loopTitle}>Beitr\u00e4ge</Text>
+          <Text style={styles.loopTitle}>Feed</Text>
         </View>
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={colors.gray300} />
@@ -435,7 +435,7 @@ export default function FeedLoopScreen() {
         <TouchableOpacity onPress={() => safeBack("feed-loop")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.loopTitle}>Beitr\u00e4ge</Text>
+        <Text style={styles.loopTitle}>Feed</Text>
       </View>
 
       <FlatList

@@ -171,6 +171,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "pause.fill": Pause,
   qrcode: QrCode,
   "square.grid.3x3": Grid3X3,
+  "rectangle.grid.3x2": Grid3X3,
 
   // People
   "person.circle": UserCircle,
