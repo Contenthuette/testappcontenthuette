@@ -42,12 +42,11 @@ import { useVideoPlayer, VideoView } from "expo-video";
 type PostType = "photo" | "video";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
-  photo: { title: "Foto posten", pickLabel: "Foto auswählen", icon: "photo" },
-  video: { title: "Video posten", pickLabel: "Video auswählen", icon: "video" },
+  photo: { title: "Foto posten", pickLabel: "Foto ausw\u00e4hlen", icon: "photo" },
+  video: { title: "Video posten", pickLabel: "Video ausw\u00e4hlen", icon: "video" },
 };
 
-// 9:16 portrait container (Reels-style)
-const FEED_ASPECT_RATIO = 9 / 16;
+const PHONE_WIDTH_RATIO = 0.48; // phone mockup = 48% of screen width
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
@@ -55,7 +54,7 @@ export default function CreatePostScreen() {
   const config = typeConfig[postType];
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
 
   const createPost = useMutation(api.posts.create);
   const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
@@ -81,11 +80,11 @@ export default function CreatePostScreen() {
   // MV Locations
   const MV_LOCATIONS = [
     "Rostock", "Schwerin", "Neubrandenburg", "Stralsund", "Greifswald",
-    "Wismar", "Guestrow", "Waren (Mueritz)", "Anklam", "Bergen auf Ruegen",
+    "Wismar", "G\u00fcstrow", "Waren (M\u00fcritz)", "Anklam", "Bergen auf R\u00fcgen",
     "Bad Doberan", "Parchim", "Demmin", "Ribnitz-Damgarten", "Pasewalk",
     "Wolgast", "Sassnitz", "Barth", "Teterow", "Malchin",
-    "Ludwigslust", "Hagenow", "Boizenburg", "Ueckermuende",
-    "Landkreis Rostock", "Landkreis Vorpommern-Ruegen",
+    "Ludwigslust", "Hagenow", "Boizenburg", "Ueckerm\u00fcnde",
+    "Landkreis Rostock", "Landkreis Vorpommern-R\u00fcgen",
     "Landkreis Nordwestmecklenburg", "Landkreis Mecklenburgische Seenplatte",
     "Landkreis Vorpommern-Greifswald", "Landkreis Ludwigslust-Parchim",
   ];
@@ -94,19 +93,31 @@ export default function CreatePostScreen() {
     ? MV_LOCATIONS.filter((l) => l.toLowerCase().includes(locationSearch.toLowerCase()))
     : MV_LOCATIONS;
 
-  // Crop state (stored as JS values for saving)
+  // Crop state for photos
   const [cropState, setCropState] = useState({ x: 0, y: 0, zoom: 1 });
 
-  // For videos, we extract a frame to use as the crop preview
-  const [_videoFrameUri, setVideoFrameUri] = useState<string | null>(null);
+  // Phone mockup dimensions
+  const phoneWidth = screenWidth * PHONE_WIDTH_RATIO;
+  const phoneHeight = phoneWidth * (16 / 9);
 
-  // Video player for live preview
-  const videoPlayer = useVideoPlayer(postType === "video" && mediaPreview ? mediaPreview : null, (player) => {
-    player.loop = true;
-    player.muted = true;
-  });
+  // Full-width preview for photo crop
+  const fullPreviewWidth = screenWidth - spacing.lg * 2;
+  const fullPreviewHeight = fullPreviewWidth * (16 / 9);
 
-  // Sync video player when media changes
+  // Media dimensions for photo crop
+  const mediaAspectRatio = mediaDims ? mediaDims.width / mediaDims.height : 1;
+  const baseMediaHeight = fullPreviewWidth / mediaAspectRatio;
+  const baseMediaWidth = fullPreviewWidth;
+
+  // Video player with SOUND
+  const videoPlayer = useVideoPlayer(
+    postType === "video" && mediaPreview ? mediaPreview : null,
+    (player) => {
+      player.loop = true;
+      player.muted = false;
+    },
+  );
+
   useEffect(() => {
     if (postType === "video" && mediaPreview && videoPlayer) {
       videoPlayer.replace(mediaPreview);
@@ -114,15 +125,7 @@ export default function CreatePostScreen() {
     }
   }, [mediaPreview, postType, videoPlayer]);
 
-  const previewWidth = width - spacing.lg * 2;
-  const containerHeight = previewWidth / FEED_ASPECT_RATIO; // 4:3 landscape
-
-  // Media dimensions at base scale (fitting width)
-  const mediaAspectRatio = mediaDims ? mediaDims.width / mediaDims.height : 1;
-  const baseMediaHeight = previewWidth / mediaAspectRatio;
-  const baseMediaWidth = previewWidth;
-
-  // --- Gesture values ---
+  // --- Photo crop gesture values ---
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
@@ -134,23 +137,19 @@ export default function CreatePostScreen() {
     (tx: number, ty: number, s: number) => {
       const scaledW = baseMediaWidth * s;
       const scaledH = baseMediaHeight * s;
-      const overflowX = Math.max(0, scaledW - previewWidth);
-      const overflowY = Math.max(0, scaledH - containerHeight);
-
-      // Convert pixel offset to normalized 0..1 (0.5 = centered)
+      const overflowX = Math.max(0, scaledW - fullPreviewWidth);
+      const overflowY = Math.max(0, scaledH - fullPreviewHeight);
       const normX = overflowX > 0 ? 0.5 - tx / overflowX : 0.5;
       const normY = overflowY > 0 ? 0.5 - ty / overflowY : 0.5;
-
       setCropState({
         x: Math.max(0, Math.min(1, normX)),
         y: Math.max(0, Math.min(1, normY)),
         zoom: s,
       });
     },
-    [baseMediaWidth, baseMediaHeight, previewWidth, containerHeight],
+    [baseMediaWidth, baseMediaHeight, fullPreviewWidth, fullPreviewHeight],
   );
 
-  // Pan gesture - direct drag, no long-press needed
   const panGesture = Gesture.Pan()
     .onStart(() => {
       savedTranslateX.value = translateX.value;
@@ -159,12 +158,10 @@ export default function CreatePostScreen() {
     .onUpdate((e) => {
       const newX = savedTranslateX.value + e.translationX;
       const newY = savedTranslateY.value + e.translationY;
-
       const scaledW = baseMediaWidth * scale.value;
       const scaledH = baseMediaHeight * scale.value;
-      const overflowX = Math.max(0, scaledW - previewWidth);
-      const overflowY = Math.max(0, scaledH - containerHeight);
-
+      const overflowX = Math.max(0, scaledW - fullPreviewWidth);
+      const overflowY = Math.max(0, scaledH - fullPreviewHeight);
       translateX.value = Math.max(-overflowX / 2, Math.min(overflowX / 2, newX));
       translateY.value = Math.max(-overflowY / 2, Math.min(overflowY / 2, newY));
     })
@@ -172,20 +169,15 @@ export default function CreatePostScreen() {
       runOnJS(syncCropState)(translateX.value, translateY.value, scale.value);
     });
 
-  // Pinch gesture - 2-finger zoom
   const pinchGesture = Gesture.Pinch()
-    .onStart(() => {
-      savedScale.value = scale.value;
-    })
+    .onStart(() => { savedScale.value = scale.value; })
     .onUpdate((e) => {
       const newScale = Math.max(1, Math.min(4, savedScale.value * e.scale));
       scale.value = newScale;
-
-      // Re-clamp translation during zoom
       const scaledW = baseMediaWidth * newScale;
       const scaledH = baseMediaHeight * newScale;
-      const overflowX = Math.max(0, scaledW - previewWidth);
-      const overflowY = Math.max(0, scaledH - containerHeight);
+      const overflowX = Math.max(0, scaledW - fullPreviewWidth);
+      const overflowY = Math.max(0, scaledH - fullPreviewHeight);
       translateX.value = Math.max(-overflowX / 2, Math.min(overflowX / 2, translateX.value));
       translateY.value = Math.max(-overflowY / 2, Math.min(overflowY / 2, translateY.value));
     })
@@ -200,19 +192,15 @@ export default function CreatePostScreen() {
       }
     });
 
-  // Compose: pan + pinch simultaneously
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  // Animated style for media inside the 4:3 container
-  const animatedMediaStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { scale: scale.value },
-      ],
-    };
-  });
+  const animatedMediaStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   useEffect(() => {
     const timeout = setTimeout(() => handlePick(), 400);
@@ -244,16 +232,10 @@ export default function CreatePostScreen() {
         resetCrop();
         setThumbnailUri(null);
         setThumbnailIsCustom(false);
-        setVideoFrameUri(null);
 
-        // Extract a frame for video crop preview
         if (postType === "video") {
           try {
-            const { uri: frameUri } = await VideoThumbnails.getThumbnailAsync(result.uri, {
-              time: 0,
-              quality: 0.8,
-            });
-            setVideoFrameUri(frameUri);
+            await VideoThumbnails.getThumbnailAsync(result.uri, { time: 0, quality: 0.8 });
           } catch (e) {
             console.warn("Failed to extract video frame:", e);
           }
@@ -283,11 +265,9 @@ export default function CreatePostScreen() {
     if (!mediaFile) return;
     setPublishing(true);
     try {
-      // Upload main media
       const uploadUrl = await generateUploadUrl();
       const storageId = await uploadToConvex(uploadUrl, mediaFile.uri, mediaFile.mimeType);
 
-      // Upload thumbnail if selected
       let thumbStorageId: string | undefined;
       if (thumbnailUri && postType === "video") {
         try {
@@ -326,7 +306,7 @@ export default function CreatePostScreen() {
       console.error("Post creation failed:", error);
       setPublishing(false);
       if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Beitrag konnte nicht veröffenlicht werden.");
+        Alert.alert("Fehler", "Beitrag konnte nicht ver\u00f6ffentlicht werden.");
       }
     }
   };
@@ -337,89 +317,84 @@ export default function CreatePostScreen() {
         <View style={styles.successBadge}>
           <Icon name="checkmark.circle.fill" size={48} tintColor={colors.success} />
         </View>
-        <Text style={styles.successTitle}>Veröffenlicht!</Text>
+        <Text style={styles.successTitle}>Ver\u00f6ffentlicht!</Text>
         <Text style={styles.successSub}>Dein Beitrag ist jetzt im Feed sichtbar.</Text>
       </View>
     );
   }
 
-  const _isCropped = true;
   const needsCrop = mediaDims
-    ? baseMediaHeight > containerHeight || baseMediaWidth > previewWidth
+    ? baseMediaHeight > fullPreviewHeight || baseMediaWidth > fullPreviewWidth
     : false;
 
-  const renderCropPreview = () => {
-    if (!mediaPreview || !mediaDims) return null;
+  // ─── VIDEO PREVIEW: Phone mockup with playing video ───
+  const renderVideoPreview = () => {
+    if (!mediaPreview) return null;
+    return (
+      <View style={styles.phoneSection}>
+        {/* Labels above phone */}
+        <Text style={styles.phoneSectionLabel}>Vorschau</Text>
 
-    // Video: show live video player
-    if (postType === "video") {
-      return (
-        <View>
-          <View
-            style={[
-              styles.cropContainer,
-              {
-                width: previewWidth,
-                height: containerHeight,
-              },
-            ]}
-          >
-            <VideoView
-              player={videoPlayer}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              nativeControls={false}
-            />
-            {/* 9:16 label badge */}
-            <View style={styles.aspectBadge} pointerEvents="none">
-              <Text style={styles.aspectBadgeText}>9:16</Text>
-            </View>
-          </View>
-
-          <Text style={styles.cropHint}>
-            So wird dein Video im Feed angezeigt
-          </Text>
-
-          {/* Thumbnail picker for videos */}
-          <ThumbnailPicker
-            videoUri={mediaPreview}
-            videoDuration={videoDuration}
-            onThumbnailSelected={handleThumbnailSelected}
-            selectedThumbnailUri={thumbnailUri}
+        {/* Phone mockup */}
+        <View
+          style={[
+            styles.phoneMockup,
+            { width: phoneWidth, height: phoneHeight },
+          ]}
+        >
+          <VideoView
+            player={videoPlayer}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls={false}
           />
 
-          {/* Change video button */}
-          <TouchableOpacity
-            style={styles.changeBtn}
-            onPress={handlePick}
-            disabled={picking || publishing}
-            activeOpacity={0.7}
-          >
-            {picking ? (
-              <ActivityIndicator size="small" color={colors.black} />
-            ) : (
-              <>
-                <Icon name="arrow.triangle.2.circlepath" size={16} tintColor={colors.black} />
-                <Text style={styles.changeBtnText}>Anderes Video</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* "Titelbild bearbeiten" overlay at bottom */}
+          <View style={styles.phoneOverlayBottom}>
+            <View style={styles.phoneOverlayBadge}>
+              <Text style={styles.phoneOverlayText}>Titelbild bearbeiten</Text>
+            </View>
+          </View>
         </View>
-      );
-    }
 
-    // Photo: show crop preview with gestures
+        {/* Thumbnail picker */}
+        <ThumbnailPicker
+          videoUri={mediaPreview}
+          videoDuration={videoDuration}
+          onThumbnailSelected={handleThumbnailSelected}
+          selectedThumbnailUri={thumbnailUri}
+        />
+
+        {/* Change video */}
+        <TouchableOpacity
+          style={styles.changeBtn}
+          onPress={handlePick}
+          disabled={picking || publishing}
+          activeOpacity={0.7}
+        >
+          {picking ? (
+            <ActivityIndicator size="small" color={colors.black} />
+          ) : (
+            <>
+              <Icon name="arrow.triangle.2.circlepath" size={16} tintColor={colors.black} />
+              <Text style={styles.changeBtnText}>Anderes Video</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  // ─── PHOTO PREVIEW: Full-width crop ───
+  const renderPhotoPreview = () => {
+    if (!mediaPreview || !mediaDims) return null;
     return (
       <View>
-        {/* Fixed 9:16 crop container */}
         <GestureDetector gesture={composedGesture}>
           <Animated.View
             style={[
               styles.cropContainer,
-              {
-                width: previewWidth,
-                height: containerHeight,
-              },
+              { width: fullPreviewWidth, height: fullPreviewHeight },
             ]}
           >
             <Animated.View
@@ -428,8 +403,8 @@ export default function CreatePostScreen() {
                   width: baseMediaWidth,
                   height: baseMediaHeight,
                   position: "absolute",
-                  left: (previewWidth - baseMediaWidth) / 2,
-                  top: (containerHeight - baseMediaHeight) / 2,
+                  left: (fullPreviewWidth - baseMediaWidth) / 2,
+                  top: (fullPreviewHeight - baseMediaHeight) / 2,
                 },
                 animatedMediaStyle,
               ]}
@@ -441,7 +416,6 @@ export default function CreatePostScreen() {
               />
             </Animated.View>
 
-            {/* Drag hint overlay */}
             {needsCrop && (
               <View style={styles.dragOverlay} pointerEvents="none">
                 <View style={styles.dragHandleTop}>
@@ -451,7 +425,6 @@ export default function CreatePostScreen() {
               </View>
             )}
 
-            {/* 9:16 label badge */}
             <View style={styles.aspectBadge} pointerEvents="none">
               <Text style={styles.aspectBadgeText}>9:16</Text>
             </View>
@@ -461,10 +434,9 @@ export default function CreatePostScreen() {
         <Text style={styles.cropHint}>
           {needsCrop
             ? "Verschiebe das Bild mit 1 Finger, zoome mit 2 Fingern"
-            : "Dein Medium passt perfekt ins 9:16 Format"}
+            : "Dein Foto passt perfekt ins 9:16 Format"}
         </Text>
 
-        {/* Change photo button */}
         <TouchableOpacity
           style={styles.changeBtn}
           onPress={handlePick}
@@ -484,26 +456,46 @@ export default function CreatePostScreen() {
     );
   };
 
+  // ─── EMPTY STATE ───
+  const renderEmpty = () => (
+    <TouchableOpacity
+      style={styles.mediaArea}
+      onPress={handlePick}
+      disabled={picking || publishing}
+      activeOpacity={0.7}
+    >
+      {picking ? (
+        <View style={styles.emptyMedia}>
+          <ActivityIndicator size="large" color={colors.gray400} />
+          <Text style={styles.emptyLabel}>\u00d6ffne Galerie...</Text>
+        </View>
+      ) : (
+        <View style={styles.emptyMedia}>
+          <Icon name={config.icon} size={40} tintColor={colors.gray400} />
+          <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
+          <Text style={styles.emptyHint}>Tippe hier, um Medien auszuw\u00e4hlen</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity onPress={() => {
-            if (mediaPreview && mediaDims) {
-              // If media is selected, go back to picker instead of leaving
-              setMediaPreview(null);
-              setMediaFile(null);
-              setMediaDims(null);
-              setThumbnailUri(null);
-              setVideoFrameUri(null);
-              setTimeout(() => handlePick(), 300);
-            } else {
+          <TouchableOpacity
+            onPress={() => {
+              if (videoPlayer) {
+                try { videoPlayer.pause(); } catch {}
+              }
               safeBack("create-post");
-            }
-          }} style={styles.headerBtn}>
+            }}
+            style={styles.headerBtn}
+          >
             <Icon name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{config.title}</Text>
@@ -525,37 +517,20 @@ export default function CreatePostScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Media Preview */}
           {mediaPreview && mediaDims ? (
-            renderCropPreview()
+            postType === "video" ? renderVideoPreview() : renderPhotoPreview()
           ) : (
-            <TouchableOpacity
-              style={styles.mediaArea}
-              onPress={handlePick}
-              disabled={picking || publishing}
-              activeOpacity={0.7}
-            >
-              {picking ? (
-                <View style={styles.emptyMedia}>
-                  <ActivityIndicator size="large" color={colors.gray400} />
-                  <Text style={styles.emptyLabel}>Öffne Galerie...</Text>
-                </View>
-              ) : (
-                <View style={styles.emptyMedia}>
-                  <Icon name={config.icon} size={40} tintColor={colors.gray400} />
-                  <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
-                  <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwählen</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            renderEmpty()
           )}
 
-          <View style={styles.captionSection}>
-            <Text style={styles.sectionLabel}>Beschreibung</Text>
+          {/* Caption */}
+          <View style={styles.section}>
             <TextInput
               style={styles.captionInput}
               value={caption}
               onChangeText={setCaption}
-              placeholder="Schreibe etwas zu deinem Beitrag..."
+              placeholder="Bildunterschrift hinzuf\u00fcgen ..."
               placeholderTextColor={colors.gray400}
               multiline
               maxLength={500}
@@ -563,30 +538,29 @@ export default function CreatePostScreen() {
             />
           </View>
 
-          {/* Location Picker */}
-          <View style={styles.captionSection}>
-            <Text style={styles.sectionLabel}>Standort</Text>
-            <Pressable
-              style={styles.locationButton}
-              onPress={() => setShowLocationPicker(true)}
-            >
-              <Icon name="mappin.circle.fill" size={20} tintColor={location ? colors.black : colors.gray400} />
-              <Text style={[styles.locationButtonText, !location && { color: colors.gray400 }]}>
-                {location ?? "Standort hinzuf\u00fcgen"}
-              </Text>
-              {location && (
-                <Pressable
-                  onPress={() => setLocation(null)}
-                  hitSlop={12}
-                  style={styles.locationClear}
-                >
-                  <Icon name="xmark.circle.fill" size={16} tintColor={colors.gray400} />
-                </Pressable>
-              )}
-            </Pressable>
-          </View>
+          {/* Location */}
+          <Pressable
+            style={styles.optionRow}
+            onPress={() => setShowLocationPicker(true)}
+          >
+            <Icon name="mappin.circle.fill" size={22} tintColor={location ? colors.black : colors.gray400} />
+            <Text style={[styles.optionText, !location && { color: colors.gray400 }]}>
+              {location ?? "Standort hinzuf\u00fcgen"}
+            </Text>
+            {location ? (
+              <Pressable
+                onPress={() => setLocation(null)}
+                hitSlop={12}
+                style={styles.optionClear}
+              >
+                <Icon name="xmark.circle.fill" size={16} tintColor={colors.gray400} />
+              </Pressable>
+            ) : (
+              <Icon name="chevron.right" size={16} tintColor={colors.gray300} />
+            )}
+          </Pressable>
 
-          {/* Location Picker Modal */}
+          {/* Location Modal */}
           <Modal
             visible={showLocationPicker}
             animationType="slide"
@@ -607,19 +581,20 @@ export default function CreatePostScreen() {
                 onChangeText={setLocationSearch}
                 autoFocus
               />
-              {locationSearch.trim().length > 0 && !MV_LOCATIONS.some((l) => l.toLowerCase() === locationSearch.toLowerCase()) && (
-                <Pressable
-                  style={styles.locationCustomRow}
-                  onPress={() => {
-                    setLocation(locationSearch.trim());
-                    setShowLocationPicker(false);
-                    setLocationSearch("");
-                  }}
-                >
-                  <Icon name="plus.circle.fill" size={20} tintColor={colors.black} />
-                  <Text style={styles.locationCustomText}>"{locationSearch.trim()}" verwenden</Text>
-                </Pressable>
-              )}
+              {locationSearch.trim().length > 0 &&
+                !MV_LOCATIONS.some((l) => l.toLowerCase() === locationSearch.toLowerCase()) && (
+                  <Pressable
+                    style={styles.locationCustomRow}
+                    onPress={() => {
+                      setLocation(locationSearch.trim());
+                      setShowLocationPicker(false);
+                      setLocationSearch("");
+                    }}
+                  >
+                    <Icon name="plus.circle.fill" size={20} tintColor={colors.black} />
+                    <Text style={styles.locationCustomText}>"{locationSearch.trim()}" verwenden</Text>
+                  </Pressable>
+                )}
               <ScrollView style={{ flex: 1 }}>
                 {filteredLocations.map((loc) => (
                   <Pressable
@@ -638,7 +613,6 @@ export default function CreatePostScreen() {
               </ScrollView>
             </View>
           </Modal>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </GestureHandlerRootView>
@@ -653,7 +627,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
   },
   headerBtn: {
@@ -676,39 +650,61 @@ const styles = StyleSheet.create({
   publishBtnDisabled: { backgroundColor: colors.gray300 },
   publishBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
-  scrollContent: { padding: spacing.lg, gap: spacing.lg },
+  scrollContent: { paddingVertical: spacing.lg, gap: 0 },
 
-  // Empty state
-  mediaArea: {
-    borderRadius: radius.md,
-    overflow: "hidden",
-    backgroundColor: colors.gray100,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderStyle: "dashed",
-    minHeight: 260,
-  },
-  emptyMedia: {
+  // ─── Phone mockup section (video) ───
+  phoneSection: {
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    gap: 10,
+    gap: 16,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  emptyLabel: { fontSize: 16, fontWeight: "600", color: colors.gray500 },
-  emptyHint: { fontSize: 13, color: colors.gray400 },
+  phoneSectionLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.gray400,
+    letterSpacing: 0.3,
+  },
+  phoneMockup: {
+    borderRadius: 28,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    borderCurve: "continuous",
+    boxShadow: "0px 8px 32px rgba(0,0,0,0.15)",
+  },
+  phoneOverlayBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    paddingBottom: 16,
+  },
+  phoneOverlayBadge: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backdropFilter: "blur(10px)",
+  },
+  phoneOverlayText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#fff",
+  },
 
-  // Crop container - fixed 4:3
+  // ─── Photo crop ───
   cropContainer: {
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#000",
     borderCurve: "continuous",
+    alignSelf: "center",
   },
   dragOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    pointerEvents: "none",
   },
   dragHandleTop: {
     flexDirection: "row",
@@ -743,42 +739,77 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     textAlign: "center",
     marginTop: 8,
+    paddingHorizontal: spacing.lg,
   },
 
-  // Change button
+  // ─── Change button ───
   changeBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginTop: 12,
     paddingVertical: 10,
+    paddingHorizontal: 20,
     backgroundColor: colors.gray100,
-    borderRadius: radius.sm,
+    borderRadius: 20,
+    borderCurve: "continuous",
+    alignSelf: "center",
   },
   changeBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
 
-  // Caption
-  captionSection: { gap: 8 },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.gray500,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  // ─── Empty state ───
+  mediaArea: {
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderStyle: "dashed",
+    minHeight: 260,
+    marginHorizontal: spacing.lg,
+  },
+  emptyMedia: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 10,
+  },
+  emptyLabel: { fontSize: 16, fontWeight: "600", color: colors.gray500 },
+  emptyHint: { fontSize: 13, color: colors.gray400 },
+
+  // ─── Caption ───
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: 4,
   },
   captionInput: {
-    backgroundColor: colors.gray100,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
     fontSize: 16,
     color: colors.black,
-    minHeight: 100,
-    textAlignVertical: "top",
+    minHeight: 48,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
   },
 
-  // Success
+  // ─── Option row (location etc) ───
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 16,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  optionText: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.black,
+    fontWeight: "500",
+  },
+  optionClear: { padding: 4 },
+
+  // ─── Success ───
   successWrap: {
     flex: 1,
     backgroundColor: colors.white,
@@ -790,25 +821,7 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 22, fontWeight: "700", color: colors.black },
   successSub: { fontSize: 15, color: colors.gray500 },
 
-  // Location picker
-  locationButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.gray100,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    gap: 10,
-  },
-  locationButtonText: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.black,
-    fontWeight: "500",
-  },
-  locationClear: {
-    padding: 4,
-  },
+  // ─── Location modal ───
   locationModal: {
     flex: 1,
     backgroundColor: colors.white,
