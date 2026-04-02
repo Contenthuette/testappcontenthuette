@@ -4,11 +4,11 @@ import {
   useWindowDimensions, ActivityIndicator, Platform,
   ViewToken, Alert, ActionSheetIOS,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { usePaginatedQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing, radius } from "@/lib/theme";
+import { colors, spacing } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
@@ -18,21 +18,11 @@ import { ShareSheet } from "@/components/ShareSheet";
 import { safeBack } from "@/lib/navigation";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming,
   withDelay, runOnJS,
 } from "react-native-reanimated";
-
-// Dynamic aspect ratios per content type (like Instagram)
-function getMediaHeight(item: FeedItem, screenWidth: number): number {
-  if (item.type === "video") {
-    // 9:16 for video posts (Reels-style)
-    return screenWidth * (16 / 9);
-  }
-  // 4:5 for photos (Instagram standard)
-  const ar = item.mediaAspectRatio ?? 4 / 5;
-  return screenWidth / ar;
-}
 
 interface FeedItem {
   _id: Id<"posts">;
@@ -60,6 +50,12 @@ interface FeedItem {
 }
 
 // ── Helpers ────────────────────────────────────────
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(".", ",")} Mio.`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(".", ",")} Tsd.`;
+  return String(n);
+}
+
 function formatTime(ts: number): string {
   const diff = Date.now() - ts;
   const min = Math.floor(diff / 60000);
@@ -72,50 +68,37 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
 }
 
-function getCropTransform(item: FeedItem, screenWidth: number, mediaHeight: number) {
-  const zoom = item.cropZoom ?? 1;
-  const mediaAR = item.mediaAspectRatio ?? 9 / 16;
-  const scaledW = screenWidth * zoom;
-  const scaledH = (screenWidth / mediaAR) * zoom;
-  const overflowX = Math.max(0, scaledW - screenWidth);
-  const overflowY = Math.max(0, scaledH - mediaHeight);
-  const tX = (0.5 - (item.cropOffsetX ?? 0.5)) * overflowX;
-  const tY = (0.5 - (item.cropOffsetY ?? 0.5)) * overflowY;
-  return { translateX: tX, translateY: tY, scale: zoom };
-}
-
 function getImagePosition(item: FeedItem) {
   const yOffset = item.cropOffsetY ?? 0.5;
   const xOffset = item.cropOffsetX ?? 0.5;
   return { top: `${yOffset * 100}%` as const, left: `${xOffset * 100}%` as const };
 }
 
-// ── Loop Post ────────────────────────────────────
-interface LoopPostProps {
+// ── Fullscreen Reel Post ────────────────────────────
+interface ReelPostProps {
   item: FeedItem;
   screenWidth: number;
+  screenHeight: number;
   isVideoPlaying: boolean;
+  bottomInset: number;
   onToggleLike: (postId: Id<"posts">) => void;
   onToggleSave: (postId: Id<"posts">) => void;
   onShare: (postId: Id<"posts">) => void;
   onDelete: (postId: Id<"posts">) => void;
 }
 
-const LoopPost = memo(function LoopPost({
-  item, screenWidth, isVideoPlaying,
+const ReelPost = memo(function ReelPost({
+  item, screenWidth, screenHeight, isVideoPlaying, bottomInset,
   onToggleLike, onToggleSave, onShare, onDelete,
-}: LoopPostProps) {
+}: ReelPostProps) {
   const [showHeart, setShowHeart] = useState(false);
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
   const lastTapRef = useRef(0);
 
-  const feedMediaHeight = getMediaHeight(item, screenWidth);
-
   const handleDoubleTap = useCallback(() => {
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
-      // Double tap!
       if (!item.isLiked) onToggleLike(item._id);
       if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setShowHeart(true);
@@ -139,196 +122,191 @@ const LoopPost = memo(function LoopPost({
     opacity: heartOpacity.value,
   }));
 
-  // Announcement
-  if (item.isAnnouncement) {
-    return (
-      <View style={styles.announcementCard}>
-        <View style={styles.announcementHeader}>
-          <Text style={styles.announcementTitle}>Z Announcement</Text>
-        </View>
-        {item.mediaUrl && (
-          <Image
-            source={{ uri: item.mediaUrl }}
-            style={{ width: screenWidth, height: 200 }}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={0}
-          />
-        )}
-        {item.caption && <Text style={styles.announcementText}>{item.caption}</Text>}
-      </View>
-    );
-  }
+  const handleMore = useCallback(() => {
+    if (Platform.OS === "ios") {
+      const options = item.isOwn
+        ? ["Abbrechen", "Beitrag l\u00f6schen"]
+        : ["Abbrechen"];
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: item.isOwn ? 1 : undefined, cancelButtonIndex: 0 },
+        (idx) => { if (idx === 1 && item.isOwn) onDelete(item._id); },
+      );
+    } else if (item.isOwn) {
+      Alert.alert("Beitrag l\u00f6schen?", "Unwiderruflich.", [
+        { text: "Abbrechen", style: "cancel" },
+        { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
+      ]);
+    }
+  }, [item._id, item.isOwn, onDelete]);
 
   const isVideo = item.type === "video";
-  const isOriginal = item.aspectMode === "original";
   const thumbUri = item.thumbnailUrl;
 
-  const renderMedia = () => {
-    if (!item.mediaUrl) return null;
-
-    if (isVideo) {
-      const crop = getCropTransform(item, screenWidth, getMediaHeight(item, screenWidth));
-      const mediaAR = item.mediaAspectRatio ?? 9 / 16;
-      const nativeHeight = screenWidth / mediaAR;
-
-      if (isOriginal) {
-        return (
-          <View style={[styles.mediaOriginal, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
-            {isVideoPlaying ? (
-              <VideoPlayer uri={item.mediaUrl} height={getMediaHeight(item, screenWidth)} width={screenWidth} autoPlay loop hideControls isVisible contentFit="contain" posterUri={thumbUri} />
+  return (
+    <View style={[styles.reelContainer, { width: screenWidth, height: screenHeight }]}>
+      {/* Fullscreen media */}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={handleDoubleTap}
+        style={StyleSheet.absoluteFill}
+      >
+        {item.mediaUrl ? (
+          isVideo ? (
+            isVideoPlaying ? (
+              <VideoPlayer
+                uri={item.mediaUrl}
+                height={screenHeight}
+                width={screenWidth}
+                autoPlay
+                loop
+                hideControls
+                isVisible
+                posterUri={thumbUri}
+              />
             ) : (
-              <View style={{ width: screenWidth, height: getMediaHeight(item, screenWidth), justifyContent: "center", alignItems: "center" }}>
+              <View style={StyleSheet.absoluteFill}>
                 {thumbUri ? (
-                  <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: getMediaHeight(item, screenWidth) }} contentFit="contain" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lot"} />
+                  <Image
+                    source={{ uri: thumbUri }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={0}
+                    recyclingKey={item._id + "-reel-t"}
+                  />
                 ) : (
-                  <View style={{ width: screenWidth, height: getMediaHeight(item, screenWidth), backgroundColor: "#111" }} />
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
                 )}
                 <View style={styles.playOverlay}>
                   <View style={styles.playCircle}>
-                    <SymbolView name="play.fill" size={22} tintColor="#fff" />
+                    <SymbolView name="play.fill" size={28} tintColor="#fff" />
                   </View>
                 </View>
               </View>
-            )}
-          </View>
-        );
-      }
-
-      return (
-        <View style={[styles.mediaCropped, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
-          {isVideoPlaying ? (
-            <View style={{ transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
-              <VideoPlayer uri={item.mediaUrl} height={nativeHeight} width={screenWidth} autoPlay loop hideControls isVisible posterUri={thumbUri} />
-            </View>
+            )
           ) : (
-            <View>
-              {thumbUri ? (
-                <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: getMediaHeight(item, screenWidth) }} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lct"} />
-              ) : (
-                <View style={{ width: screenWidth, height: getMediaHeight(item, screenWidth), backgroundColor: "#111" }} />
-              )}
-              <View style={styles.playOverlay}>
-                <View style={styles.playCircle}>
-                  <SymbolView name="play.fill" size={22} tintColor="#fff" />
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-      );
-    }
-
-    // Photo
-    if (isOriginal) {
-      return (
-        <View style={[styles.mediaOriginal, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
-          <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: getMediaHeight(item, screenWidth) }} contentFit="contain" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lo"} />
-        </View>
-      );
-    }
-
-    const hasZoom = (item.cropZoom ?? 1) > 1.05;
-    if (hasZoom) {
-      const crop = getCropTransform(item, screenWidth, getMediaHeight(item, screenWidth));
-      const mediaAR = item.mediaAspectRatio ?? 3 / 4;
-      const photoH = screenWidth / mediaAR;
-      return (
-        <View style={[styles.mediaCropped, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
-          <View style={{ width: screenWidth, height: photoH, transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
-            <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: photoH }} contentFit="cover" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lz"} />
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <Image source={{ uri: item.mediaUrl }} style={[styles.postImage, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lc"} />
-    );
-  };
-
-  return (
-    <View style={styles.postCard}>
-      {/* Author row */}
-      <TouchableOpacity
-        style={styles.postHeader}
-        onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
-        activeOpacity={0.7}
-      >
-        <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={38} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.postAuthor}>{item.authorName}</Text>
-          <Text style={styles.postTime}>{formatTime(item.createdAt)}</Text>
-        </View>
-        <TouchableOpacity
-          hitSlop={12}
-          onPress={() => {
-            if (!item.isOwn) return;
-            if (Platform.OS === "ios") {
-              ActionSheetIOS.showActionSheetWithOptions(
-                { options: ["Abbrechen", "Beitrag l\u00f6schen"], destructiveButtonIndex: 1, cancelButtonIndex: 0 },
-                (idx) => { if (idx === 1) onDelete(item._id); },
-              );
-            } else {
-              Alert.alert("Beitrag l\u00f6schen?", "Unwiderruflich.", [
-                { text: "Abbrechen", style: "cancel" },
-                { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
-              ]);
-            }
-          }}
-        >
-          <SymbolView name="ellipsis" size={18} tintColor={colors.black} />
-        </TouchableOpacity>
-      </TouchableOpacity>
-
-      {item.location && (
-        <View style={styles.locationBadge}>
-          <SymbolView name="mappin" size={12} tintColor={colors.gray500} />
-          <Text style={styles.locationText}>{item.location}</Text>
-        </View>
-      )}
-
-      {/* Media with double-tap */}
-      <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap}>
-        {renderMedia()}
-        {showHeart && (
-          <Animated.View style={[styles.heartOverlay, heartAnim]} pointerEvents="none">
-            <SymbolView name="heart.fill" size={80} tintColor="#fff" />
-          </Animated.View>
+            <Image
+              source={{ uri: item.mediaUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              contentPosition={getImagePosition(item)}
+              cachePolicy="memory-disk"
+              transition={0}
+              recyclingKey={item._id + "-reel"}
+            />
+          )
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
         )}
       </TouchableOpacity>
 
-      {/* Actions */}
-      <View style={styles.postActions}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => onToggleLike(item._id)} hitSlop={8}>
-          <SymbolView name={item.isLiked ? "heart.fill" : "heart"} size={24} tintColor={item.isLiked ? colors.danger : colors.black} />
+      {/* Double-tap heart */}
+      {showHeart && (
+        <Animated.View style={[styles.heartOverlay, heartAnim]} pointerEvents="none">
+          <SymbolView name="heart.fill" size={90} tintColor="#fff" />
+        </Animated.View>
+      )}
+
+      {/* Bottom gradient for readability */}
+      <LinearGradient
+        colors={["transparent", "rgba(0,0,0,0.6)"]}
+        style={styles.bottomGradient}
+        pointerEvents="none"
+      />
+
+      {/* Right side action buttons */}
+      <View style={[styles.actionColumn, { bottom: 100 + bottomInset }]}>
+        {/* Like */}
+        <TouchableOpacity
+          style={styles.actionItem}
+          onPress={() => {
+            onToggleLike(item._id);
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          hitSlop={8}
+        >
+          <SymbolView
+            name={item.isLiked ? "heart.fill" : "heart"}
+            size={28}
+            tintColor={item.isLiked ? "#ff3b5c" : "#fff"}
+          />
+          {item.likeCount > 0 && (
+            <Text style={styles.actionCount}>{formatCount(item.likeCount)}</Text>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })} hitSlop={8}>
-          <SymbolView name="bubble.right" size={24} tintColor={colors.black} />
+
+        {/* Comment */}
+        <TouchableOpacity
+          style={styles.actionItem}
+          onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}
+          hitSlop={8}
+        >
+          <SymbolView name="bubble.right" size={28} tintColor="#fff" />
+          {item.commentCount > 0 && (
+            <Text style={styles.actionCount}>{formatCount(item.commentCount)}</Text>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => onShare(item._id)}>
-          <SymbolView name="paperplane.fill" size={24} tintColor={colors.black} />
+
+        {/* Share */}
+        <TouchableOpacity
+          style={styles.actionItem}
+          onPress={() => onShare(item._id)}
+          hitSlop={8}
+        >
+          <SymbolView name="paperplane" size={28} tintColor="#fff" />
         </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => onToggleSave(item._id)} hitSlop={8}>
-          <SymbolView name={item.isSaved ? "bookmark.fill" : "bookmark"} size={24} tintColor={colors.black} />
+
+        {/* Save */}
+        <TouchableOpacity
+          style={styles.actionItem}
+          onPress={() => {
+            onToggleSave(item._id);
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          hitSlop={8}
+        >
+          <SymbolView
+            name={item.isSaved ? "bookmark.fill" : "bookmark"}
+            size={28}
+            tintColor="#fff"
+          />
+        </TouchableOpacity>
+
+        {/* More */}
+        <TouchableOpacity
+          style={styles.actionItem}
+          onPress={handleMore}
+          hitSlop={8}
+        >
+          <SymbolView name="ellipsis" size={24} tintColor="#fff" />
         </TouchableOpacity>
       </View>
 
-      {item.likeCount > 0 && (
-        <Text style={styles.likeCount}>{item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}</Text>
-      )}
-      {item.caption ? (
-        <Text style={styles.captionRow}>
-          <Text style={styles.captionAuthor}>{item.authorName} </Text>
-          <Text style={styles.captionText}>{item.caption}</Text>
-        </Text>
-      ) : null}
-      {item.commentCount > 0 && (
-        <TouchableOpacity onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}>
-          <Text style={styles.viewComments}>Alle {item.commentCount} Kommentare ansehen</Text>
+      {/* Bottom left: author + caption */}
+      <View style={[styles.bottomInfo, { bottom: 16 + bottomInset }]}>
+        <TouchableOpacity
+          style={styles.authorRow}
+          onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
+          activeOpacity={0.8}
+        >
+          <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={36} />
+          <Text style={styles.authorName}>{item.authorName}</Text>
+          <Text style={styles.timeLabel}>{formatTime(item.createdAt)}</Text>
         </TouchableOpacity>
-      )}
+
+        {item.location && (
+          <View style={styles.locationRow}>
+            <SymbolView name="mappin" size={11} tintColor="rgba(255,255,255,0.7)" />
+            <Text style={styles.locationText}>{item.location}</Text>
+          </View>
+        )}
+
+        {item.caption ? (
+          <Text style={styles.caption} numberOfLines={2}>
+            {item.caption}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 });
@@ -337,9 +315,10 @@ const LoopPost = memo(function LoopPost({
 export default function FeedLoopScreen() {
   const { startIndex: startIndexStr } = useLocalSearchParams<{ startIndex: string }>();
   const startIdx = parseInt(startIndexStr ?? "0", 10);
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { isAuthenticated } = useConvexAuth();
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
   const {
     results: feed,
     status: feedStatus,
@@ -368,7 +347,6 @@ export default function FeedLoopScreen() {
     }
   }, [deletePost]);
 
-  // Viewability tracking for video autoplay
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -382,74 +360,57 @@ export default function FeedLoopScreen() {
 
   const keyExtractor = useCallback((item: FeedItem) => item._id, []);
 
+  const getItemLayout = useCallback((_data: unknown, index: number) => ({
+    length: screenHeight,
+    offset: screenHeight * index,
+    index,
+  }), [screenHeight]);
+
   const renderItem = useCallback(({ item }: { item: FeedItem }) => (
-    <LoopPost
+    <ReelPost
       item={item}
       screenWidth={screenWidth}
+      screenHeight={screenHeight}
       isVideoPlaying={isFocused && visibleVideoId === item._id}
+      bottomInset={insets.bottom}
       onToggleLike={handleToggleLike}
       onToggleSave={handleToggleSave}
       onShare={handleShare}
       onDelete={handleDelete}
     />
-  ), [screenWidth, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
+  ), [screenWidth, screenHeight, isFocused, visibleVideoId, insets.bottom, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
 
-  // Scroll to the tapped post after first load
   const onContentSizeChange = useCallback(() => {
     if (!didScrollRef.current && feed && feed.length > startIdx && flatListRef.current) {
       didScrollRef.current = true;
-      // Small delay so layout is ready
       setTimeout(() => {
         flatListRef.current?.scrollToIndex({ index: startIdx, animated: false });
       }, 50);
     }
   }, [feed, startIdx]);
 
-  const listFooter = useMemo(() => {
-    if (feedStatus === "LoadingMore") {
-      return <View style={styles.loadingWrap}><ActivityIndicator color={colors.gray300} /></View>;
-    }
-    return <View style={{ height: 80 }} />;
-  }, [feedStatus]);
-
   if (!feed || feed.length === 0) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.loopHeader}>
-          <TouchableOpacity onPress={() => safeBack("feed-loop")} style={styles.backBtn}>
-            <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
-          </TouchableOpacity>
-          <Text style={styles.loopTitle}>Feed</Text>
-        </View>
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.gray300} />
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator color="#fff" />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.loopHeader}>
-        <TouchableOpacity onPress={() => safeBack("feed-loop")} style={styles.backBtn}>
-          <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.loopTitle}>Feed</Text>
-      </View>
-
+    <View style={styles.screen}>
       <FlatList
         ref={flatListRef}
         data={feed}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentContainerStyle={styles.loopList}
+        getItemLayout={getItemLayout}
+        pagingEnabled
         showsVerticalScrollIndicator={false}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={(info) => {
-          // Fallback: scroll to estimated offset
           flatListRef.current?.scrollToOffset({
             offset: info.averageItemLength * info.index,
             animated: false,
@@ -460,137 +421,167 @@ export default function FeedLoopScreen() {
         }}
         onEndReachedThreshold={0.6}
         removeClippedSubviews
-        maxToRenderPerBatch={4}
-        windowSize={5}
-        initialNumToRender={3}
-        ListFooterComponent={listFooter}
+        maxToRenderPerBatch={3}
+        windowSize={3}
+        initialNumToRender={2}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        snapToInterval={screenHeight}
       />
 
+      {/* Floating back button */}
+      <TouchableOpacity
+        style={[styles.backBtn, { top: insets.top + 8 }]}
+        onPress={() => safeBack("feed-loop")}
+        hitSlop={12}
+      >
+        <SymbolView name="chevron.left" size={22} tintColor="#fff" />
+      </TouchableOpacity>
+
+      {/* Floating title */}
+      <Text style={[styles.headerTitle, { top: insets.top + 11 }]}>Feed</Text>
+
       <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.white },
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
-
-  /* Loop header */
-  loopHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.gray100,
-  },
-  backBtn: { padding: spacing.xs },
-  loopTitle: { fontSize: 17, fontWeight: "600", color: colors.black },
-  loopList: { paddingBottom: 120 },
-
-  /* Post card */
-  postCard: { marginBottom: spacing.lg },
-  postHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  postAuthor: { fontSize: 15, fontWeight: "600", color: colors.black, letterSpacing: -0.2 },
-  postTime: { fontSize: 12, color: colors.gray400 },
-
-  postImage: { backgroundColor: colors.gray100 },
-  mediaOriginal: {
-    backgroundColor: colors.gray100,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mediaCropped: {
+  screen: {
+    flex: 1,
     backgroundColor: "#000",
-    overflow: "hidden",
+  },
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
-  postActions: {
+  /* Floating header */
+  backBtn: {
+    position: "absolute",
+    left: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    position: "absolute",
+    left: 60,
+    zIndex: 10,
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#fff",
+  },
+
+  /* Reel post */
+  reelContainer: {
+    backgroundColor: "#000",
+    position: "relative",
+  },
+
+  /* Bottom gradient */
+  bottomGradient: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 300,
+  },
+
+  /* Right side actions */
+  actionColumn: {
+    position: "absolute",
+    right: 12,
+    alignItems: "center",
+    gap: 20,
+  },
+  actionItem: {
+    alignItems: "center",
+    gap: 4,
+  },
+  actionCount: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+
+  /* Bottom info */
+  bottomInfo: {
+    position: "absolute",
+    left: 16,
+    right: 80,
+    gap: 6,
+  },
+  authorRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    gap: spacing.lg,
+    gap: 10,
   },
-  actionBtn: { padding: 2 },
-  likeCount: {
-    fontSize: 14,
+  authorName: {
+    fontSize: 15,
     fontWeight: "700",
-    color: colors.black,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  captionRow: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xs,
-    lineHeight: 20,
+  timeLabel: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.65)",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  captionAuthor: { fontSize: 14, fontWeight: "600", color: colors.black },
-  captionText: { fontSize: 14, color: colors.gray700 },
-  viewComments: {
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.7)",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  caption: {
     fontSize: 14,
-    color: colors.gray400,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
+    color: "#fff",
+    lineHeight: 19,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 
+  /* Heart overlay */
+  heartOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 5,
+  },
+
+  /* Play overlay */
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
   },
   playCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
-  },
-
-  heartOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  locationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: 6,
-  },
-  locationText: { fontSize: 12, color: colors.gray500 },
-
-  announcementCard: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    backgroundColor: colors.black,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    borderCurve: "continuous",
-  },
-  announcementHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  announcementTitle: { fontSize: 15, fontWeight: "700", color: colors.white },
-  announcementText: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    fontSize: 15,
-    color: colors.white,
-    lineHeight: 22,
   },
 });
