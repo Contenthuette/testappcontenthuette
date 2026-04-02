@@ -28,23 +28,31 @@ interface FrameData {
 
 const FRAME_COUNT = 8;
 const FRAME_SIZE = 52;
+const MAX_RETRIES = 3;
 
-// Simple helper: try to get a thumbnail, return null on failure
+// Simple helper: try to get a thumbnail with retry logic
 async function tryGetThumbnail(
   uri: string,
   timeMs: number,
+  retries = MAX_RETRIES,
 ): Promise<string | null> {
-  try {
-    // Dynamic import to handle potential native module issues
-    const VideoThumbnails = await import("expo-video-thumbnails");
-    const result = await VideoThumbnails.getThumbnailAsync(uri, {
-      time: timeMs,
-      quality: 0.6,
-    });
-    return result?.uri ?? null;
-  } catch {
-    return null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Wait longer between retries
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+      }
+      const VideoThumbnails = await import("expo-video-thumbnails");
+      const result = await VideoThumbnails.getThumbnailAsync(uri, {
+        time: timeMs,
+        quality: 0.6,
+      });
+      if (result?.uri) return result.uri;
+    } catch (e) {
+      console.warn(`Thumbnail extraction attempt ${attempt + 1} failed at ${timeMs}ms:`, e);
+    }
   }
+  return null;
 }
 
 export function ThumbnailPicker({
@@ -59,6 +67,7 @@ export function ThumbnailPicker({
   const [pickingImage, setPickingImage] = useState(false);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null);
   const [extractError, setExtractError] = useState(false);
+  const [retryCounter, setRetryCounter] = useState(0);
   const attemptRef = useRef(0);
 
   // Extract frames from video
@@ -72,8 +81,9 @@ export function ThumbnailPicker({
       setSelectedFrameIndex(null);
       setExtractError(false);
 
-      // Wait a bit for the video to be ready on disk
-      await new Promise((r) => setTimeout(r, 800));
+      // Wait for the video to be ready on disk — longer on first try
+      const delay = retryCounter > 0 ? 1500 : 800;
+      await new Promise((r) => setTimeout(r, delay));
       if (attempt !== attemptRef.current) return;
 
       const duration = videoDuration && videoDuration > 0 ? videoDuration : 10;
@@ -86,6 +96,7 @@ export function ThumbnailPicker({
 
       if (!testUri) {
         // Can't extract thumbnails from this video at all
+        console.warn("ThumbnailPicker: Could not extract any frame from video");
         setLoadingFrames(false);
         setExtractError(true);
         return;
@@ -99,7 +110,7 @@ export function ThumbnailPicker({
         const fraction = (i) / (FRAME_COUNT - 1);
         const timeMs = Math.min(Math.round(totalMs * fraction), totalMs - 100);
 
-        const uri = await tryGetThumbnail(videoUri, timeMs);
+        const uri = await tryGetThumbnail(videoUri, timeMs, 2);
         if (uri && attempt === attemptRef.current) {
           extracted.push({ uri, time: timeMs });
         }
@@ -115,7 +126,7 @@ export function ThumbnailPicker({
     };
 
     extractFrames();
-  }, [videoUri, videoDuration]);
+  }, [videoUri, videoDuration, retryCounter]);
 
   const handleSelectFrame = useCallback(
     (index: number) => {
@@ -229,10 +240,7 @@ export function ThumbnailPicker({
               <TouchableOpacity
                 style={styles.retryBtn}
                 onPress={() => {
-                  setExtractError(false);
-                  setLoadingFrames(true);
-                  // Trigger re-extract by toggling
-                  setFrames([]);
+                  setRetryCounter((c) => c + 1);
                 }}
               >
                 <Text style={styles.retryText}>Nochmal versuchen</Text>
