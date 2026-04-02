@@ -23,7 +23,16 @@ import Animated, {
   withDelay, runOnJS,
 } from "react-native-reanimated";
 
-const FEED_ASPECT_RATIO = 3 / 4;
+// Dynamic aspect ratios per content type (like Instagram)
+function getMediaHeight(item: FeedItem, screenWidth: number): number {
+  if (item.type === "video") {
+    // 9:16 for video posts (Reels-style)
+    return screenWidth * (16 / 9);
+  }
+  // 4:5 for photos (Instagram standard)
+  const ar = item.mediaAspectRatio ?? 4 / 5;
+  return screenWidth / ar;
+}
 
 interface FeedItem {
   _id: Id<"posts">;
@@ -85,7 +94,6 @@ function getImagePosition(item: FeedItem) {
 interface LoopPostProps {
   item: FeedItem;
   screenWidth: number;
-  feedMediaHeight: number;
   isVideoPlaying: boolean;
   onToggleLike: (postId: Id<"posts">) => void;
   onToggleSave: (postId: Id<"posts">) => void;
@@ -94,13 +102,15 @@ interface LoopPostProps {
 }
 
 const LoopPost = memo(function LoopPost({
-  item, screenWidth, feedMediaHeight, isVideoPlaying,
+  item, screenWidth, isVideoPlaying,
   onToggleLike, onToggleSave, onShare, onDelete,
 }: LoopPostProps) {
   const [showHeart, setShowHeart] = useState(false);
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
   const lastTapRef = useRef(0);
+
+  const feedMediaHeight = getMediaHeight(item, screenWidth);
 
   const handleDoubleTap = useCallback(() => {
     const now = Date.now();
@@ -158,21 +168,21 @@ const LoopPost = memo(function LoopPost({
     if (!item.mediaUrl) return null;
 
     if (isVideo) {
-      const crop = getCropTransform(item, screenWidth, feedMediaHeight);
+      const crop = getCropTransform(item, screenWidth, getMediaHeight(item, screenWidth));
       const mediaAR = item.mediaAspectRatio ?? 9 / 16;
       const nativeHeight = screenWidth / mediaAR;
 
       if (isOriginal) {
         return (
-          <View style={[styles.mediaOriginal, { width: screenWidth, height: feedMediaHeight }]}>
+          <View style={[styles.mediaOriginal, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
             {isVideoPlaying ? (
-              <VideoPlayer uri={item.mediaUrl} height={feedMediaHeight} width={screenWidth} autoPlay loop hideControls isVisible contentFit="contain" posterUri={thumbUri} />
+              <VideoPlayer uri={item.mediaUrl} height={getMediaHeight(item, screenWidth)} width={screenWidth} autoPlay loop hideControls isVisible contentFit="contain" posterUri={thumbUri} />
             ) : (
-              <View style={{ width: screenWidth, height: feedMediaHeight, justifyContent: "center", alignItems: "center" }}>
+              <View style={{ width: screenWidth, height: getMediaHeight(item, screenWidth), justifyContent: "center", alignItems: "center" }}>
                 {thumbUri ? (
-                  <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: feedMediaHeight }} contentFit="contain" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lot"} />
+                  <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: getMediaHeight(item, screenWidth) }} contentFit="contain" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lot"} />
                 ) : (
-                  <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
+                  <View style={{ width: screenWidth, height: getMediaHeight(item, screenWidth), backgroundColor: "#111" }} />
                 )}
                 <View style={styles.playOverlay}>
                   <View style={styles.playCircle}>
@@ -186,7 +196,7 @@ const LoopPost = memo(function LoopPost({
       }
 
       return (
-        <View style={[styles.mediaCropped, { width: screenWidth, height: feedMediaHeight }]}>
+        <View style={[styles.mediaCropped, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
           {isVideoPlaying ? (
             <View style={{ transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
               <VideoPlayer uri={item.mediaUrl} height={nativeHeight} width={screenWidth} autoPlay loop hideControls isVisible posterUri={thumbUri} />
@@ -194,9 +204,9 @@ const LoopPost = memo(function LoopPost({
           ) : (
             <View>
               {thumbUri ? (
-                <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: feedMediaHeight }} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lct"} />
+                <Image source={{ uri: thumbUri }} style={{ width: screenWidth, height: getMediaHeight(item, screenWidth) }} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lct"} />
               ) : (
-                <View style={{ width: screenWidth, height: feedMediaHeight, backgroundColor: "#111" }} />
+                <View style={{ width: screenWidth, height: getMediaHeight(item, screenWidth), backgroundColor: "#111" }} />
               )}
               <View style={styles.playOverlay}>
                 <View style={styles.playCircle}>
@@ -212,19 +222,19 @@ const LoopPost = memo(function LoopPost({
     // Photo
     if (isOriginal) {
       return (
-        <View style={[styles.mediaOriginal, { width: screenWidth, height: feedMediaHeight }]}>
-          <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: feedMediaHeight }} contentFit="contain" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lo"} />
+        <View style={[styles.mediaOriginal, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
+          <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: getMediaHeight(item, screenWidth) }} contentFit="contain" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lo"} />
         </View>
       );
     }
 
     const hasZoom = (item.cropZoom ?? 1) > 1.05;
     if (hasZoom) {
-      const crop = getCropTransform(item, screenWidth, feedMediaHeight);
+      const crop = getCropTransform(item, screenWidth, getMediaHeight(item, screenWidth));
       const mediaAR = item.mediaAspectRatio ?? 3 / 4;
       const photoH = screenWidth / mediaAR;
       return (
-        <View style={[styles.mediaCropped, { width: screenWidth, height: feedMediaHeight }]}>
+        <View style={[styles.mediaCropped, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]}>
           <View style={{ width: screenWidth, height: photoH, transform: [{ translateX: crop.translateX }, { translateY: crop.translateY }, { scale: crop.scale }] }}>
             <Image source={{ uri: item.mediaUrl }} style={{ width: screenWidth, height: photoH }} contentFit="cover" cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lz"} />
           </View>
@@ -233,7 +243,7 @@ const LoopPost = memo(function LoopPost({
     }
 
     return (
-      <Image source={{ uri: item.mediaUrl }} style={[styles.postImage, { width: screenWidth, height: feedMediaHeight }]} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lc"} />
+      <Image source={{ uri: item.mediaUrl }} style={[styles.postImage, { width: screenWidth, height: getMediaHeight(item, screenWidth) }]} contentFit="cover" contentPosition={getImagePosition(item)} cachePolicy="memory-disk" transition={0} recyclingKey={item._id + "-lc"} />
     );
   };
 
@@ -338,8 +348,6 @@ export default function FeedLoopScreen() {
     initialNumItems: Math.max(30, startIdx + 10),
   });
 
-  const feedMediaHeight = screenWidth / FEED_ASPECT_RATIO;
-
   const toggleLike = useMutation(api.posts.toggleLike);
   const toggleSave = useMutation(api.posts.toggleSave);
   const deletePost = useMutation(api.posts.deletePost);
@@ -372,27 +380,19 @@ export default function FeedLoopScreen() {
     [],
   );
 
-  const ESTIMATED_ITEM_HEIGHT = 56 + feedMediaHeight + 48 + 60 + 16;
-  const getItemLayout = useCallback((_data: unknown, index: number) => ({
-    length: ESTIMATED_ITEM_HEIGHT,
-    offset: ESTIMATED_ITEM_HEIGHT * index,
-    index,
-  }), [ESTIMATED_ITEM_HEIGHT]);
-
   const keyExtractor = useCallback((item: FeedItem) => item._id, []);
 
   const renderItem = useCallback(({ item }: { item: FeedItem }) => (
     <LoopPost
       item={item}
       screenWidth={screenWidth}
-      feedMediaHeight={feedMediaHeight}
       isVideoPlaying={isFocused && visibleVideoId === item._id}
       onToggleLike={handleToggleLike}
       onToggleSave={handleToggleSave}
       onShare={handleShare}
       onDelete={handleDelete}
     />
-  ), [screenWidth, feedMediaHeight, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
+  ), [screenWidth, isFocused, visibleVideoId, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
 
   // Scroll to the tapped post after first load
   const onContentSizeChange = useCallback(() => {
@@ -443,7 +443,6 @@ export default function FeedLoopScreen() {
         data={feed}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        getItemLayout={getItemLayout}
         contentContainerStyle={styles.loopList}
         showsVerticalScrollIndicator={false}
         viewabilityConfig={viewabilityConfig}
