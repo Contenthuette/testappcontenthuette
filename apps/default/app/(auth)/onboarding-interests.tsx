@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
@@ -56,7 +57,7 @@ export default function OnboardingInterestsScreen() {
   const communityExtras = useMemo(() => {
     if (!communityResults) return [];
     return communityResults.filter(
-      (ci) => !presetSet.has(ci.name) && !selected.includes(ci.name),
+      (ci: { _id: string; name: string; usageCount: number }) => !presetSet.has(ci.name) && !selected.includes(ci.name),
     );
   }, [communityResults, selected]);
 
@@ -64,7 +65,7 @@ export default function OnboardingInterestsScreen() {
   const showCreateOption =
     searchQuery.trim().length >= 2 &&
     !filteredPresets.some((p) => p.toLowerCase() === searchQuery.trim().toLowerCase()) &&
-    !communityExtras.some((c) => c.name.toLowerCase() === searchQuery.trim().toLowerCase()) &&
+    !communityExtras.some((c: { name: string }) => c.name.toLowerCase() === searchQuery.trim().toLowerCase()) &&
     !selected.some((s) => s.toLowerCase() === searchQuery.trim().toLowerCase());
 
   return (
@@ -158,7 +159,7 @@ export default function OnboardingInterestsScreen() {
           <View style={styles.sectionWrap}>
             <Text style={styles.sectionLabel}>Community Interessen</Text>
             <View style={styles.chipContainer}>
-              {communityExtras.map((ci) => (
+              {communityExtras.map((ci: { _id: string; name: string; usageCount: number }) => (
                 <TouchableOpacity
                   key={ci._id}
                   style={[styles.chip, selected.includes(ci.name) && styles.chipSelected]}

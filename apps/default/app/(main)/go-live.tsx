@@ -350,7 +350,7 @@ export default function GoLiveScreen() {
           {/* Join Requests (host only) */}
           {!isCoHost && joinRequests && joinRequests.length > 0 && (
             <Animated.View entering={FadeInUp.duration(300)} style={styles.joinRequestsContainer}>
-              {joinRequests.map((req) => (
+              {joinRequests.map((req: { _id: Id<"livestreamJoinRequests">; userName: string; userAvatarUrl?: string }) => (
                 <View key={req._id} style={styles.joinRequestCard}>
                   <Avatar uri={req.userAvatarUrl} name={req.userName} size={28} />
                   <Text style={styles.joinRequestText} numberOfLines={1}>
