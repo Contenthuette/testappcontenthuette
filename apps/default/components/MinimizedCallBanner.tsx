@@ -181,7 +181,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
   }
 
   const otherParticipant = call.participants.find(
-    (p) => p.userId !== call.callerId || call.participants.length === 1
+    (p: { userId: string }) => p.userId !== call.callerId || call.participants.length === 1
   );
   const displayName =
     call.groupName ?? otherParticipant?.userName ?? call.callerName;
