@@ -537,13 +537,13 @@ export default function CreatePostScreen() {
               {picking ? (
                 <View style={styles.emptyMedia}>
                   <ActivityIndicator size="large" color={colors.gray400} />
-                  <Text style={styles.emptyLabel}>\u00d6ffne Galerie...</Text>
+                  <Text style={styles.emptyLabel}>Öffne Galerie...</Text>
                 </View>
               ) : (
                 <View style={styles.emptyMedia}>
                   <Icon name={config.icon} size={40} tintColor={colors.gray400} />
                   <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
-                  <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwaehlen</Text>
+                  <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwählen</Text>
                 </View>
               )}
             </TouchableOpacity>
