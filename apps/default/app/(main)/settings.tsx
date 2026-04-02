@@ -126,7 +126,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.brand}>CONTENTHUETTE</Text>
+        <Text style={styles.brand}>built by CONTENTHUETTE</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -208,6 +208,7 @@ const styles = StyleSheet.create({
     color: colors.gray300,
     textAlign: "center",
     letterSpacing: 2,
+    marginTop: spacing.xxl * 2,
     marginBottom: spacing.lg,
   },
 });
