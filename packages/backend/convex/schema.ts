@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Schema for Z Social Platform
 export default defineSchema({
   // ── User Profiles ──────────────────────────────────────────────
   users: defineTable({
