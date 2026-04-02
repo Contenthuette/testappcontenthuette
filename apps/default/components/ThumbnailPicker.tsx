@@ -27,8 +27,8 @@ interface FrameData {
   time: number;
 }
 
-const FRAME_COUNT = 12;
-const FRAME_SIZE = 56;
+const FRAME_COUNT = 8;
+const FRAME_SIZE = 52;
 
 export function ThumbnailPicker({
   videoUri,
@@ -41,6 +41,7 @@ export function ThumbnailPicker({
   const [loadingFrames, setLoadingFrames] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null);
+  const [extractError, setExtractError] = useState(false);
 
   // Extract frames from video
   useEffect(() => {
@@ -51,34 +52,47 @@ export function ThumbnailPicker({
       setLoadingFrames(true);
       setFrames([]);
       setSelectedFrameIndex(null);
+      setExtractError(false);
 
-      const duration = videoDuration ?? 10; // fallback 10s
-      const interval = (duration * 1000) / (FRAME_COUNT + 1);
+      // Use a safe duration - if unknown, try shorter intervals
+      const duration = videoDuration && videoDuration > 0 ? videoDuration : 10;
+      const totalMs = duration * 1000;
       const extracted: FrameData[] = [];
 
-      for (let i = 1; i <= FRAME_COUNT; i++) {
+      // Generate timestamps evenly across the video
+      for (let i = 0; i < FRAME_COUNT; i++) {
         if (cancelled) return;
-        const time = Math.round(interval * i);
+        // Spread frames across 5% to 95% of the video
+        const fraction = 0.05 + (0.9 * i) / (FRAME_COUNT - 1);
+        const timeMs = Math.round(totalMs * fraction);
+
         try {
-          const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
-            time,
-            quality: 0.6,
+          const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
+            time: timeMs,
+            quality: 0.7,
           });
-          extracted.push({ uri, time });
+          if (result?.uri) {
+            extracted.push({ uri: result.uri, time: timeMs });
+          }
         } catch {
-          // Skip failed frames
+          // Individual frame extraction can fail, continue with others
         }
       }
 
       if (!cancelled) {
         setFrames(extracted);
         setLoadingFrames(false);
+        if (extracted.length === 0) {
+          setExtractError(true);
+        }
       }
     };
 
-    extractFrames();
+    // Small delay to let video load
+    const timer = setTimeout(extractFrames, 500);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [videoUri, videoDuration]);
 
@@ -130,7 +144,7 @@ export function ThumbnailPicker({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <Text style={styles.label}>Titelbild</Text>
+        <Text style={styles.label}>TITELBILD</Text>
         {selectedThumbnailUri ? (
           <TouchableOpacity onPress={handleRemove} hitSlop={12}>
             <Text style={styles.removeText}>Entfernen</Text>
@@ -146,19 +160,24 @@ export function ThumbnailPicker({
           activeOpacity={0.7}
         >
           <Icon
-            name="video"
+            name="film"
             size={14}
             tintColor={mode === "frames" ? colors.white : colors.gray500}
           />
           <Text
             style={[styles.modeBtnText, mode === "frames" && styles.modeBtnTextActive]}
           >
-            Aus Video wählen
+            Aus Video
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modeBtn, mode === "upload" && styles.modeBtnActive]}
-          onPress={() => setMode("upload")}
+          onPress={() => {
+            setMode("upload");
+            if (!selectedThumbnailUri) {
+              handlePickFromGallery();
+            }
+          }}
           activeOpacity={0.7}
         >
           <Icon
@@ -182,48 +201,59 @@ export function ThumbnailPicker({
               <ActivityIndicator size="small" color={colors.gray400} />
               <Text style={styles.loadingText}>Frames werden extrahiert…</Text>
             </View>
-          ) : frames.length === 0 ? (
-            <Text style={styles.emptyText}>Keine Frames verfügbar</Text>
-          ) : (
-            <>
-              <Text style={styles.hint}>Tippe auf einen Frame als Vorschaubild</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.framesStrip}
+          ) : extractError || frames.length === 0 ? (
+            <View style={styles.emptyFrames}>
+              <Icon name="film" size={24} tintColor={colors.gray300} />
+              <Text style={styles.emptyText}>Frames konnten nicht geladen werden</Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => {
+                  setExtractError(false);
+                  setLoadingFrames(true);
+                  // Trigger re-extract by toggling
+                  setFrames([]);
+                }}
               >
-                {frames.map((frame, index) => {
-                  const isSelected = selectedFrameIndex === index;
-                  return (
-                    <TouchableOpacity
-                      key={frame.time}
-                      onPress={() => handleSelectFrame(index)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.frameThumb,
-                        isSelected && styles.frameThumbSelected,
-                      ]}
-                    >
-                      <Image
-                        source={{ uri: frame.uri }}
-                        style={styles.frameImage}
-                        contentFit="cover"
-                        transition={100}
-                      />
-                      {isSelected && (
-                        <View style={styles.frameCheck}>
-                          <Icon
-                            name="checkmark.circle.fill"
-                            size={18}
-                            tintColor={colors.white}
-                          />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </>
+                <Text style={styles.retryText}>Nochmal versuchen</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.framesStrip}
+            >
+              {frames.map((frame, index) => {
+                const isSelected = selectedFrameIndex === index;
+                return (
+                  <TouchableOpacity
+                    key={`frame-${frame.time}`}
+                    onPress={() => handleSelectFrame(index)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.frameThumb,
+                      isSelected && styles.frameThumbSelected,
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: frame.uri }}
+                      style={styles.frameImage}
+                      contentFit="cover"
+                      transition={100}
+                    />
+                    {isSelected && (
+                      <View style={styles.frameCheck}>
+                        <Icon
+                          name="checkmark.circle.fill"
+                          size={18}
+                          tintColor={colors.white}
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           )}
         </View>
       )}
@@ -246,7 +276,7 @@ export function ThumbnailPicker({
                 activeOpacity={0.7}
               >
                 <Icon name="arrow.triangle.2.circlepath" size={14} tintColor={colors.white} />
-                <Text style={styles.uploadOverlayText}>Ändern</Text>
+                <Text style={styles.uploadOverlayText}>{"\u00c4ndern"}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -261,7 +291,7 @@ export function ThumbnailPicker({
               ) : (
                 <>
                   <Icon name="photo.badge.plus" size={24} tintColor={colors.gray400} />
-                  <Text style={styles.uploadBtnText}>Bild aus Galerie wählen</Text>
+                  <Text style={styles.uploadBtnText}>{"Bild aus Galerie w\u00e4hlen"}</Text>
                   <Text style={styles.uploadBtnHint}>9:16 Format empfohlen</Text>
                 </>
               )}
@@ -276,7 +306,6 @@ export function ThumbnailPicker({
 const styles = StyleSheet.create({
   container: {
     gap: 10,
-    marginTop: 12,
   },
   headerRow: {
     flexDirection: "row",
@@ -284,11 +313,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.gray500,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.gray400,
+    letterSpacing: 0.8,
   },
   removeText: {
     fontSize: 13,
@@ -324,28 +352,40 @@ const styles = StyleSheet.create({
   },
   // Frames
   framesSection: {
-    gap: 8,
-  },
-  hint: {
-    fontSize: 12,
-    color: colors.gray400,
+    minHeight: 80,
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 24,
+    paddingVertical: 20,
   },
   loadingText: {
     fontSize: 13,
     color: colors.gray400,
   },
+  emptyFrames: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    gap: 8,
+  },
   emptyText: {
     fontSize: 13,
     color: colors.gray400,
     textAlign: "center",
-    paddingVertical: 16,
+  },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.gray100,
+  },
+  retryText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.black,
   },
   framesStrip: {
     gap: 6,
@@ -353,7 +393,7 @@ const styles = StyleSheet.create({
   },
   frameThumb: {
     width: FRAME_SIZE,
-    height: FRAME_SIZE * (16 / 9),
+    height: Math.round(FRAME_SIZE * (16 / 9)),
     borderRadius: 8,
     overflow: "hidden",
     borderWidth: 2,
@@ -369,11 +409,11 @@ const styles = StyleSheet.create({
   },
   frameCheck: {
     position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    bottom: 3,
+    right: 3,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
@@ -391,7 +431,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 28,
+    paddingVertical: 24,
     borderCurve: "continuous",
   },
   uploadBtnText: {
@@ -411,7 +451,7 @@ const styles = StyleSheet.create({
   },
   uploadPreview: {
     width: "100%",
-    height: 180,
+    height: 160,
     borderRadius: 12,
   },
   uploadOverlayBtn: {

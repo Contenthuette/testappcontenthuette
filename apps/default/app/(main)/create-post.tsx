@@ -24,7 +24,6 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
-import * as VideoThumbnails from "expo-video-thumbnails";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Gesture,
@@ -46,7 +45,8 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
   video: { title: "Video posten", pickLabel: "Video ausw\u00e4hlen", icon: "video" },
 };
 
-const PHONE_WIDTH_RATIO = 0.48; // phone mockup = 48% of screen width
+// Video preview fills ~62% of screen width for a nice phone-mockup look
+const PHONE_WIDTH_RATIO = 0.62;
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
@@ -77,7 +77,6 @@ export default function CreatePostScreen() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
 
-  // MV Locations
   const MV_LOCATIONS = [
     "Rostock", "Schwerin", "Neubrandenburg", "Stralsund", "Greifswald",
     "Wismar", "G\u00fcstrow", "Waren (M\u00fcritz)", "Anklam", "Bergen auf R\u00fcgen",
@@ -97,8 +96,8 @@ export default function CreatePostScreen() {
   const [cropState, setCropState] = useState({ x: 0, y: 0, zoom: 1 });
 
   // Phone mockup dimensions
-  const phoneWidth = screenWidth * PHONE_WIDTH_RATIO;
-  const phoneHeight = phoneWidth * (16 / 9);
+  const phoneWidth = Math.round(screenWidth * PHONE_WIDTH_RATIO);
+  const phoneHeight = Math.round(phoneWidth * (16 / 9));
 
   // Full-width preview for photo crop
   const fullPreviewWidth = screenWidth - spacing.lg * 2;
@@ -109,7 +108,7 @@ export default function CreatePostScreen() {
   const baseMediaHeight = fullPreviewWidth / mediaAspectRatio;
   const baseMediaWidth = fullPreviewWidth;
 
-  // Video player with SOUND
+  // Video player
   const videoPlayer = useVideoPlayer(
     postType === "video" && mediaPreview ? mediaPreview : null,
     (player) => {
@@ -233,14 +232,6 @@ export default function CreatePostScreen() {
         setThumbnailUri(null);
         setThumbnailIsCustom(false);
 
-        if (postType === "video") {
-          try {
-            await VideoThumbnails.getThumbnailAsync(result.uri, { time: 0, quality: 0.8 });
-          } catch (e) {
-            console.warn("Failed to extract video frame:", e);
-          }
-        }
-
         if (result.duration !== undefined && result.duration > 0) {
           setVideoDuration(result.duration / 1000);
         } else {
@@ -327,35 +318,37 @@ export default function CreatePostScreen() {
     ? baseMediaHeight > fullPreviewHeight || baseMediaWidth > fullPreviewWidth
     : false;
 
-  // ─── VIDEO PREVIEW: Phone mockup with playing video ───
+  // ─── VIDEO PREVIEW ───
   const renderVideoPreview = () => {
     if (!mediaPreview) return null;
     return (
-      <View style={styles.phoneSection}>
-        {/* Phone mockup */}
+      <View style={styles.videoSection}>
+        {/* Video Preview - large phone mockup */}
         <View
           style={[
-            styles.phoneMockup,
+            styles.videoMockup,
             { width: phoneWidth, height: phoneHeight },
           ]}
         >
           <VideoView
             player={videoPlayer}
-            style={StyleSheet.absoluteFill}
-            contentFit="contain"
+            style={{ width: phoneWidth, height: phoneHeight }}
+            contentFit="cover"
             nativeControls={false}
           />
         </View>
 
         {/* Thumbnail picker */}
-        <ThumbnailPicker
-          videoUri={mediaPreview}
-          videoDuration={videoDuration}
-          onThumbnailSelected={handleThumbnailSelected}
-          selectedThumbnailUri={thumbnailUri}
-        />
+        <View style={styles.thumbnailSection}>
+          <ThumbnailPicker
+            videoUri={mediaPreview}
+            videoDuration={videoDuration}
+            onThumbnailSelected={handleThumbnailSelected}
+            selectedThumbnailUri={thumbnailUri}
+          />
+        </View>
 
-        {/* Change video */}
+        {/* Change video button */}
         <TouchableOpacity
           style={styles.changeBtn}
           onPress={handlePick}
@@ -375,7 +368,7 @@ export default function CreatePostScreen() {
     );
   };
 
-  // ─── PHOTO PREVIEW: Full-width crop ───
+  // ─── PHOTO PREVIEW ───
   const renderPhotoPreview = () => {
     if (!mediaPreview || !mediaDims) return null;
     return (
@@ -505,6 +498,7 @@ export default function CreatePostScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {/* Media Preview */}
           {mediaPreview && mediaDims ? (
@@ -513,13 +507,16 @@ export default function CreatePostScreen() {
             renderEmpty()
           )}
 
+          {/* Divider */}
+          <View style={styles.divider} />
+
           {/* Caption */}
-          <View style={styles.section}>
+          <View style={styles.captionSection}>
             <TextInput
               style={styles.captionInput}
               value={caption}
               onChangeText={setCaption}
-              placeholder="Bildunterschrift hinzuf\u00fcgen ..."
+              placeholder={"Bildunterschrift hinzuf\u00fcgen..."}
               placeholderTextColor={colors.gray400}
               multiline
               maxLength={500}
@@ -548,6 +545,8 @@ export default function CreatePostScreen() {
               <Icon name="chevron.right" size={16} tintColor={colors.gray300} />
             )}
           </Pressable>
+
+          <View style={{ height: 100 }} />
 
           {/* Location Modal */}
           <Modal
@@ -639,47 +638,23 @@ const styles = StyleSheet.create({
   publishBtnDisabled: { backgroundColor: colors.gray300 },
   publishBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
   scroll: { flex: 1 },
-  scrollContent: { paddingVertical: spacing.lg, gap: 0 },
+  scrollContent: { paddingTop: spacing.lg },
 
-  // ─── Phone mockup section (video) ───
-  phoneSection: {
+  // ─── Video section ───
+  videoSection: {
     alignItems: "center",
-    gap: 16,
+    gap: 20,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
   },
-  phoneSectionLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: colors.gray400,
-    letterSpacing: 0.3,
-  },
-  phoneMockup: {
-    borderRadius: 28,
+  videoMockup: {
+    borderRadius: 24,
+    borderCurve: "continuous",
     overflow: "hidden",
     backgroundColor: "#000",
-    borderCurve: "continuous",
     boxShadow: "0px 8px 32px rgba(0,0,0,0.15)",
   },
-  phoneOverlayBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    paddingBottom: 16,
-  },
-  phoneOverlayBadge: {
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backdropFilter: "blur(10px)",
-  },
-  phoneOverlayText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#fff",
+  thumbnailSection: {
+    width: "100%",
   },
 
   // ─── Photo crop ───
@@ -746,6 +721,15 @@ const styles = StyleSheet.create({
   },
   changeBtnText: { fontSize: 14, fontWeight: "600", color: colors.black },
 
+  // ─── Divider ───
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.gray200,
+    marginHorizontal: spacing.lg,
+    marginTop: 20,
+    marginBottom: 4,
+  },
+
   // ─── Empty state ───
   mediaArea: {
     borderRadius: radius.md,
@@ -767,7 +751,7 @@ const styles = StyleSheet.create({
   emptyHint: { fontSize: 13, color: colors.gray400 },
 
   // ─── Caption ───
-  section: {
+  captionSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: 4,
   },
@@ -780,7 +764,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.gray200,
   },
 
-  // ─── Option row (location etc) ───
+  // ─── Option row ───
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
