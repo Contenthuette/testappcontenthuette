@@ -130,7 +130,7 @@ export function ThumbnailPicker({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <Text style={styles.label}>Thumbnail</Text>
+        <Text style={styles.label}>Titelbild</Text>
         {selectedThumbnailUri ? (
           <TouchableOpacity onPress={handleRemove} hitSlop={12}>
             <Text style={styles.removeText}>Entfernen</Text>
@@ -146,7 +146,7 @@ export function ThumbnailPicker({
           activeOpacity={0.7}
         >
           <Icon
-            name="film"
+            name="video"
             size={14}
             tintColor={mode === "frames" ? colors.white : colors.gray500}
           />

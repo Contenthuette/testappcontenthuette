@@ -332,9 +332,6 @@ export default function CreatePostScreen() {
     if (!mediaPreview) return null;
     return (
       <View style={styles.phoneSection}>
-        {/* Labels above phone */}
-        <Text style={styles.phoneSectionLabel}>Vorschau</Text>
-
         {/* Phone mockup */}
         <View
           style={[
@@ -345,16 +342,9 @@ export default function CreatePostScreen() {
           <VideoView
             player={videoPlayer}
             style={StyleSheet.absoluteFill}
-            contentFit="cover"
+            contentFit="contain"
             nativeControls={false}
           />
-
-          {/* "Titelbild bearbeiten" overlay at bottom */}
-          <View style={styles.phoneOverlayBottom}>
-            <View style={styles.phoneOverlayBadge}>
-              <Text style={styles.phoneOverlayText}>Titelbild bearbeiten</Text>
-            </View>
-          </View>
         </View>
 
         {/* Thumbnail picker */}

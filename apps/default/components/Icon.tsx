@@ -164,6 +164,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   "photo.stack": Images,
   video: Video,
   "video.fill": Video,
+  film: Video,
   "video.slash": VideoOff,
   "video.slash.fill": VideoOff,
   "play.rectangle": Play,
