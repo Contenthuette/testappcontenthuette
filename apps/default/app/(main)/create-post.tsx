@@ -45,8 +45,8 @@ const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: str
   video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
 };
 
-// 3:4 portrait container (width:height = 3:4)
-const FEED_ASPECT_RATIO = 3 / 4;
+// 9:16 portrait container (Reels-style)
+const FEED_ASPECT_RATIO = 9 / 16;
 
 export default function CreatePostScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
@@ -389,7 +389,7 @@ export default function CreatePostScreen() {
 
             {/* 4:3 label badge */}
             <View style={styles.aspectBadge} pointerEvents="none">
-              <Text style={styles.aspectBadgeText}>4:3</Text>
+              <Text style={styles.aspectBadgeText}>9:16</Text>
             </View>
           </Animated.View>
         </GestureDetector>
@@ -397,7 +397,7 @@ export default function CreatePostScreen() {
         <Text style={styles.cropHint}>
           {needsCrop
             ? "Verschiebe das Bild mit 1 Finger, zoome mit 2 Fingern"
-            : "Dein Medium passt perfekt ins 4:3 Format"}
+            : "Dein Medium passt perfekt ins 9:16 Format"}
         </Text>
 
         {/* Thumbnail picker for videos */}

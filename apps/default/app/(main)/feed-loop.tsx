@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useMemo, useState, memo } from "react";
+import React, { useCallback, useRef, useState, memo } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   useWindowDimensions, ActivityIndicator, Platform,
@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { usePaginatedQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
@@ -429,17 +428,17 @@ export default function FeedLoopScreen() {
         snapToInterval={screenHeight}
       />
 
-      {/* Floating back button */}
-      <TouchableOpacity
-        style={[styles.backBtn, { top: insets.top + 8 }]}
-        onPress={() => safeBack("feed-loop")}
-        hitSlop={12}
-      >
-        <SymbolView name="chevron.left" size={22} tintColor="#fff" />
-      </TouchableOpacity>
-
-      {/* Floating title */}
-      <Text style={[styles.headerTitle, { top: insets.top + 11 }]}>Feed</Text>
+      {/* Floating header row */}
+      <View style={[styles.headerRow, { top: insets.top + 4 }]}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => safeBack("feed-loop")}
+          hitSlop={12}
+        >
+          <SymbolView name="chevron.left" size={22} tintColor="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Feed</Text>
+      </View>
 
       <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
     </View>
@@ -459,10 +458,16 @@ const styles = StyleSheet.create({
   },
 
   /* Floating header */
-  backBtn: {
+  headerRow: {
     position: "absolute",
     left: 16,
+    right: 16,
     zIndex: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -471,12 +476,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: {
-    position: "absolute",
-    left: 60,
-    zIndex: 10,
     fontSize: 17,
     fontWeight: "600",
     color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 
   /* Reel post */

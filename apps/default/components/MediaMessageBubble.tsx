@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     margin: MEDIA_PAD,
     borderRadius: 15,
     overflow: "hidden",
-    aspectRatio: 3 / 4,
+    aspectRatio: 9 / 16,
   },
   media: {
     width: "100%",
