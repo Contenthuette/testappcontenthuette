@@ -58,7 +58,7 @@ export default function GoLiveScreen() {
 
   const {
     localStreamUrl, remoteStreamUrl, peerConnected,
-    isMuted, isVideoOff, isFrontCamera,
+    isMuted, isVideoOff, isFrontCamera, isSwitchingCamera,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
   } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true, isCoHost });
 
@@ -178,7 +178,7 @@ export default function GoLiveScreen() {
   if (!isLive) {
     return (
       <View style={styles.fullScreen}>
-        {localStreamUrl && RTCView ? (
+        {localStreamUrl && RTCView && !isSwitchingCamera ? (
           <RTCView
             streamURL={localStreamUrl}
             style={StyleSheet.absoluteFill}
@@ -188,8 +188,12 @@ export default function GoLiveScreen() {
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
-            <ActivityIndicator color={colors.white} size="large" />
-            <Text style={styles.cameraPlaceholderText}>Kamera & Mikro werden aktiviert</Text>
+            {!isSwitchingCamera && (
+              <>
+                <ActivityIndicator color={colors.white} size="large" />
+                <Text style={styles.cameraPlaceholderText}>Kamera & Mikro werden aktiviert</Text>
+              </>
+            )}
           </View>
         )}
 
@@ -253,7 +257,7 @@ export default function GoLiveScreen() {
         <View style={styles.splitContainer}>
           {/* Top half: local camera */}
           <View style={styles.splitHalf}>
-            {localStreamUrl && RTCView && !isVideoOff ? (
+            {localStreamUrl && RTCView && !isVideoOff && !isSwitchingCamera ? (
               <RTCView
                 streamURL={localStreamUrl}
                 style={StyleSheet.absoluteFill}
@@ -263,7 +267,9 @@ export default function GoLiveScreen() {
               />
             ) : (
               <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
-                <SymbolView name="video.slash" size={32} tintColor={colors.gray500} />
+                {!isSwitchingCamera && (
+                  <SymbolView name="video.slash" size={32} tintColor={colors.gray500} />
+                )}
               </View>
             )}
             <View style={styles.splitLabel}>
@@ -292,7 +298,7 @@ export default function GoLiveScreen() {
       ) : (
         /* Solo: local camera fullscreen */
         <>
-          {localStreamUrl && RTCView && !isVideoOff ? (
+          {localStreamUrl && RTCView && !isVideoOff && !isSwitchingCamera ? (
             <RTCView
               streamURL={localStreamUrl}
               style={StyleSheet.absoluteFill}
@@ -302,7 +308,9 @@ export default function GoLiveScreen() {
             />
           ) : (
             <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
-              <SymbolView name="video.slash" size={48} tintColor={colors.gray500} />
+              {!isSwitchingCamera && (
+                <SymbolView name="video.slash" size={48} tintColor={colors.gray500} />
+              )}
             </View>
           )}
         </>

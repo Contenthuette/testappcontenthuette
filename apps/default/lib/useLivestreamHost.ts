@@ -96,6 +96,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview, isCoHo
   const [mediaReady, setMediaReady] = useState(false);
   const [peerConnected, setPeerConnected] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
 
   const localStreamRef = useRef<MediaStreamLike | null>(null);
   const pcRef = useRef<RTCPeerConnectionLike | null>(null);
@@ -433,8 +434,15 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview, isCoHo
   }, []);
 
   const flipCamera = useCallback(() => {
-    localStreamRef.current?.getVideoTracks()?.[0]?._switchCamera?.();
-    setIsFrontCamera((prev) => !prev);
+    const track = localStreamRef.current?.getVideoTracks()?.[0];
+    if (!track?._switchCamera) return;
+    // Brief blackout to hide the mirrored frame during hardware switch
+    setIsSwitchingCamera(true);
+    track._switchCamera();
+    setTimeout(() => {
+      setIsFrontCamera((prev) => !prev);
+      setIsSwitchingCamera(false);
+    }, 400);
   }, []);
 
   return {
@@ -447,6 +455,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview, isCoHo
     toggleVideo,
     flipCamera,
     isFrontCamera,
+    isSwitchingCamera,
     cleanup,
     isSupported: !!RTC,
     RTCView: (RTC?.RTCView as RTCViewComponent | null) ?? null,
