@@ -529,7 +529,7 @@ export default function CreatePostScreen() {
             style={styles.optionRow}
             onPress={() => setShowLocationPicker(true)}
           >
-            <Icon name="mappin.circle.fill" size={22} tintColor={location ? colors.black : colors.gray400} />
+            <Icon name="mappin" size={20} tintColor={location ? colors.black : colors.gray400} />
             <Text style={[styles.optionText, !location && { color: colors.gray400 }]}>
               {location ?? "Standort hinzuf\u00fcgen"}
             </Text>

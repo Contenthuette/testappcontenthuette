@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import * as VideoThumbnails from "expo-video-thumbnails";
 import * as Haptics from "expo-haptics";
 import Icon from "@/components/Icon";
 import { colors } from "@/lib/theme";
@@ -30,6 +29,24 @@ interface FrameData {
 const FRAME_COUNT = 8;
 const FRAME_SIZE = 52;
 
+// Simple helper: try to get a thumbnail, return null on failure
+async function tryGetThumbnail(
+  uri: string,
+  timeMs: number,
+): Promise<string | null> {
+  try {
+    // Dynamic import to handle potential native module issues
+    const VideoThumbnails = await import("expo-video-thumbnails");
+    const result = await VideoThumbnails.getThumbnailAsync(uri, {
+      time: timeMs,
+      quality: 0.6,
+    });
+    return result?.uri ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function ThumbnailPicker({
   videoUri,
   videoDuration,
@@ -42,11 +59,12 @@ export function ThumbnailPicker({
   const [pickingImage, setPickingImage] = useState(false);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null);
   const [extractError, setExtractError] = useState(false);
+  const attemptRef = useRef(0);
 
   // Extract frames from video
   useEffect(() => {
     if (!videoUri) return;
-    let cancelled = false;
+    const attempt = ++attemptRef.current;
 
     const extractFrames = async () => {
       setLoadingFrames(true);
@@ -54,32 +72,40 @@ export function ThumbnailPicker({
       setSelectedFrameIndex(null);
       setExtractError(false);
 
-      // Use a safe duration - if unknown, try shorter intervals
+      // Wait a bit for the video to be ready on disk
+      await new Promise((r) => setTimeout(r, 800));
+      if (attempt !== attemptRef.current) return;
+
       const duration = videoDuration && videoDuration > 0 ? videoDuration : 10;
       const totalMs = duration * 1000;
       const extracted: FrameData[] = [];
 
-      // Generate timestamps evenly across the video
-      for (let i = 0; i < FRAME_COUNT; i++) {
-        if (cancelled) return;
-        // Spread frames across 5% to 95% of the video
-        const fraction = 0.05 + (0.9 * i) / (FRAME_COUNT - 1);
-        const timeMs = Math.round(totalMs * fraction);
+      // Try a quick test frame first at time 0
+      const testUri = await tryGetThumbnail(videoUri, 0);
+      if (attempt !== attemptRef.current) return;
 
-        try {
-          const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
-            time: timeMs,
-            quality: 0.7,
-          });
-          if (result?.uri) {
-            extracted.push({ uri: result.uri, time: timeMs });
-          }
-        } catch {
-          // Individual frame extraction can fail, continue with others
+      if (!testUri) {
+        // Can't extract thumbnails from this video at all
+        setLoadingFrames(false);
+        setExtractError(true);
+        return;
+      }
+
+      extracted.push({ uri: testUri, time: 0 });
+
+      // Now extract more frames
+      for (let i = 1; i < FRAME_COUNT; i++) {
+        if (attempt !== attemptRef.current) return;
+        const fraction = (i) / (FRAME_COUNT - 1);
+        const timeMs = Math.min(Math.round(totalMs * fraction), totalMs - 100);
+
+        const uri = await tryGetThumbnail(videoUri, timeMs);
+        if (uri && attempt === attemptRef.current) {
+          extracted.push({ uri, time: timeMs });
         }
       }
 
-      if (!cancelled) {
+      if (attempt === attemptRef.current) {
         setFrames(extracted);
         setLoadingFrames(false);
         if (extracted.length === 0) {
@@ -88,12 +114,7 @@ export function ThumbnailPicker({
       }
     };
 
-    // Small delay to let video load
-    const timer = setTimeout(extractFrames, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+    extractFrames();
   }, [videoUri, videoDuration]);
 
   const handleSelectFrame = useCallback(
