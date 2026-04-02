@@ -39,25 +39,16 @@ export default function MainLayout() {
     }
   }, [isAuthenticated, isLoading]);
 
-  if ((isLoading || !isAuthenticated) && !wasAuthenticatedRef.current && !shouldRedirect) {
+  // ── HARD GATE: never render children without authentication ──
+  if (!isAuthenticated) {
+    if (shouldRedirect) {
+      return <Redirect href="/(auth)/welcome" />;
+    }
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={colors.gray400} />
       </View>
     );
-  }
-
-  // During sign-out or token refresh: show clean loading instead of broken content
-  if (!isAuthenticated && wasAuthenticatedRef.current && !shouldRedirect) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={colors.gray400} />
-      </View>
-    );
-  }
-
-  if (shouldRedirect && !isAuthenticated) {
-    return <Redirect href="/(auth)/welcome" />;
   }
 
   return (
