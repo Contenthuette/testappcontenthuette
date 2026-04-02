@@ -10,7 +10,7 @@ import * as Haptics from "expo-haptics";
 import { useSound } from "@/lib/sounds";
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming,
-  withDelay, runOnJS, FadeIn,
+  withDelay, runOnJS,
 } from "react-native-reanimated";
 
 interface PostCardProps {

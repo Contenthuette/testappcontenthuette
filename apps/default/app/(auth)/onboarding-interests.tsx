@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Keyboard, ActivityIndicator,
+  TextInput, Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -16,7 +16,6 @@ export default function OnboardingInterestsScreen() {
   const params = useLocalSearchParams<{ county: string; city: string }>();
   const [selected, setSelected] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [customInput, setCustomInput] = useState("");
 
   const createInterest = useMutation(api.communityInterests.create);
   const communityResults = useQuery(
@@ -32,23 +31,6 @@ export default function OnboardingInterestsScreen() {
     );
   };
 
-  const addCustom = async () => {
-    const trimmed = customInput.trim();
-    if (!trimmed) return;
-    const already = selected.some(
-      (s) => s.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (!already) {
-      setSelected((prev) => [...prev, trimmed]);
-      // Persist to community interests so others can find it
-      try {
-        await createInterest({ name: trimmed });
-      } catch { /* ignore */ }
-    }
-    setCustomInput("");
-    Keyboard.dismiss();
-  };
-
   const handleNext = () => {
     router.push({
       pathname: "/(auth)/onboarding-notifications",
@@ -62,7 +44,6 @@ export default function OnboardingInterestsScreen() {
 
   // Merge preset interests with search results
   const presetSet = new Set<string>(INTERESTS);
-  const customTags = selected.filter((s) => !presetSet.has(s));
 
   // Filtered preset list based on search
   const filteredPresets = useMemo(() => {
