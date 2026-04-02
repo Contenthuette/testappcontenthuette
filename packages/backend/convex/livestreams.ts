@@ -593,3 +593,145 @@ export const ackSignals = authMutation({
     return null;
   },
 });
+
+// ── Join Requests ──────────────────────────────────────────────────
+
+/** Request to join a livestream as participant */
+export const requestJoin = authMutation({
+  args: { livestreamId: v.id("livestreams") },
+  returns: v.union(v.literal("requested"), v.literal("already_requested"), v.literal("full")),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const stream = await ctx.db.get(args.livestreamId);
+    if (!stream || stream.status !== "live") throw new Error("Livestream ist nicht aktiv.");
+    if (stream.participantCount >= MAX_PARTICIPANTS) return "full" as const;
+
+    const existing = await ctx.db
+      .query("livestreamJoinRequests")
+      .withIndex("by_livestreamId_and_userId", (q) =>
+        q.eq("livestreamId", args.livestreamId).eq("userId", userId),
+      )
+      .first();
+    if (existing && existing.status === "pending") return "already_requested" as const;
+    if (existing) await ctx.db.delete(existing._id);
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    await ctx.db.insert("livestreamJoinRequests", {
+      livestreamId: args.livestreamId,
+      userId,
+      userName: user.name,
+      userAvatarUrl: user.avatarUrl,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+    return "requested" as const;
+  },
+});
+
+/** Get pending join requests (host only) */
+export const getJoinRequests = authQuery({
+  args: { livestreamId: v.id("livestreams") },
+  returns: v.array(
+    v.object({
+      _id: v.id("livestreamJoinRequests"),
+      userId: v.id("users"),
+      userName: v.string(),
+      userAvatarUrl: v.optional(v.string()),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const userId = await resolveUserId(ctx);
+    if (!userId) return [];
+    const stream = await ctx.db.get(args.livestreamId);
+    if (!stream || stream.hostId !== userId) return [];
+
+    const requests = await ctx.db
+      .query("livestreamJoinRequests")
+      .withIndex("by_livestreamId_and_status", (q) =>
+        q.eq("livestreamId", args.livestreamId).eq("status", "pending"),
+      )
+      .take(10);
+
+    return requests.map((r) => ({
+      _id: r._id,
+      userId: r.userId,
+      userName: r.userName,
+      userAvatarUrl: r.userAvatarUrl,
+      createdAt: r.createdAt,
+    }));
+  },
+});
+
+/** Accept or reject a join request (host only) */
+export const respondToJoinRequest = authMutation({
+  args: {
+    requestId: v.id("livestreamJoinRequests"),
+    accept: v.boolean(),
+  },
+  returns: v.union(v.literal("accepted"), v.literal("rejected"), v.literal("full")),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const request = await ctx.db.get(args.requestId);
+    if (!request) throw new Error("Anfrage nicht gefunden.");
+
+    const stream = await ctx.db.get(request.livestreamId);
+    if (!stream || stream.hostId !== userId) throw new Error("Nur der Host kann Anfragen beantworten.");
+
+    if (!args.accept) {
+      await ctx.db.patch(args.requestId, { status: "rejected" });
+      return "rejected" as const;
+    }
+
+    if (stream.participantCount >= MAX_PARTICIPANTS) {
+      await ctx.db.patch(args.requestId, { status: "rejected" });
+      return "full" as const;
+    }
+
+    const requester = await ctx.db.get(request.userId);
+    if (!requester) throw new Error("User nicht gefunden.");
+
+    await ctx.db.patch(args.requestId, { status: "accepted" });
+    await ctx.db.patch(request.livestreamId, {
+      coHostId: request.userId,
+      coHostName: requester.name,
+      coHostAvatarUrl: requester.avatarUrl,
+      participantCount: 2,
+    });
+
+    // Remove from viewers if they were watching
+    const viewerDoc = await ctx.db
+      .query("livestreamViewers")
+      .withIndex("by_livestreamId_and_userId", (q) =>
+        q.eq("livestreamId", request.livestreamId).eq("userId", request.userId),
+      )
+      .unique();
+    if (viewerDoc) {
+      await ctx.db.delete(viewerDoc._id);
+      await ctx.db.patch(request.livestreamId, {
+        viewerCount: Math.max(0, stream.viewerCount - 1),
+      });
+    }
+
+    return "accepted" as const;
+  },
+});
+
+/** Check my join request status */
+export const getMyJoinRequestStatus = authQuery({
+  args: { livestreamId: v.id("livestreams") },
+  returns: v.union(v.literal("none"), v.literal("pending"), v.literal("accepted"), v.literal("rejected")),
+  handler: async (ctx, args) => {
+    const userId = await resolveUserId(ctx);
+    if (!userId) return "none";
+    const request = await ctx.db
+      .query("livestreamJoinRequests")
+      .withIndex("by_livestreamId_and_userId", (q) =>
+        q.eq("livestreamId", args.livestreamId).eq("userId", userId),
+      )
+      .first();
+    return request?.status ?? "none";
+  },
+});

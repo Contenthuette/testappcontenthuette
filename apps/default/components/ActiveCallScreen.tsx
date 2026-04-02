@@ -196,7 +196,8 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const otherParticipants =
     call.participants.filter((p: CallParticipant) => p.userId !== me?._id) ?? [];
   const mainOther = otherParticipants[0];
-  const displayName = call.groupName ?? call.callerName;
+  const displayName = mainOther?.userName ?? call.groupName ?? "Anruf";
+  const displayAvatar = mainOther?.userAvatarUrl;
 
   // ─── Ringing / Connecting ───
   if (phase === "ringing" || phase === "connecting") {
@@ -227,7 +228,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               </View>
             ) : (
               <Avatar
-                uri={mainOther?.userAvatarUrl}
+                uri={displayAvatar ?? mainOther?.userAvatarUrl}
                 name={mainOther?.userName ?? displayName}
                 size={140}
               />

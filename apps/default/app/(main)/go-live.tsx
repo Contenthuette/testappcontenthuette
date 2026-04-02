@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { useLivestreamHost } from "@/lib/useLivestreamHost";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
-import { setSpeakerOn } from "@/lib/audioRouting";
+import { setSpeakerOn, forceSpeakerWithRetries } from "@/lib/audioRouting";
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
   Easing, FadeIn, FadeInUp,
@@ -41,6 +41,7 @@ export default function GoLiveScreen() {
   const joinAsParticipant = useMutation(api.livestreams.joinAsParticipant);
   const leaveAsParticipant = useMutation(api.livestreams.leaveAsParticipant);
   const sendComment = useMutation(api.livestreams.sendComment);
+  const respondToJoinRequest = useMutation(api.livestreams.respondToJoinRequest);
 
   const stream = useQuery(
     api.livestreams.getById,
@@ -50,10 +51,14 @@ export default function GoLiveScreen() {
     api.livestreams.getComments,
     livestreamId ? { livestreamId } : "skip",
   );
+  const joinRequests = useQuery(
+    api.livestreams.getJoinRequests,
+    livestreamId && !isCoHost ? { livestreamId } : "skip",
+  );
 
   const {
     localStreamUrl, remoteStreamUrl, peerConnected,
-    isMuted, isVideoOff,
+    isMuted, isVideoOff, isFrontCamera,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
   } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true, isCoHost });
 
@@ -99,9 +104,16 @@ export default function GoLiveScreen() {
   // Force audio to loudspeaker for livestream
   useEffect(() => {
     if (!isLive) return;
-    setSpeakerOn(true);
-    return () => { setSpeakerOn(false); };
+    const cancelRetries = forceSpeakerWithRetries();
+    return () => { cancelRetries(); setSpeakerOn(false); };
   }, [isLive]);
+
+  // Re-force speaker when remote peer connects (WebRTC resets audio session)
+  useEffect(() => {
+    if (!remoteStreamUrl || !isLive) return;
+    const cancelRetries = forceSpeakerWithRetries();
+    return () => cancelRetries();
+  }, [remoteStreamUrl, isLive]);
 
   // Reversed comments for inverted FlatList (newest at bottom)
   const reversedComments = useMemo(
@@ -171,7 +183,7 @@ export default function GoLiveScreen() {
             streamURL={localStreamUrl}
             style={StyleSheet.absoluteFill}
             objectFit="cover"
-            mirror={true}
+            mirror={isFrontCamera}
             zOrder={0}
           />
         ) : (
@@ -246,7 +258,7 @@ export default function GoLiveScreen() {
                 streamURL={localStreamUrl}
                 style={StyleSheet.absoluteFill}
                 objectFit="cover"
-                mirror={true}
+                mirror={isFrontCamera}
                 zOrder={0}
               />
             ) : (
@@ -285,7 +297,7 @@ export default function GoLiveScreen() {
               streamURL={localStreamUrl}
               style={StyleSheet.absoluteFill}
               objectFit="cover"
-              mirror={true}
+              mirror={isFrontCamera}
               zOrder={0}
             />
           ) : (
@@ -334,6 +346,37 @@ export default function GoLiveScreen() {
               </View>
             )}
           </Animated.View>
+
+          {/* Join Requests (host only) */}
+          {!isCoHost && joinRequests && joinRequests.length > 0 && (
+            <Animated.View entering={FadeInUp.duration(300)} style={styles.joinRequestsContainer}>
+              {joinRequests.map((req) => (
+                <View key={req._id} style={styles.joinRequestCard}>
+                  <Avatar uri={req.userAvatarUrl} name={req.userName} size={28} />
+                  <Text style={styles.joinRequestText} numberOfLines={1}>
+                    {req.userName} m\u00f6chte beitreten
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.joinRequestAccept}
+                    onPress={async () => {
+                      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      try { await respondToJoinRequest({ requestId: req._id, accept: true }); } catch {}
+                    }}
+                  >
+                    <SymbolView name="checkmark" size={14} tintColor={colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.joinRequestReject}
+                    onPress={async () => {
+                      try { await respondToJoinRequest({ requestId: req._id, accept: false }); } catch {}
+                    }}
+                  >
+                    <SymbolView name="xmark" size={14} tintColor={colors.white} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </Animated.View>
+          )}
 
           {/* Comments */}
           <View style={{ flex: 1 }} />
@@ -581,6 +624,46 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
     fontSize: 13,
     fontWeight: "500",
+  },
+
+  /* Join Requests */
+  joinRequestsContainer: {
+    paddingHorizontal: spacing.lg,
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  joinRequestCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: radius.full,
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderCurve: "continuous",
+  },
+  joinRequestText: {
+    flex: 1,
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  joinRequestAccept: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#34C759",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  joinRequestReject: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   /* Setup area */

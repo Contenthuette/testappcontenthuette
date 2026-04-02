@@ -283,7 +283,7 @@ export default function EditProfileScreen() {
               style={[styles.fieldInput, styles.fieldInputMultiline]}
               value={bio}
               onChangeText={setBio}
-              placeholder="Erzaehle etwas ueber dich..."
+              placeholder="Erz\u00e4hl was \u00fcber dich..."
               placeholderTextColor={colors.gray400}
               multiline
               maxLength={300}

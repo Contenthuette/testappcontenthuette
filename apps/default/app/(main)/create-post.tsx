@@ -439,7 +439,19 @@ export default function CreatePostScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity onPress={() => safeBack("create-post")} style={styles.headerBtn}>
+          <TouchableOpacity onPress={() => {
+            if (mediaPreview && mediaDims) {
+              // If media is selected, go back to picker instead of leaving
+              setMediaPreview(null);
+              setMediaFile(null);
+              setMediaDims(null);
+              setThumbnailUri(null);
+              setVideoFrameUri(null);
+              setTimeout(() => handlePick(), 300);
+            } else {
+              safeBack("create-post");
+            }
+          }} style={styles.headerBtn}>
             <Icon name="chevron.left" size={20} tintColor={colors.black} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{config.title}</Text>

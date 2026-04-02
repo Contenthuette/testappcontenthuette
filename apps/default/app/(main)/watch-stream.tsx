@@ -30,8 +30,13 @@ export default function WatchStreamScreen() {
 
   const joinStream = useMutation(api.livestreams.joinStream);
   const leaveStream = useMutation(api.livestreams.leaveStream);
-  const joinAsParticipant = useMutation(api.livestreams.joinAsParticipant);
+  const requestJoin = useMutation(api.livestreams.requestJoin);
   const sendComment = useMutation(api.livestreams.sendComment);
+
+  const myJoinStatus = useQuery(
+    api.livestreams.getMyJoinRequestStatus,
+    livestreamId ? { livestreamId } : "skip",
+  );
 
   const stream = useQuery(
     api.livestreams.getById,
@@ -69,11 +74,10 @@ export default function WatchStreamScreen() {
     const cancelRetries = forceSpeakerWithRetries();
     return () => {
       cancelRetries();
-      leaveStream({ livestreamId }).catch(() => {});
       cleanup();
       setSpeakerOn(false);
     };
-  }, [livestreamId, hasJoined, joinStream, leaveStream, cleanup]);
+  }, [livestreamId, hasJoined, joinStream, cleanup]);
 
   // Re-force speaker when remote stream actually arrives (WebRTC resets audio session)
   useEffect(() => {
@@ -108,28 +112,25 @@ export default function WatchStreamScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setIsJoiningCall(true);
     try {
-      const result = await joinAsParticipant({ livestreamId });
+      const result = await requestJoin({ livestreamId });
       if (result === "full") {
         if (Platform.OS !== "web") {
           Alert.alert(
             "Livestream voll",
-            "Mehr als 2 Personen live sind derzeit nicht m\u00f6glich. Warte bis jemand den Call verl\u00e4sst.",
+            "Mehr als 2 Personen live sind derzeit nicht m\u00f6glich.",
           );
         }
         setIsJoiningCall(false);
+      } else if (result === "already_requested") {
+        setIsJoiningCall(false);
       } else {
-        // Joined! Leave as viewer, navigate to go-live as cohost
-        leaveStream({ livestreamId }).catch(() => {});
-        cleanup();
-        router.replace({
-          pathname: "/(main)/go-live",
-          params: { livestreamId, mode: "cohost" },
-        });
+        // Request sent! Wait for host to accept
+        setIsJoiningCall(false);
       }
     } catch {
       setIsJoiningCall(false);
     }
-  }, [livestreamId, joinAsParticipant, leaveStream, cleanup]);
+  }, [livestreamId, requestJoin]);
 
   if (!livestreamId) return null;
 
@@ -163,6 +164,20 @@ export default function WatchStreamScreen() {
   }
 
   const canJoinCall = stream.participantCount < 2;
+  const joinRequested = myJoinStatus === "pending";
+  const joinAccepted = myJoinStatus === "accepted";
+
+  // Navigate to go-live when request is accepted
+  useEffect(() => {
+    if (joinAccepted && livestreamId) {
+      leaveStream({ livestreamId }).catch(() => {});
+      cleanup();
+      router.replace({
+        pathname: "/(main)/go-live",
+        params: { livestreamId, mode: "cohost" },
+      });
+    }
+  }, [joinAccepted, livestreamId, leaveStream, cleanup]);
 
   return (
     <View style={styles.fullScreen}>
@@ -172,7 +187,7 @@ export default function WatchStreamScreen() {
           streamURL={remoteStreamUrl}
           style={StyleSheet.absoluteFill}
           objectFit="cover"
-          mirror={true}
+          mirror={false}
           zOrder={0}
         />
       ) : (
@@ -252,17 +267,22 @@ export default function WatchStreamScreen() {
           {canJoinCall && (
             <Animated.View entering={FadeInUp.duration(300)} style={styles.joinCallContainer}>
               <TouchableOpacity
-                style={styles.joinCallBtn}
+                style={[styles.joinCallBtn, joinRequested && styles.joinCallBtnPending]}
                 onPress={handleJoinCall}
-                disabled={isJoiningCall}
+                disabled={isJoiningCall || joinRequested}
                 activeOpacity={0.8}
               >
                 {isJoiningCall ? (
                   <ActivityIndicator color={colors.black} size="small" />
+                ) : joinRequested ? (
+                  <>
+                    <SymbolView name="clock" size={16} tintColor={colors.gray500} />
+                    <Text style={styles.joinCallTextPending}>Anfrage gesendet</Text>
+                  </>
                 ) : (
                   <>
-                    <SymbolView name="video.fill" size={16} tintColor={colors.black} />
-                    <Text style={styles.joinCallText}>Live dazukommen</Text>
+                    <SymbolView name="hand.raised.fill" size={16} tintColor={colors.black} />
+                    <Text style={styles.joinCallText}>Beitritt anfragen</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -510,6 +530,14 @@ const styles = StyleSheet.create({
     color: colors.black,
     fontSize: 15,
     fontWeight: "700",
+  },
+  joinCallBtnPending: {
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  joinCallTextPending: {
+    color: colors.gray500,
+    fontSize: 15,
+    fontWeight: "600",
   },
 
   /* Comments */

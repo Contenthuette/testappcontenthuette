@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Keyboard,
+  TextInput, Keyboard, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
@@ -13,7 +15,14 @@ import { INTERESTS } from "@/lib/constants";
 export default function OnboardingInterestsScreen() {
   const params = useLocalSearchParams<{ county: string; city: string }>();
   const [selected, setSelected] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [customInput, setCustomInput] = useState("");
+
+  const createInterest = useMutation(api.communityInterests.create);
+  const communityResults = useQuery(
+    api.communityInterests.search,
+    searchQuery.trim().length >= 2 ? { query: searchQuery.trim() } : "skip",
+  );
 
   const toggle = (interest: string) => {
     setSelected((prev) =>
@@ -23,15 +32,18 @@ export default function OnboardingInterestsScreen() {
     );
   };
 
-  const addCustom = () => {
+  const addCustom = async () => {
     const trimmed = customInput.trim();
     if (!trimmed) return;
-    // Avoid duplicates (case-insensitive)
     const already = selected.some(
       (s) => s.toLowerCase() === trimmed.toLowerCase(),
     );
     if (!already) {
       setSelected((prev) => [...prev, trimmed]);
+      // Persist to community interests so others can find it
+      try {
+        await createInterest({ name: trimmed });
+      } catch { /* ignore */ }
     }
     setCustomInput("");
     Keyboard.dismiss();
@@ -48,9 +60,31 @@ export default function OnboardingInterestsScreen() {
     });
   };
 
-  // Split into preset vs. custom
+  // Merge preset interests with search results
   const presetSet = new Set<string>(INTERESTS);
   const customTags = selected.filter((s) => !presetSet.has(s));
+
+  // Filtered preset list based on search
+  const filteredPresets = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [...INTERESTS];
+    return INTERESTS.filter((i) => i.toLowerCase().includes(q));
+  }, [searchQuery]);
+
+  // Community interests not already in preset
+  const communityExtras = useMemo(() => {
+    if (!communityResults) return [];
+    return communityResults.filter(
+      (ci) => !presetSet.has(ci.name) && !selected.includes(ci.name),
+    );
+  }, [communityResults, selected]);
+
+  const hasSearchResults = filteredPresets.length > 0 || communityExtras.length > 0;
+  const showCreateOption =
+    searchQuery.trim().length >= 2 &&
+    !filteredPresets.some((p) => p.toLowerCase() === searchQuery.trim().toLowerCase()) &&
+    !communityExtras.some((c) => c.name.toLowerCase() === searchQuery.trim().toLowerCase()) &&
+    !selected.some((s) => s.toLowerCase() === searchQuery.trim().toLowerCase());
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -59,51 +93,49 @@ export default function OnboardingInterestsScreen() {
           <View style={[styles.progressBar, { width: "75%" }]} />
         </View>
         <Text style={styles.step}>Schritt 3 von 4</Text>
-        <Text style={styles.title}>Wähle deine Interessen</Text>
+        <Text style={styles.title}>W\u00e4hle deine Interessen</Text>
         <Text style={styles.subtitle}>
-          Wähle mindestens 3 Interessen aus
+          W\u00e4hle mindestens 3 Interessen aus
         </Text>
+      </View>
+
+      {/* Search bar */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchInputWrap}>
+          <SymbolView name="magnifyingglass" size={16} tintColor={colors.gray400} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Interesse suchen oder erstellen..."
+            placeholderTextColor={colors.gray400}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            maxLength={40}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
+              <SymbolView name="xmark.circle.fill" size={16} tintColor={colors.gray400} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Custom input */}
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="Eigenes Interesse hinzufügen"
-            placeholderTextColor={colors.gray400}
-            value={customInput}
-            onChangeText={setCustomInput}
-            onSubmitEditing={addCustom}
-            returnKeyType="done"
-            maxLength={30}
-          />
-          <TouchableOpacity
-            style={[
-              styles.addBtn,
-              !customInput.trim() && styles.addBtnDisabled,
-            ]}
-            onPress={addCustom}
-            disabled={!customInput.trim()}
-            activeOpacity={0.7}
-          >
-            <SymbolView
-              name="plus"
-              size={16}
-              tintColor={customInput.trim() ? colors.white : colors.gray400}
-            />
-          </TouchableOpacity>
-        </View>
+        {/* Selected count */}
+        {selected.length > 0 && (
+          <Text style={styles.selectedCount}>
+            {selected.length} ausgew\u00e4hlt
+          </Text>
+        )}
 
-        {/* Custom tags */}
-        {customTags.length > 0 && (
-          <View style={styles.customSection}>
-            <Text style={styles.customLabel}>Deine Interessen</Text>
+        {/* Selected tags */}
+        {selected.length > 0 && (
+          <View style={styles.selectedSection}>
             <View style={styles.chipContainer}>
-              {customTags.map((tag) => (
+              {selected.map((tag) => (
                 <TouchableOpacity
                   key={tag}
                   style={[styles.chip, styles.chipSelected]}
@@ -119,28 +151,87 @@ export default function OnboardingInterestsScreen() {
           </View>
         )}
 
+        {/* Create custom option */}
+        {showCreateOption && (
+          <TouchableOpacity
+            style={styles.createOption}
+            onPress={async () => {
+              const name = searchQuery.trim();
+              if (!selected.includes(name)) {
+                setSelected((prev) => [...prev, name]);
+                try { await createInterest({ name }); } catch {}
+              }
+              setSearchQuery("");
+              Keyboard.dismiss();
+            }}
+          >
+            <SymbolView name="plus.circle.fill" size={20} tintColor={colors.black} />
+            <Text style={styles.createOptionText}>
+              "{searchQuery.trim()}" erstellen
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Community interests from search */}
+        {communityExtras.length > 0 && (
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionLabel}>Community Interessen</Text>
+            <View style={styles.chipContainer}>
+              {communityExtras.map((ci) => (
+                <TouchableOpacity
+                  key={ci._id}
+                  style={[styles.chip, selected.includes(ci.name) && styles.chipSelected]}
+                  onPress={() => toggle(ci.name)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selected.includes(ci.name) && styles.chipTextSelected,
+                    ]}
+                  >
+                    {ci.name}
+                  </Text>
+                  {ci.usageCount > 1 && (
+                    <Text style={styles.usageCount}>{ci.usageCount}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Preset chips */}
-        <View style={styles.chipContainer}>
-          {INTERESTS.map((interest) => (
-            <TouchableOpacity
-              key={interest}
-              style={[
-                styles.chip,
-                selected.includes(interest) && styles.chipSelected,
-              ]}
-              onPress={() => toggle(interest)}
-            >
-              <Text
+        {filteredPresets.length > 0 && (
+          <View style={styles.chipContainer}>
+            {filteredPresets.map((interest) => (
+              <TouchableOpacity
+                key={interest}
                 style={[
-                  styles.chipText,
-                  selected.includes(interest) && styles.chipTextSelected,
+                  styles.chip,
+                  selected.includes(interest) && styles.chipSelected,
                 ]}
+                onPress={() => toggle(interest)}
               >
-                {interest}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text
+                  style={[
+                    styles.chipText,
+                    selected.includes(interest) && styles.chipTextSelected,
+                  ]}
+                >
+                  {interest}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* No results */}
+        {searchQuery.trim().length >= 2 && !hasSearchResults && !showCreateOption && (
+          <View style={styles.emptyState}>
+            <SymbolView name="magnifyingglass" size={32} tintColor={colors.gray300} />
+            <Text style={styles.emptyText}>Keine Interessen gefunden</Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -176,51 +267,77 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: colors.gray500,
+    marginBottom: spacing.sm,
+  },
+
+  /* Search */
+  searchRow: {
+    paddingHorizontal: spacing.xxl,
     marginBottom: spacing.md,
   },
-  scroll: { paddingHorizontal: spacing.xxl, paddingBottom: 120 },
-
-  /* Custom input */
-  inputRow: {
+  searchInputWrap: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  input: {
-    flex: 1,
-    height: 44,
+    alignItems: "center",
     backgroundColor: colors.gray50,
     borderRadius: radius.full,
-    paddingHorizontal: 16,
-    fontSize: 14,
-    color: colors.black,
+    paddingHorizontal: 14,
+    height: 44,
+    gap: 8,
     borderWidth: 1,
     borderColor: colors.gray200,
     borderCurve: "continuous",
   },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addBtnDisabled: {
-    backgroundColor: colors.gray100,
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.black,
   },
 
-  /* Custom section */
-  customSection: {
+  scroll: { paddingHorizontal: spacing.xxl, paddingBottom: 120 },
+
+  selectedCount: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.gray400,
+    marginBottom: spacing.sm,
+  },
+  selectedSection: {
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+
+  sectionWrap: {
     marginBottom: spacing.lg,
   },
-  customLabel: {
+  sectionLabel: {
     fontSize: 12,
     fontWeight: "600",
     color: colors.gray400,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
+  },
+
+  /* Create option */
+  createOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.gray50,
+    borderRadius: radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderCurve: "continuous",
+  },
+  createOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.black,
   },
 
   /* Chips */
@@ -247,6 +364,21 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 13, color: colors.gray700 },
   chipTextSelected: { color: colors.white, fontWeight: "600" },
+  usageCount: {
+    fontSize: 10,
+    color: colors.gray400,
+    fontWeight: "600",
+  },
+
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 10,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.gray400,
+  },
 
   footer: {
     position: "absolute",

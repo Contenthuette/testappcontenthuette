@@ -7,9 +7,12 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
+  Modal,
+  useWindowDimensions,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
 import { SymbolView } from "@/components/Icon";
 import { useSound } from "@/lib/sounds";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
@@ -107,7 +110,9 @@ export function ChatInputBar({
   const [text, setText] = useState("");
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [isPickingMedia, setIsPickingMedia] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState<MediaPickResult | null>(null);
   const { playSound } = useSound();
+  const { width: screenWidth } = useWindowDimensions();
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -146,7 +151,7 @@ export function ChatInputBar({
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const isVideo = asset.mimeType?.startsWith("video") ?? false;
-        onSendMedia({
+        setMediaPreview({
           uri: asset.uri,
           type: isVideo ? "video" : "image",
           mimeType: asset.mimeType ?? (isVideo ? "video/mp4" : "image/jpeg"),
@@ -254,6 +259,56 @@ export function ChatInputBar({
           )}
         </View>
       )}
+
+      {/* Media preview modal */}
+      <Modal
+        visible={!!mediaPreview}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setMediaPreview(null)}
+      >
+        <View style={styles.previewBg}>
+          <View style={styles.previewContent}>
+            {mediaPreview && (
+              <Image
+                source={{ uri: mediaPreview.uri }}
+                style={{
+                  width: screenWidth * 0.85,
+                  height: screenWidth * 0.85 * (4 / 3),
+                  borderRadius: 16,
+                }}
+                contentFit="cover"
+              />
+            )}
+            {mediaPreview?.type === "video" && (
+              <View style={styles.previewVideoBadge}>
+                <SymbolView name="video.fill" size={14} tintColor="#FFF" />
+                <Text style={styles.previewVideoText}>Video</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.previewActions}>
+            <Pressable
+              style={styles.previewCancel}
+              onPress={() => setMediaPreview(null)}
+            >
+              <SymbolView name="xmark" size={20} tintColor="#FFF" />
+            </Pressable>
+            <Pressable
+              style={styles.previewSend}
+              onPress={() => {
+                if (mediaPreview && onSendMedia) {
+                  onSendMedia(mediaPreview);
+                }
+                setMediaPreview(null);
+              }}
+            >
+              <SymbolView name="arrow.up" size={20} tintColor="#FFF" />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -310,5 +365,52 @@ const styles = StyleSheet.create({
   btnPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.95 }],
+  },
+  previewBg: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewContent: {
+    position: "relative" as const,
+  },
+  previewVideoBadge: {
+    position: "absolute" as const,
+    top: 12,
+    left: 12,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  previewVideoText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "600" as const,
+  },
+  previewActions: {
+    flexDirection: "row" as const,
+    gap: 32,
+    marginTop: 32,
+  },
+  previewCancel: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  previewSend: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#000",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
 });

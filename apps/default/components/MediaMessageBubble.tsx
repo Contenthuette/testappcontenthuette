@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 18,
     overflow: "hidden",
-    maxWidth: 240,
+    maxWidth: 260,
   },
   mine: {
     backgroundColor: "#000",
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     margin: MEDIA_PAD,
     borderRadius: 15,
     overflow: "hidden",
-    aspectRatio: 4 / 3,
+    aspectRatio: 3 / 4,
   },
   media: {
     width: "100%",

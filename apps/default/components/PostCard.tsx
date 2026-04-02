@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from "react-native";
+import React, { useState, useCallback, useRef } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { SymbolView } from "@/components/Icon";
 import { theme } from "@/lib/theme";
@@ -8,6 +8,10 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { useSound } from "@/lib/sounds";
+import Animated, {
+  useSharedValue, useAnimatedStyle, withSequence, withTiming,
+  withDelay, runOnJS, FadeIn,
+} from "react-native-reanimated";
 
 interface PostCardProps {
   post: {
@@ -44,6 +48,10 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
   const [playVideo, setPlayVideo] = useState(false);
   const videoHeight = (width - 32) * (4 / 3);
   const { playSound } = useSound();
+  const [showHeart, setShowHeart] = useState(false);
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
+  const lastTapRef = useRef(0);
 
   const handlePlayVideo = useCallback(() => {
     setPlayVideo(true);
@@ -52,6 +60,42 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }, []);
+
+  const triggerDoubleTapLike = useCallback(() => {
+    if (!post.isLiked) {
+      onLike();
+    }
+    setShowHeart(true);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    heartScale.value = withSequence(
+      withTiming(1.3, { duration: 200 }),
+      withTiming(1, { duration: 100 }),
+      withDelay(400, withTiming(0, { duration: 200 })),
+    );
+    heartOpacity.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withDelay(500, withTiming(0, { duration: 200 }, () => {
+        runOnJS(setShowHeart)(false);
+      })),
+    );
+  }, [post.isLiked, onLike, heartScale, heartOpacity]);
+
+  const handleMediaPress = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      triggerDoubleTapLike();
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+    }
+  }, [triggerDoubleTapLike]);
+
+  const heartAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartOpacity.value,
+  }));
 
   // Use thumbnail for videos, media for photos
   const displayImage = isVideo ? (post.thumbnailUrl ?? post.mediaUrl) : post.mediaUrl;
@@ -77,16 +121,25 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
 
       {post.mediaUrl ? (
         isVideo && playVideo ? (
-          <View style={s.videoWrap}>
-            <VideoPlayer
-              uri={post.mediaUrl}
-              height={videoHeight}
-              autoPlay
-              loop
-              muted={false}
-              posterUri={displayImage}
-            />
-          </View>
+          <Pressable onPress={handleMediaPress}>
+            <View style={s.videoWrap}>
+              <VideoPlayer
+                uri={post.mediaUrl}
+                height={videoHeight}
+                autoPlay
+                loop
+                muted={false}
+                posterUri={displayImage}
+              />
+              {showHeart && (
+                <View style={s.heartOverlay} pointerEvents="none">
+                  <Animated.View style={heartAnimStyle}>
+                    <SymbolView name="heart.fill" size={80} tintColor="#FF3B30" />
+                  </Animated.View>
+                </View>
+              )}
+            </View>
+          </Pressable>
         ) : isVideo ? (
           <TouchableOpacity activeOpacity={0.9} onPress={handlePlayVideo}>
             <View style={s.videoWrap}>
@@ -111,16 +164,27 @@ export function PostCard({ post, onLike, onComment, onSave, onShare, onProfile }
             </View>
           </TouchableOpacity>
         ) : (
-          <Image
-            source={{ uri: post.mediaUrl }}
-            style={s.media}
-            contentFit="cover"
-            contentPosition={cropPosition}
-            cachePolicy="memory-disk"
-            priority="high"
-            transition={0}
-            recyclingKey={post._id}
-          />
+          <Pressable onPress={handleMediaPress}>
+            <View>
+              <Image
+                source={{ uri: post.mediaUrl }}
+                style={s.media}
+                contentFit="cover"
+                contentPosition={cropPosition}
+                cachePolicy="memory-disk"
+                priority="high"
+                transition={0}
+                recyclingKey={post._id}
+              />
+              {showHeart && (
+                <View style={s.heartOverlay} pointerEvents="none">
+                  <Animated.View style={heartAnimStyle}>
+                    <SymbolView name="heart.fill" size={80} tintColor="#FF3B30" />
+                  </Animated.View>
+                </View>
+              )}
+            </View>
+          </Pressable>
         )
       ) : null}
 
@@ -202,4 +266,10 @@ const s = StyleSheet.create({
   captionRow: { flexDirection: "row", paddingHorizontal: 14, paddingBottom: 12, flexWrap: "wrap" },
   captionAuthor: { fontSize: 14, fontWeight: "600", color: theme.text },
   caption: { fontSize: 14, color: theme.text, flex: 1 },
+  heartOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
 });

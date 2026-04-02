@@ -482,6 +482,26 @@ export default defineSchema({
   })
     .index("by_livestreamId_and_recipientId", ["livestreamId", "recipientId"]),
 
+  communityInterests: defineTable({
+    name: v.string(),
+    createdByUserId: v.id("users"),
+    usageCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .searchIndex("search_name", { searchField: "name" }),
+
+  livestreamJoinRequests: defineTable({
+    livestreamId: v.id("livestreams"),
+    userId: v.id("users"),
+    userName: v.string(),
+    userAvatarUrl: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected")),
+    createdAt: v.number(),
+  })
+    .index("by_livestreamId_and_status", ["livestreamId", "status"])
+    .index("by_livestreamId_and_userId", ["livestreamId", "userId"]),
+
   // ── Announcements ──────────────────────────────────────────────
   announcements: defineTable({
     text: v.string(),
