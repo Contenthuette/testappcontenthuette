@@ -20,8 +20,16 @@ import { useCallContext } from "@/lib/call-context";
 import { useSound } from "@/lib/sounds";
 import { useWebRTC } from "@/lib/useWebRTC";
 import { setSpeakerOn } from "@/lib/audioRouting";
+import { BlurView } from "expo-blur";
 
-interface CallParticipant { _id: string; userId: string; userName: string; userAvatarUrl?: string }
+interface CallParticipant {
+  _id: string;
+  userId: string;
+  userName: string;
+  userAvatarUrl?: string;
+  isVideoOff?: boolean;
+  isMuted?: boolean;
+}
 
 interface RTCViewProps {
   streamURL: string;
@@ -38,6 +46,7 @@ interface ActiveCallScreenProps {
 export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const call = useQuery(api.calls.getCallDetails, { callId });
   const endCallMutation = useMutation(api.calls.endCall);
+  const toggleVideoMutation = useMutation(api.calls.toggleVideo);
   const me = useQuery(api.users.me);
   const { minimizeCall } = useCallContext();
   const { playSound, stopSound } = useSound();
@@ -157,7 +166,9 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleVideo();
-  }, [playSound, toggleVideo]);
+    // Sync video state to backend so other participant sees the change
+    toggleVideoMutation({ callId }).catch(() => {});
+  }, [playSound, toggleVideo, toggleVideoMutation, callId]);
 
   const handleFlipCamera = useCallback(() => {
     playSound("tap");
@@ -188,7 +199,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     return (
       <View style={styles.container}>
         <ActivityIndicator color="#FFF" size="large" />
-        <Text style={styles.statusText}>Verbinde…</Text>
+        <Text style={styles.statusText}>Verbinde\u2026</Text>
       </View>
     );
   }
@@ -197,7 +208,9 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     call.participants.filter((p: CallParticipant) => p.userId !== me?._id) ?? [];
   const mainOther = otherParticipants[0];
   const displayName = mainOther?.userName ?? call.groupName ?? "Anruf";
-  const displayAvatar = mainOther?.userAvatarUrl;
+
+  // Check if the remote participant has their video paused
+  const remoteVideoOff = mainOther?.isVideoOff ?? false;
 
   // ─── Ringing / Connecting ───
   if (phase === "ringing" || phase === "connecting") {
@@ -210,7 +223,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
             </Text>
             <Text style={styles.ringingName}>{displayName}</Text>
             <Text style={styles.ringingStatus}>
-              {phase === "connecting" ? "Verbinde…" : "Klingelt…"}
+              {phase === "connecting" ? "Verbinde\u2026" : "Klingelt\u2026"}
             </Text>
           </View>
 
@@ -228,7 +241,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               </View>
             ) : (
               <Avatar
-                uri={displayAvatar ?? mainOther?.userAvatarUrl}
+                uri={mainOther?.userAvatarUrl}
                 name={mainOther?.userName ?? displayName}
                 size={140}
               />
@@ -261,7 +274,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   // ─── Error ───
   if (phase === "error") {
     const errorMessage = !isSupported
-      ? "Anrufe sind nur in der mobilen App verfügbar"
+      ? "Anrufe sind nur in der mobilen App verf\u00fcgbar"
       : "Verbindungsfehler";
     return (
       <View style={styles.container}>
@@ -287,7 +300,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 if (router.canGoBack()) router.back();
               }}
             >
-              <Text style={styles.backBtnText}>Zurück</Text>
+              <Text style={styles.backBtnText}>Zur\u00fcck</Text>
             </Pressable>
           </View>
         </SafeAreaView>
@@ -316,12 +329,61 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     <View style={styles.container}>
       {/* Remote video (full screen) or audio avatar */}
       {isVideoCall && RTCViewComponent && remoteStreamUrl ? (
-        <RTCViewComponent
-          streamURL={remoteStreamUrl}
-          style={styles.remoteVideo}
-          objectFit="cover"
-          zOrder={0}
-        />
+        <View style={styles.remoteVideoWrapper}>
+          <RTCViewComponent
+            streamURL={remoteStreamUrl}
+            style={styles.remoteVideo}
+            objectFit="cover"
+            zOrder={0}
+          />
+          {/* Video paused overlay */}
+          {remoteVideoOff && (
+            <View style={styles.videoPausedOverlay}>
+              <BlurView
+                intensity={60}
+                tint="dark"
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.videoPausedContent}>
+                <Avatar
+                  uri={mainOther?.userAvatarUrl}
+                  name={mainOther?.userName ?? displayName}
+                  size={80}
+                />
+                <View style={styles.videoPausedBadge}>
+                  <SymbolView
+                    name="video.slash.fill"
+                    size={16}
+                    tintColor="rgba(255,255,255,0.7)"
+                  />
+                  <Text style={styles.videoPausedText}>
+                    {mainOther?.userName ?? "Z Member"} hat Video angehalten
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+      ) : isVideoCall && remoteVideoOff ? (
+        <View style={styles.videoPausedFullScreen}>
+          <View style={styles.videoPausedContent}>
+            <Avatar
+              uri={mainOther?.userAvatarUrl}
+              name={mainOther?.userName ?? displayName}
+              size={80}
+            />
+            <View style={styles.videoPausedBadge}>
+              <SymbolView
+                name="video.slash.fill"
+                size={16}
+                tintColor="rgba(255,255,255,0.7)"
+              />
+              <Text style={styles.videoPausedText}>
+                {mainOther?.userName ?? "Z Member"} hat Video angehalten
+              </Text>
+            </View>
+          </View>
+        </View>
       ) : (
         <View style={styles.audioCallCenter}>
           <Avatar
@@ -337,13 +399,23 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
       {/* Local video PiP */}
       {isVideoCall && RTCViewComponent && localStreamUrl && (
         <View style={styles.localVideoContainer}>
-          <RTCViewComponent
-            streamURL={localStreamUrl}
-            style={styles.localVideo}
-            objectFit="cover"
-            mirror={true}
-            zOrder={1}
-          />
+          {isVideoOff ? (
+            <View style={styles.localVideoOffContainer}>
+              <SymbolView
+                name="video.slash.fill"
+                size={20}
+                tintColor="rgba(255,255,255,0.5)"
+              />
+            </View>
+          ) : (
+            <RTCViewComponent
+              streamURL={localStreamUrl}
+              style={styles.localVideo}
+              objectFit="cover"
+              mirror={true}
+              zOrder={1}
+            />
+          )}
         </View>
       )}
 
@@ -566,6 +638,11 @@ const styles = StyleSheet.create({
   },
 
   // ─── Live call ───
+  remoteVideoWrapper: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
   remoteVideo: {
     flex: 1,
     width: "100%",
@@ -585,6 +662,46 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   localVideo: { flex: 1, backgroundColor: "#222" },
+  localVideoOffContainer: {
+    flex: 1,
+    backgroundColor: "#1a1a1a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Video paused overlay
+  videoPausedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  videoPausedFullScreen: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: "#1a1a1a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoPausedContent: {
+    alignItems: "center",
+    gap: 16,
+    zIndex: 1,
+  },
+  videoPausedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  videoPausedText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.7)",
+  },
 
   // Audio call live view
   audioCallCenter: {
