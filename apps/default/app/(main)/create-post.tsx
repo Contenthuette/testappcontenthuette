@@ -37,12 +37,13 @@ import Animated, {
   withSpring,
   runOnJS,
 } from "react-native-reanimated";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 type PostType = "photo" | "video";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
-  photo: { title: "Foto posten", pickLabel: "Foto auswaehlen", icon: "photo" },
-  video: { title: "Video posten", pickLabel: "Video auswaehlen", icon: "video" },
+  photo: { title: "Foto posten", pickLabel: "Foto auswählen", icon: "photo" },
+  video: { title: "Video posten", pickLabel: "Video auswählen", icon: "video" },
 };
 
 // 9:16 portrait container (Reels-style)
@@ -97,7 +98,21 @@ export default function CreatePostScreen() {
   const [cropState, setCropState] = useState({ x: 0, y: 0, zoom: 1 });
 
   // For videos, we extract a frame to use as the crop preview
-  const [videoFrameUri, setVideoFrameUri] = useState<string | null>(null);
+  const [_videoFrameUri, setVideoFrameUri] = useState<string | null>(null);
+
+  // Video player for live preview
+  const videoPlayer = useVideoPlayer(postType === "video" && mediaPreview ? mediaPreview : null, (player) => {
+    player.loop = true;
+    player.muted = true;
+  });
+
+  // Sync video player when media changes
+  useEffect(() => {
+    if (postType === "video" && mediaPreview && videoPlayer) {
+      videoPlayer.replace(mediaPreview);
+      videoPlayer.play();
+    }
+  }, [mediaPreview, postType, videoPlayer]);
 
   const previewWidth = width - spacing.lg * 2;
   const containerHeight = previewWidth / FEED_ASPECT_RATIO; // 4:3 landscape
@@ -311,7 +326,7 @@ export default function CreatePostScreen() {
       console.error("Post creation failed:", error);
       setPublishing(false);
       if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Beitrag konnte nicht veroeffentlicht werden.");
+        Alert.alert("Fehler", "Beitrag konnte nicht veröffenlicht werden.");
       }
     }
   };
@@ -322,7 +337,7 @@ export default function CreatePostScreen() {
         <View style={styles.successBadge}>
           <Icon name="checkmark.circle.fill" size={48} tintColor={colors.success} />
         </View>
-        <Text style={styles.successTitle}>Veroeffentlicht!</Text>
+        <Text style={styles.successTitle}>Veröffenlicht!</Text>
         <Text style={styles.successSub}>Dein Beitrag ist jetzt im Feed sichtbar.</Text>
       </View>
     );
@@ -336,9 +351,67 @@ export default function CreatePostScreen() {
   const renderCropPreview = () => {
     if (!mediaPreview || !mediaDims) return null;
 
+    // Video: show live video player
+    if (postType === "video") {
+      return (
+        <View>
+          <View
+            style={[
+              styles.cropContainer,
+              {
+                width: previewWidth,
+                height: containerHeight,
+              },
+            ]}
+          >
+            <VideoView
+              player={videoPlayer}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              nativeControls={false}
+            />
+            {/* 9:16 label badge */}
+            <View style={styles.aspectBadge} pointerEvents="none">
+              <Text style={styles.aspectBadgeText}>9:16</Text>
+            </View>
+          </View>
+
+          <Text style={styles.cropHint}>
+            So wird dein Video im Feed angezeigt
+          </Text>
+
+          {/* Thumbnail picker for videos */}
+          <ThumbnailPicker
+            videoUri={mediaPreview}
+            videoDuration={videoDuration}
+            onThumbnailSelected={handleThumbnailSelected}
+            selectedThumbnailUri={thumbnailUri}
+          />
+
+          {/* Change video button */}
+          <TouchableOpacity
+            style={styles.changeBtn}
+            onPress={handlePick}
+            disabled={picking || publishing}
+            activeOpacity={0.7}
+          >
+            {picking ? (
+              <ActivityIndicator size="small" color={colors.black} />
+            ) : (
+              <>
+                <Icon name="arrow.triangle.2.circlepath" size={16} tintColor={colors.black} />
+                <Text style={styles.changeBtnText}>Anderes Video</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Photo: show crop preview with gestures
     return (
       <View>
-        {/* Fixed 4:3 crop container */}
+        {/* Fixed 9:16 crop container */}
         <GestureDetector gesture={composedGesture}>
           <Animated.View
             style={[
@@ -354,7 +427,6 @@ export default function CreatePostScreen() {
                 {
                   width: baseMediaWidth,
                   height: baseMediaHeight,
-                  // Center media initially
                   position: "absolute",
                   left: (previewWidth - baseMediaWidth) / 2,
                   top: (containerHeight - baseMediaHeight) / 2,
@@ -362,19 +434,11 @@ export default function CreatePostScreen() {
                 animatedMediaStyle,
               ]}
             >
-              {postType === "video" ? (
-                <Image
-                  source={{ uri: videoFrameUri ?? mediaPreview }}
-                  style={{ width: baseMediaWidth, height: baseMediaHeight }}
-                  contentFit="cover"
-                />
-              ) : (
-                <Image
-                  source={{ uri: mediaPreview }}
-                  style={{ width: baseMediaWidth, height: baseMediaHeight }}
-                  contentFit="cover"
-                />
-              )}
+              <Image
+                source={{ uri: mediaPreview }}
+                style={{ width: baseMediaWidth, height: baseMediaHeight }}
+                contentFit="cover"
+              />
             </Animated.View>
 
             {/* Drag hint overlay */}
@@ -387,7 +451,7 @@ export default function CreatePostScreen() {
               </View>
             )}
 
-            {/* 4:3 label badge */}
+            {/* 9:16 label badge */}
             <View style={styles.aspectBadge} pointerEvents="none">
               <Text style={styles.aspectBadgeText}>9:16</Text>
             </View>
@@ -400,17 +464,7 @@ export default function CreatePostScreen() {
             : "Dein Medium passt perfekt ins 9:16 Format"}
         </Text>
 
-        {/* Thumbnail picker for videos */}
-        {postType === "video" && mediaPreview && (
-          <ThumbnailPicker
-            videoUri={mediaPreview}
-            videoDuration={videoDuration}
-            onThumbnailSelected={handleThumbnailSelected}
-            selectedThumbnailUri={thumbnailUri}
-          />
-        )}
-
-        {/* Change media button */}
+        {/* Change photo button */}
         <TouchableOpacity
           style={styles.changeBtn}
           onPress={handlePick}
@@ -422,9 +476,7 @@ export default function CreatePostScreen() {
           ) : (
             <>
               <Icon name="arrow.triangle.2.circlepath" size={16} tintColor={colors.black} />
-              <Text style={styles.changeBtnText}>
-                {postType === "video" ? "Anderes Video" : "Anderes Foto"}
-              </Text>
+              <Text style={styles.changeBtnText}>Anderes Foto</Text>
             </>
           )}
         </TouchableOpacity>
@@ -485,7 +537,7 @@ export default function CreatePostScreen() {
               {picking ? (
                 <View style={styles.emptyMedia}>
                   <ActivityIndicator size="large" color={colors.gray400} />
-                  <Text style={styles.emptyLabel}>Oeffne Galerie...</Text>
+                  <Text style={styles.emptyLabel}>\u00d6ffne Galerie...</Text>
                 </View>
               ) : (
                 <View style={styles.emptyMedia}>
@@ -520,7 +572,7 @@ export default function CreatePostScreen() {
             >
               <Icon name="mappin.circle.fill" size={20} tintColor={location ? colors.black : colors.gray400} />
               <Text style={[styles.locationButtonText, !location && { color: colors.gray400 }]}>
-                {location ?? "Standort hinzufuegen"}
+                {location ?? "Standort hinzuf\u00fcgen"}
               </Text>
               {location && (
                 <Pressable
@@ -542,7 +594,7 @@ export default function CreatePostScreen() {
           >
             <View style={styles.locationModal}>
               <View style={styles.locationModalHeader}>
-                <Text style={styles.locationModalTitle}>Standort waehlen</Text>
+                <Text style={styles.locationModalTitle}>Standort w\u00e4hlen</Text>
                 <Pressable onPress={() => { setShowLocationPicker(false); setLocationSearch(""); }}>
                   <Icon name="xmark.circle.fill" size={28} tintColor={colors.gray400} />
                 </Pressable>
