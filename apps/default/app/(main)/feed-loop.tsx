@@ -86,11 +86,12 @@ interface ReelPostProps {
   onShare: (postId: Id<"posts">) => void;
   onDelete: (postId: Id<"posts">) => void;
   onComment: (postId: Id<"posts">) => void;
+  onReport: (postId: Id<"posts">) => void;
 }
 
 const ReelPost = memo(function ReelPost({
   item, screenWidth, screenHeight, isVideoPlaying, bottomInset,
-  onToggleLike, onToggleSave, onShare, onDelete, onComment,
+  onToggleLike, onToggleSave, onShare, onDelete, onComment, onReport,
 }: ReelPostProps) {
   const [showHeart, setShowHeart] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -170,18 +171,37 @@ const ReelPost = memo(function ReelPost({
     if (Platform.OS === "ios") {
       const options = item.isOwn
         ? ["Abbrechen", "Beitrag l\u00f6schen"]
-        : ["Abbrechen"];
+        : ["Abbrechen", "Beitrag melden"];
       ActionSheetIOS.showActionSheetWithOptions(
-        { options, destructiveButtonIndex: item.isOwn ? 1 : undefined, cancelButtonIndex: 0 },
-        (idx) => { if (idx === 1 && item.isOwn) onDelete(item._id); },
+        {
+          options,
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 0,
+        },
+        (idx) => {
+          if (idx === 1) {
+            if (item.isOwn) {
+              onDelete(item._id);
+            } else {
+              onReport(item._id);
+            }
+          }
+        },
       );
-    } else if (item.isOwn) {
-      Alert.alert("Beitrag l\u00f6schen?", "Unwiderruflich.", [
-        { text: "Abbrechen", style: "cancel" },
-        { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
-      ]);
+    } else {
+      if (item.isOwn) {
+        Alert.alert("Beitrag l\u00f6schen?", "Unwiderruflich.", [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
+        ]);
+      } else {
+        Alert.alert("Beitrag melden", "M\u00f6chtest du diesen Beitrag melden?", [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Melden", style: "destructive", onPress: () => onReport(item._id) },
+        ]);
+      }
     }
-  }, [item._id, item.isOwn, onDelete]);
+  }, [item._id, item.isOwn, onDelete, onReport]);
 
   const isVideo = item.type === "video";
   const thumbUri = item.thumbnailUrl;
@@ -386,6 +406,7 @@ export default function FeedLoopScreen() {
   const toggleLike = useMutation(api.posts.toggleLike);
   const toggleSave = useMutation(api.posts.toggleSave);
   const deletePost = useMutation(api.posts.deletePost);
+  const reportPost = useMutation(api.reports.create);
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
   const [commentsPostId, setCommentsPostId] = useState<Id<"posts"> | null>(null);
@@ -404,6 +425,16 @@ export default function FeedLoopScreen() {
       Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
     }
   }, [deletePost]);
+
+  const handleReport = useCallback(async (postId: Id<"posts">) => {
+    try {
+      await reportPost({ type: "post" as const, targetId: postId, reason: "Vom Nutzer gemeldet" });
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Gemeldet", "Der Beitrag wurde gemeldet. Danke f\u00fcr dein Feedback.");
+    } catch {
+      Alert.alert("Fehler", "Meldung konnte nicht gesendet werden.");
+    }
+  }, [reportPost]);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useCallback(
@@ -436,8 +467,9 @@ export default function FeedLoopScreen() {
       onShare={handleShare}
       onDelete={handleDelete}
       onComment={handleComment}
+      onReport={handleReport}
     />
-  ), [screenWidth, screenHeight, isFocused, visibleVideoId, insets.bottom, handleToggleLike, handleToggleSave, handleShare, handleDelete, handleComment]);
+  ), [screenWidth, screenHeight, isFocused, visibleVideoId, insets.bottom, handleToggleLike, handleToggleSave, handleShare, handleDelete, handleComment, handleReport]);
 
   const onContentSizeChange = useCallback(() => {
     if (!didScrollRef.current && feed && feed.length > startIdx && flatListRef.current) {

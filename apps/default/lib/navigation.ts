@@ -6,6 +6,7 @@ import { router } from "expo-router";
  */
 const FALLBACK_ROUTES: Record<string, string> = {
   // All main sub-pages → Groups home
+  "feed-loop": "/(main)/(tabs)/feed",
   "group-detail": "/(main)/(tabs)/groups",
   "group-chat": "/(main)/(tabs)/groups",
   "create-group": "/(main)/(tabs)/groups",

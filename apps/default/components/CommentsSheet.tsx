@@ -120,7 +120,7 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
 
       {/* Sheet */}
       <Animated.View
-        entering={SlideInDown.duration(300).springify().damping(20)}
+        entering={SlideInDown.duration(350)}
         exiting={SlideOutDown.duration(200)}
         style={[styles.sheet, { height: sheetHeight }]}
       >
