@@ -22,6 +22,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming,
   withDelay, runOnJS,
 } from "react-native-reanimated";
+import { CommentsSheet } from "@/components/CommentsSheet";
 
 interface FeedItem {
   _id: Id<"posts">;
@@ -84,11 +85,12 @@ interface ReelPostProps {
   onToggleSave: (postId: Id<"posts">) => void;
   onShare: (postId: Id<"posts">) => void;
   onDelete: (postId: Id<"posts">) => void;
+  onComment: (postId: Id<"posts">) => void;
 }
 
 const ReelPost = memo(function ReelPost({
   item, screenWidth, screenHeight, isVideoPlaying, bottomInset,
-  onToggleLike, onToggleSave, onShare, onDelete,
+  onToggleLike, onToggleSave, onShare, onDelete, onComment,
 }: ReelPostProps) {
   const [showHeart, setShowHeart] = useState(false);
   const heartScale = useSharedValue(0);
@@ -237,7 +239,7 @@ const ReelPost = memo(function ReelPost({
         {/* Comment */}
         <TouchableOpacity
           style={styles.actionItem}
-          onPress={() => router.push({ pathname: "/(main)/post-comments", params: { id: item._id } })}
+          onPress={() => onComment(item._id)}
           hitSlop={8}
         >
           <SymbolView name="bubble.right" size={28} tintColor="#fff" />
@@ -331,12 +333,14 @@ export default function FeedLoopScreen() {
   const deletePost = useMutation(api.posts.deletePost);
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
   const [sharePostId, setSharePostId] = useState<Id<"posts"> | null>(null);
+  const [commentsPostId, setCommentsPostId] = useState<Id<"posts"> | null>(null);
   const didScrollRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
 
   const handleToggleLike = useCallback((postId: Id<"posts">) => { toggleLike({ postId }); }, [toggleLike]);
   const handleToggleSave = useCallback((postId: Id<"posts">) => { toggleSave({ postId }); }, [toggleSave]);
   const handleShare = useCallback((postId: Id<"posts">) => { setSharePostId(postId); }, []);
+  const handleComment = useCallback((postId: Id<"posts">) => { setCommentsPostId(postId); }, []);
   const handleDelete = useCallback(async (postId: Id<"posts">) => {
     try {
       await deletePost({ postId });
@@ -376,8 +380,9 @@ export default function FeedLoopScreen() {
       onToggleSave={handleToggleSave}
       onShare={handleShare}
       onDelete={handleDelete}
+      onComment={handleComment}
     />
-  ), [screenWidth, screenHeight, isFocused, visibleVideoId, insets.bottom, handleToggleLike, handleToggleSave, handleShare, handleDelete]);
+  ), [screenWidth, screenHeight, isFocused, visibleVideoId, insets.bottom, handleToggleLike, handleToggleSave, handleShare, handleDelete, handleComment]);
 
   const onContentSizeChange = useCallback(() => {
     if (!didScrollRef.current && feed && feed.length > startIdx && flatListRef.current) {
@@ -440,6 +445,11 @@ export default function FeedLoopScreen() {
         <Text style={styles.headerTitle}>Feed</Text>
       </View>
 
+      <CommentsSheet
+        postId={commentsPostId}
+        visible={commentsPostId !== null}
+        onClose={() => setCommentsPostId(null)}
+      />
       <ShareSheet visible={sharePostId !== null} postId={sharePostId} onClose={() => setSharePostId(null)} />
     </View>
   );
