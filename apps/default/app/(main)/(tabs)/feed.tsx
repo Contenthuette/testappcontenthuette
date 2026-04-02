@@ -176,7 +176,7 @@ export default function FeedScreen() {
       {/* Header */}
       <View style={styles.header}>
         <ZLogo size={47} />
-        <Text style={styles.headerTitle}>Feed</Text>
+        <Text style={styles.headerTitle}>Z Posts</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity
           onPress={() => router.push("/(main)/conversations")}
