@@ -467,7 +467,6 @@ export default function CreatePostScreen() {
       {picking ? (
         <View style={styles.emptyMedia}>
           <ActivityIndicator size="large" color={colors.gray400} />
-          <Text style={styles.emptyLabel}>\u00d6ffne Galerie...</Text>
         </View>
       ) : (
         <View style={styles.emptyMedia}>
