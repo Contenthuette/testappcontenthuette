@@ -44,6 +44,16 @@ export function VideoPlayer({
   const player = useVideoPlayer(uri, (p) => {
     p.loop = loop;
     p.muted = muted;
+    p.playbackRate = 1.0;
+    // Buffer aggressively for instant playback
+    p.bufferOptions = {
+      preferredForwardBufferDuration: 10,
+      minBufferForPlayback: 0.5,
+      prioritizeTimeOverSizeThreshold: true,
+    };
+    if (autoPlay) {
+      p.play();
+    }
   });
 
   const [progress, setProgress] = useState(0);

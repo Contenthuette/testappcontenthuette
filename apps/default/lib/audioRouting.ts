@@ -37,7 +37,8 @@ export function forceSpeakerWithRetries(): () => void {
   setSpeakerOn(true);
 
   // Retry at increasing intervals to override WebRTC audio session resets
-  const delays = [300, 800, 1500, 3000];
+  // More frequent retries in the first few seconds when WebRTC is most likely to reset
+  const delays = [100, 300, 600, 1000, 1500, 2500, 4000, 6000];
   for (const delay of delays) {
     timers.push(setTimeout(() => setSpeakerOn(true), delay));
   }

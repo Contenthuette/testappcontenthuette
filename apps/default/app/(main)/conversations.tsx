@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
-  ScrollView,
+  ScrollView, LayoutAnimation, UIManager, Platform as RNPlatform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -16,31 +16,50 @@ import { SymbolView } from "@/components/Icon";
 import { PollCard } from "@/components/PollCard";
 import Animated, { FadeIn } from "react-native-reanimated";
 
+// Enable LayoutAnimation on Android
+if (RNPlatform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 /* ─── Community Polls ─── */
 function CommunityPolls() {
   const { isAuthenticated } = useConvexAuth();
   const polls = useQuery(api.polls.listCommunity, isAuthenticated ? {} : "skip");
+  const [expanded, setExpanded] = useState(false);
   if (!polls || polls.length === 0) return null;
+
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  };
 
   return (
     <Animated.View entering={FadeIn.duration(300)} style={pollStyles.section}>
-      <View style={pollStyles.header}>
+      <TouchableOpacity onPress={toggleExpand} activeOpacity={0.7} style={pollStyles.header}>
         <SymbolView name="chart.bar.fill" size={16} tintColor={colors.black} />
         <Text style={pollStyles.title}>Umfragen</Text>
-      </View>
+        <SymbolView
+          name={expanded ? "chevron.up" : "chevron.down"}
+          size={12}
+          tintColor={colors.gray400}
+        />
+      </TouchableOpacity>
       <ScrollView
-        horizontal
+        horizontal={!expanded}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={pollStyles.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={expanded ? pollStyles.expandedScroll : pollStyles.scroll}
         decelerationRate="fast"
-        snapToInterval={220 + spacing.sm}
+        snapToInterval={expanded ? undefined : 220 + spacing.sm}
       >
         {polls.map((p: { _id: string }) => (
-          <View key={p._id} style={pollStyles.cardWrap}>
-            <PollCard {...(p as React.ComponentProps<typeof PollCard>)} compact />
+          <View key={p._id} style={expanded ? pollStyles.cardWrapExpanded : pollStyles.cardWrap}>
+            <PollCard {...(p as React.ComponentProps<typeof PollCard>)} compact={!expanded} />
           </View>
         ))}
       </ScrollView>
+      {/* Separator line */}
+      <View style={pollStyles.separator} />
     </Animated.View>
   );
 }
@@ -119,7 +138,7 @@ function formatTime(ts: number): string {
 
 const pollStyles = StyleSheet.create({
   section: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   header: {
     flexDirection: "row",
@@ -138,8 +157,22 @@ const pollStyles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
   },
+  expandedScroll: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.sm,
+    flexDirection: "column",
+  },
   cardWrap: {
     width: 220,
+  },
+  cardWrapExpanded: {
+    width: "100%",
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.gray200,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
   },
 });
 

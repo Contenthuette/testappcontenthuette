@@ -299,11 +299,11 @@ const ReelPost = memo(function ReelPost({
             onToggleLike(item._id);
             if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          hitSlop={8}
+          hitSlop={12}
         >
           <SymbolView
             name={item.isLiked ? "heart.fill" : "heart"}
-            size={28}
+            size={34}
             tintColor={item.isLiked ? "#ff3b5c" : "#fff"}
           />
           {item.likeCount > 0 && (
@@ -315,9 +315,9 @@ const ReelPost = memo(function ReelPost({
         <TouchableOpacity
           style={styles.actionItem}
           onPress={() => onComment(item._id)}
-          hitSlop={8}
+          hitSlop={12}
         >
-          <SymbolView name="bubble.right" size={28} tintColor="#fff" />
+          <SymbolView name="bubble.right" size={34} tintColor="#fff" />
           {item.commentCount > 0 && (
             <Text style={styles.actionCount}>{formatCount(item.commentCount)}</Text>
           )}
@@ -327,9 +327,9 @@ const ReelPost = memo(function ReelPost({
         <TouchableOpacity
           style={styles.actionItem}
           onPress={() => onShare(item._id)}
-          hitSlop={8}
+          hitSlop={12}
         >
-          <SymbolView name="paperplane" size={28} tintColor="#fff" />
+          <SymbolView name="paperplane" size={32} tintColor="#fff" />
         </TouchableOpacity>
 
         {/* Save */}
@@ -339,11 +339,11 @@ const ReelPost = memo(function ReelPost({
             onToggleSave(item._id);
             if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          hitSlop={8}
+          hitSlop={12}
         >
           <SymbolView
             name={item.isSaved ? "bookmark.fill" : "bookmark"}
-            size={28}
+            size={32}
             tintColor="#fff"
           />
         </TouchableOpacity>
@@ -352,9 +352,9 @@ const ReelPost = memo(function ReelPost({
         <TouchableOpacity
           style={styles.actionItem}
           onPress={handleMore}
-          hitSlop={8}
+          hitSlop={12}
         >
-          <SymbolView name="ellipsis" size={24} tintColor="#fff" />
+          <SymbolView name="ellipsis" size={28} tintColor="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -436,7 +436,7 @@ export default function FeedLoopScreen() {
     }
   }, [reportPost]);
 
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 40 }).current;
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const visibleVideo = viewableItems.find(
@@ -511,10 +511,10 @@ export default function FeedLoopScreen() {
           if (feedStatus === "CanLoadMore") loadMore(10);
         }}
         onEndReachedThreshold={0.6}
-        removeClippedSubviews
-        maxToRenderPerBatch={3}
-        windowSize={3}
-        initialNumToRender={2}
+        removeClippedSubviews={false}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        initialNumToRender={3}
         decelerationRate="fast"
         snapToAlignment="start"
         snapToInterval={screenHeight}
@@ -601,14 +601,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 12,
     alignItems: "center",
-    gap: 20,
+    gap: 18,
   },
   actionItem: {
     alignItems: "center",
     gap: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
   },
   actionCount: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
     color: "#fff",
     textShadowColor: "rgba(0,0,0,0.5)",
