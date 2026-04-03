@@ -235,28 +235,10 @@ export default function GroupsScreen() {
     </TouchableOpacity>
   );
 
-  return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <ZLogo size={47} />
-        <Text style={styles.headerTitle}>Community</Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
-          <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
-          <SymbolView name="bell" size={22} tintColor={colors.black} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Announcement Banner */}
+  const listHeader = (
+    <>
       <AnnouncementBanner />
-
-      {/* Live Now */}
       <LiveNowSection />
-
-      {/* Community Polls */}
       <CommunityPolls />
 
       {/* Tab Toggle */}
@@ -298,8 +280,25 @@ export default function GroupsScreen() {
           )}
         </View>
       </View>
+    </>
+  );
 
-      {/* List */}
+  return (
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <ZLogo size={47} />
+        <Text style={styles.headerTitle}>Community</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
+          <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
+          <SymbolView name="bell" size={22} tintColor={colors.black} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Scrollable content */}
       {tab === "groups" ? (
         <FlatList
           data={groups}
@@ -307,6 +306,7 @@ export default function GroupsScreen() {
           keyExtractor={item => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={listHeader}
           onEndReached={() => {
             if (groupsStatus === "CanLoadMore") loadMoreGroups(16);
           }}
@@ -339,6 +339,7 @@ export default function GroupsScreen() {
           keyExtractor={item => item._id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={listHeader}
           onEndReached={() => {
             if (peopleStatus === "CanLoadMore") loadMorePeople(16);
           }}
