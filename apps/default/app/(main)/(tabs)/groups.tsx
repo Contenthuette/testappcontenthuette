@@ -92,11 +92,11 @@ function CommunityPolls() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.pollsScroll}
         decelerationRate="fast"
-        snapToInterval={300 + spacing.sm}
+        snapToInterval={220 + spacing.sm}
       >
         {polls.map((p: { _id: string }) => (
           <View key={p._id} style={styles.pollCardWrap}>
-            <PollCard {...(p as React.ComponentProps<typeof PollCard>)} />
+            <PollCard {...(p as React.ComponentProps<typeof PollCard>)} compact />
           </View>
         ))}
       </ScrollView>
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   pollCardWrap: {
-    width: 300,
+    width: 220,
   },
 
   header: {

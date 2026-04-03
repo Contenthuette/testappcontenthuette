@@ -19,6 +19,7 @@ interface PollCardProps {
   myVote?: number;
   isActive: boolean;
   createdAt: number;
+  compact?: boolean;
 }
 
 export function PollCard({
@@ -26,12 +27,13 @@ export function PollCard({
   question,
   options,
   creatorName,
-  creatorAvatarUrl,
+  creatorAvatarUrl: _creatorAvatarUrl,
   totalVotes,
   voteCounts,
   myVote,
   isActive,
   createdAt,
+  compact,
 }: PollCardProps) {
   const castVote = useMutation(api.polls.vote);
   const hasVoted = myVote !== undefined;
@@ -49,17 +51,19 @@ export function PollCard({
   const timeAgo = getTimeAgo(createdAt);
 
   return (
-    <Animated.View entering={FadeIn.duration(300)} style={styles.card}>
+    <Animated.View entering={FadeIn.duration(300)} style={[styles.card, compact && styles.cardCompact]}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.pollIcon}>
-          <SymbolView name="chart.bar.fill" size={16} tintColor={colors.white} />
+        <View style={[styles.pollIcon, compact && styles.pollIconCompact]}>
+          <SymbolView name="chart.bar.fill" size={compact ? 12 : 16} tintColor={colors.white} />
         </View>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerLabel}>Umfrage</Text>
-          <Text style={styles.headerMeta}>
-            von {creatorName} · {timeAgo}
-          </Text>
+          <Text style={[styles.headerLabel, compact && styles.headerLabelCompact]}>Umfrage</Text>
+          {!compact && (
+            <Text style={styles.headerMeta}>
+              von {creatorName} · {timeAgo}
+            </Text>
+          )}
         </View>
         {!isActive && (
           <View style={styles.closedBadge}>
@@ -69,10 +73,10 @@ export function PollCard({
       </View>
 
       {/* Question */}
-      <Text style={styles.question}>{question}</Text>
+      <Text style={[styles.question, compact && styles.questionCompact]} numberOfLines={compact ? 2 : undefined}>{question}</Text>
 
       {/* Options */}
-      <View style={styles.optionsWrap}>
+      <View style={[styles.optionsWrap, compact && styles.optionsWrapCompact]}>
         {options.map((option, i) => {
           const count = voteCounts[i] ?? 0;
           const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -83,6 +87,7 @@ export function PollCard({
               key={i}
               style={[
                 styles.optionBtn,
+                compact && styles.optionBtnCompact,
                 hasVoted && styles.optionVoted,
                 isMyVote && styles.optionMyVote,
               ]}
@@ -103,18 +108,19 @@ export function PollCard({
               <Text
                 style={[
                   styles.optionText,
+                  compact && styles.optionTextCompact,
                   isMyVote && styles.optionTextBold,
                 ]}
-                numberOfLines={2}
+                numberOfLines={1}
               >
                 {option}
               </Text>
               {hasVoted && (
                 <View style={styles.optionRight}>
                   {isMyVote && (
-                    <SymbolView name="checkmark.circle.fill" size={14} tintColor={colors.black} />
+                    <SymbolView name="checkmark.circle.fill" size={compact ? 12 : 14} tintColor={colors.black} />
                   )}
-                  <Text style={[styles.pctText, isMyVote && styles.pctTextBold]}>
+                  <Text style={[styles.pctText, compact && styles.pctTextCompact, isMyVote && styles.pctTextBold]}>
                     {pct}%
                   </Text>
                 </View>
@@ -125,8 +131,8 @@ export function PollCard({
       </View>
 
       {/* Footer */}
-      <Text style={styles.footer}>
-        {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"}
+      <Text style={[styles.footer, compact && styles.footerCompact]}>
+        {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"}{compact ? "" : ` · ${timeAgo}`}
       </Text>
     </Animated.View>
   );
@@ -153,6 +159,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderCurve: "continuous",
   },
+  cardCompact: {
+    padding: spacing.md,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -167,12 +176,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  pollIconCompact: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
   headerInfo: { flex: 1 },
   headerLabel: {
     fontSize: 14,
     fontWeight: "700",
     color: colors.black,
     letterSpacing: -0.2,
+  },
+  headerLabelCompact: {
+    fontSize: 13,
   },
   headerMeta: {
     fontSize: 12,
@@ -198,8 +215,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     lineHeight: 22,
   },
+  questionCompact: {
+    fontSize: 14,
+    lineHeight: 19,
+    marginBottom: spacing.sm,
+  },
   optionsWrap: {
     gap: spacing.sm,
+  },
+  optionsWrapCompact: {
+    gap: 6,
   },
   optionBtn: {
     flexDirection: "row",
@@ -210,6 +235,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray100,
     borderCurve: "continuous",
     overflow: "hidden",
+  },
+  optionBtnCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
   optionVoted: {
     backgroundColor: colors.gray100,
@@ -235,6 +264,9 @@ const styles = StyleSheet.create({
     color: colors.black,
     letterSpacing: -0.2,
   },
+  optionTextCompact: {
+    fontSize: 13,
+  },
   optionTextBold: {
     fontWeight: "600",
   },
@@ -249,6 +281,9 @@ const styles = StyleSheet.create({
     color: colors.gray500,
     fontVariant: ["tabular-nums"],
   },
+  pctTextCompact: {
+    fontSize: 12,
+  },
   pctTextBold: {
     fontWeight: "700",
     color: colors.black,
@@ -258,5 +293,9 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     marginTop: spacing.md,
     letterSpacing: -0.1,
+  },
+  footerCompact: {
+    fontSize: 11,
+    marginTop: spacing.sm,
   },
 });
