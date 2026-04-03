@@ -294,6 +294,45 @@ export const listConversations = authQuery({
   },
 });
 
+// Total unread messages count across all conversations
+export const getUnreadConversationsCount = authQuery({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) return 0;
+
+    const allConversations = await ctx.db
+      .query("conversations")
+      .withIndex("by_lastMessageAt")
+      .order("desc")
+      .take(100);
+    const myConversations = allConversations.filter(
+      (c) =>
+        c.type === "direct" && c.participantIds?.includes(myUserId),
+    );
+
+    let total = 0;
+    for (const conversation of myConversations) {
+      const readStatus = await ctx.db
+        .query("conversationReadStatus")
+        .withIndex("by_conversationId_and_userId", (q) =>
+          q.eq("conversationId", conversation._id).eq("userId", myUserId),
+        )
+        .unique();
+      const lastReadAt = readStatus?.lastReadAt ?? 0;
+      const unreadMessages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversationId_and_createdAt", (q) =>
+          q.eq("conversationId", conversation._id).gt("createdAt", lastReadAt),
+        )
+        .take(100);
+      total += unreadMessages.filter((m) => m.senderId !== myUserId).length;
+    }
+    return total;
+  },
+});
+
 // Mark conversation as read
 export const markConversationAsRead = authMutation({
   args: { conversationId: v.id("conversations") },

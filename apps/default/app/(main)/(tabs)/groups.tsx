@@ -79,6 +79,16 @@ export default function GroupsScreen() {
   const [tab, setTab] = useState<Tab>("groups");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Unread counts for badges
+  const unreadMessages = useQuery(
+    api.messaging.getUnreadConversationsCount,
+    isAuthenticated ? {} : "skip",
+  );
+  const unreadNotifications = useQuery(
+    api.notifications.getUnreadCount,
+    isAuthenticated ? {} : "skip",
+  );
+
   // Fetch which groups are currently live
   const liveGroupIds = useQuery(
     api.livestreams.liveGroupIds,
@@ -261,9 +271,23 @@ export default function GroupsScreen() {
         <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
           <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
+          {(unreadMessages ?? 0) > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {(unreadMessages ?? 0) > 99 ? "99+" : unreadMessages}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
           <SymbolView name="bell" size={22} tintColor={colors.black} />
+          {(unreadNotifications ?? 0) > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {(unreadNotifications ?? 0) > 99 ? "99+" : unreadNotifications}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -599,5 +623,25 @@ const styles = StyleSheet.create({
     width: 30,
     alignItems: "center",
     justifyContent: "center",
+  },
+  badge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.white,
+    fontVariant: ["tabular-nums"],
   },
 });
