@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 interface PollCardProps {
   _id: Id<"polls">;
@@ -68,20 +68,20 @@ export function PollCard({
       try {
         await removePoll({ pollId: _id });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Fehler beim L\u00f6schen";
+        const msg = e instanceof Error ? e.message : "Fehler beim Löschen";
         if (Platform.OS !== "web") Alert.alert("Fehler", msg);
       }
     };
 
     if (Platform.OS === "web") {
-      if (confirm("Umfrage l\u00f6schen?")) doDelete();
+      if (confirm("Umfrage löschen?")) doDelete();
     } else {
       Alert.alert(
-        "Umfrage l\u00f6schen",
-        "M\u00f6chtest du diese Umfrage unwiderruflich l\u00f6schen?",
+        "Umfrage löschen",
+        "Möchtest du diese Umfrage unwiderruflich löschen?",
         [
           { text: "Abbrechen", style: "cancel" },
-          { text: "L\u00f6schen", style: "destructive", onPress: doDelete },
+          { text: "Löschen", style: "destructive", onPress: doDelete },
         ],
       );
     }
@@ -91,9 +91,9 @@ export function PollCard({
     setShowMenu(false);
     if (totalVotes > 0) {
       if (Platform.OS === "web") {
-        alert("Umfrage hat bereits Stimmen, Bearbeiten nicht m\u00f6glich");
+        alert("Umfrage hat bereits Stimmen, Bearbeiten nicht möglich");
       } else {
-        Alert.alert("Nicht m\u00f6glich", "Umfrage hat bereits Stimmen, Bearbeiten nicht m\u00f6glich");
+        Alert.alert("Nicht möglich", "Umfrage hat bereits Stimmen, Bearbeiten nicht möglich");
       }
       return;
     }
@@ -169,7 +169,7 @@ export function PollCard({
             onPress={() => setEditOptions([...editOptions, ""])}
           >
             <SymbolView name="plus.circle.fill" size={16} tintColor={colors.black} />
-            <Text style={styles.addOptText}>Option hinzuf\u00fcgen</Text>
+            <Text style={styles.addOptText}>Option hinzufügen</Text>
           </TouchableOpacity>
         )}
 
@@ -204,7 +204,7 @@ export function PollCard({
           <Text style={[styles.headerLabel, compact && styles.headerLabelCompact]}>Umfrage</Text>
           {!compact && (
             <Text style={styles.headerMeta}>
-              von {creatorName} \u00b7 {timeAgo}
+              von {creatorName} · {timeAgo}
             </Text>
           )}
         </View>
@@ -241,7 +241,7 @@ export function PollCard({
           )}
           <TouchableOpacity style={styles.menuItemDanger} onPress={handleDelete}>
             <SymbolView name="trash.fill" size={14} tintColor="#FF3B30" />
-            <Text style={styles.menuItemTextDanger}>L\u00f6schen</Text>
+            <Text style={styles.menuItemTextDanger}>Löschen</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -306,7 +306,7 @@ export function PollCard({
       {/* Footer with countdown */}
       <View style={[styles.footerRow, compact && styles.footerRowCompact]}>
         <Text style={[styles.footer, compact && styles.footerCompact]}>
-          {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"}{compact ? "" : ` \u00b7 ${timeAgo}`}
+          {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"}{compact ? "" : ` · ${timeAgo}`}
         </Text>
         {isActive && timeLeft && (
           <View style={styles.expiryBadge}>
