@@ -211,6 +211,7 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   eye: Eye,
   "eye.slash": EyeOff,
   "hand.raised": Hand,
+  "hand.raised.fill": Hand,
   "hand.draw": Hand,
   "speaker.fill": Volume1,
   "speaker.wave.1.fill": Volume1,

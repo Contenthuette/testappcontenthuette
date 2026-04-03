@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  Modal, Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -33,6 +34,7 @@ export default function GoLiveScreen() {
   const [isStarting, setIsStarting] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [showViewers, setShowViewers] = useState(false);
   const commentsRef = useRef<FlatList>(null);
   const isCoHost = mode === "cohost";
 
@@ -55,9 +57,13 @@ export default function GoLiveScreen() {
     api.livestreams.getJoinRequests,
     livestreamId && !isCoHost ? { livestreamId } : "skip",
   );
+  const viewers = useQuery(
+    api.livestreams.getViewers,
+    livestreamId && showViewers ? { livestreamId } : "skip",
+  );
 
   const {
-    localStreamUrl, remoteStreamUrl, peerConnected,
+    localStreamUrl, remoteStreamUrl,
     isMuted, isVideoOff, isFrontCamera, isSwitchingCamera,
     toggleMute, toggleVideo, flipCamera, cleanup, isSupported, RTCView,
   } = useLivestreamHost({ livestreamId, enabled: !!livestreamId, enablePreview: true, isCoHost });
@@ -248,7 +254,7 @@ export default function GoLiveScreen() {
   }
 
   /* ---- Live Mode ---- */
-  const hasRemotePeer = !!remoteStreamUrl && peerConnected;
+  const hasRemotePeer = !!remoteStreamUrl;
 
   return (
     <View style={styles.fullScreen}>
@@ -280,13 +286,17 @@ export default function GoLiveScreen() {
           <View style={styles.splitDivider} />
           {/* Bottom half: remote camera (the other person) */}
           <View style={styles.splitHalf}>
-            {RTCView && remoteStreamUrl && (
+            {RTCView && remoteStreamUrl ? (
               <RTCView
                 streamURL={remoteStreamUrl}
                 style={StyleSheet.absoluteFill}
                 objectFit="cover"
                 zOrder={0}
               />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, styles.videoOffBg]}>
+                <ActivityIndicator color={colors.white} size="small" />
+              </View>
             )}
             <View style={styles.splitLabel}>
               <Text style={styles.splitLabelText}>
@@ -326,10 +336,17 @@ export default function GoLiveScreen() {
               <Animated.View style={[styles.liveBadgeDot, pulseDotStyle]} />
               <Text style={styles.liveBadgeText}>LIVE</Text>
             </View>
-            <View style={styles.viewerBadge}>
+            <TouchableOpacity
+              style={styles.viewerBadge}
+              onPress={() => {
+                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowViewers(true);
+              }}
+              activeOpacity={0.7}
+            >
               <SymbolView name="eye" size={12} tintColor={colors.white} />
               <Text style={styles.viewerBadgeText}>{stream?.viewerCount ?? 0}</Text>
-            </View>
+            </TouchableOpacity>
             {stream && stream.participantCount > 0 && (
               <View style={styles.participantBadge}>
                 <SymbolView name="person.fill" size={12} tintColor={colors.white} />
@@ -447,6 +464,44 @@ export default function GoLiveScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Viewers Modal */}
+      <Modal
+        visible={showViewers}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowViewers(false)}
+      >
+        <Pressable style={styles.viewersBackdrop} onPress={() => setShowViewers(false)}>
+          <Pressable style={styles.viewersSheet} onPress={() => {}}>
+            <View style={styles.viewersHandle} />
+            <Text style={styles.viewersTitle}>
+              Zuschauer ({stream?.viewerCount ?? 0})
+            </Text>
+            {!viewers ? (
+              <ActivityIndicator color={colors.gray400} style={{ marginTop: 20 }} />
+            ) : viewers.length === 0 ? (
+              <View style={styles.viewersEmpty}>
+                <SymbolView name="eye" size={32} tintColor={colors.gray500} />
+                <Text style={styles.viewersEmptyText}>Noch keine Zuschauer</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={viewers}
+                keyExtractor={(item) => item._id}
+                style={styles.viewersList}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                renderItem={({ item }) => (
+                  <View style={styles.viewerRow}>
+                    <Avatar uri={item.userAvatarUrl} name={item.userName} size={36} />
+                    <Text style={styles.viewerName}>{item.userName}</Text>
+                  </View>
+                )}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -788,5 +843,59 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  /* Viewers Modal */
+  viewersBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  viewersSheet: {
+    backgroundColor: colors.gray900,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: "60%",
+  },
+  viewersHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray600,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  viewersTitle: {
+    color: colors.white,
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    marginBottom: 16,
+  },
+  viewersEmpty: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 30,
+  },
+  viewersEmptyText: {
+    color: colors.gray500,
+    fontSize: 14,
+  },
+  viewersList: {
+    flexGrow: 0,
+  },
+  viewerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  viewerName: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "600",
   },
 });
