@@ -12,6 +12,7 @@ import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import Animated, {
   SlideInDown, SlideOutDown,
   useSharedValue, useAnimatedStyle, withSpring, runOnJS,
@@ -33,6 +34,7 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
 
   const me = useQuery(api.users.me, isAuthenticated ? undefined : "skip");
   const meId = me?._id;
+  const router = useRouter();
 
   const comments = useQuery(
     api.posts.getComments,
@@ -135,6 +137,20 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
     }
   }, [meId, handleDeleteComment]);
 
+  const handleProfilePress = useCallback(
+    (authorId: Id<"users">) => {
+      onClose();
+      setTimeout(() => {
+        if (authorId === meId) {
+          router.navigate("/(main)/(tabs)/profile");
+        } else {
+          router.navigate({ pathname: "/(main)/user-profile", params: { id: authorId } });
+        }
+      }, 300);
+    },
+    [meId, onClose, router],
+  );
+
   if (!visible) return null;
 
   return (
@@ -187,9 +203,13 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
                   disabled={item.authorId !== meId}
                 >
                   <View style={styles.commentRow}>
-                    <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={32} />
+                    <TouchableOpacity onPress={() => handleProfilePress(item.authorId)} activeOpacity={0.7}>
+                      <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={32} />
+                    </TouchableOpacity>
                     <View style={styles.commentBody}>
-                      <Text style={styles.commentAuthor}>{item.authorName}</Text>
+                      <TouchableOpacity onPress={() => handleProfilePress(item.authorId)} activeOpacity={0.7}>
+                        <Text style={styles.commentAuthor}>{item.authorName}</Text>
+                      </TouchableOpacity>
                       <Text style={styles.commentText}>{item.text}</Text>
                       <View style={styles.commentMeta}>
                         <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
