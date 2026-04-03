@@ -1,6 +1,7 @@
 import React from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Linking, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -11,6 +12,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
+import * as Haptics from "expo-haptics";
 
 const sections = [
   {
@@ -42,6 +44,10 @@ const sections = [
   },
 ];
 
+const FEEDBACK_EMAIL = "leif@z-social.com";
+const FEEDBACK_SUBJECT = "Z App – Feedback / Bug-Meldung";
+const FEEDBACK_BODY = "Hallo Z-Team,\n\nich möchte folgendes melden:\n\n";
+
 export default function SettingsScreen() {
   const { isAuthenticated } = useConvexAuth();
   const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
@@ -53,6 +59,17 @@ export default function SettingsScreen() {
       await authClient.signOut();
     } catch (e) {
       console.error("Sign out error:", e);
+    }
+  };
+
+  const handleFeedback = async () => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const url = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(FEEDBACK_SUBJECT)}&body=${encodeURIComponent(FEEDBACK_BODY)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // fallback – just open mailto
+      await Linking.openURL(`mailto:${FEEDBACK_EMAIL}`);
     }
   };
 
@@ -126,7 +143,27 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.brand}>built by CONTENTHUETTE</Text>
+        {/* Feedback / Bug Report */}
+        <View style={styles.feedbackSection}>
+          <View style={styles.betaBadge}>
+            <Text style={styles.betaBadgeText}>BETA</Text>
+          </View>
+          <Text style={styles.feedbackTitle}>Hilf uns, Z besser zu machen</Text>
+          <Text style={styles.feedbackDesc}>
+            Z ist noch in der Beta-Phase – Bugs können leider vorkommen und dafür entschuldigen wir uns! {"\n"}
+            Dein Feedback hilft uns, die App für alle zu verbessern.
+          </Text>
+          <TouchableOpacity style={styles.feedbackBtn} onPress={handleFeedback} activeOpacity={0.7}>
+            <SymbolView name="envelope" size={16} tintColor={colors.white} />
+            <Text style={styles.feedbackBtnText}>Bug melden oder Feedback geben</Text>
+          </TouchableOpacity>
+          <Text style={styles.feedbackEmail}>{FEEDBACK_EMAIL}</Text>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.brand}>built by CONTENTHUETTE</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -195,12 +232,63 @@ const styles = StyleSheet.create({
   },
   logoutText: { flex: 1, fontSize: 16, fontWeight: "500", color: colors.danger },
 
-  version: {
+  feedbackSection: {
+    marginTop: spacing.xxl,
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+  },
+  betaBadge: {
+    backgroundColor: colors.black,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    marginBottom: spacing.md,
+  },
+  betaBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.white,
+    letterSpacing: 2,
+  },
+  feedbackTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.black,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  feedbackDesc: {
+    fontSize: 14,
+    color: colors.gray500,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  feedbackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.black,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderCurve: "continuous",
+  },
+  feedbackBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  feedbackEmail: {
     fontSize: 12,
     color: colors.gray400,
-    textAlign: "center",
-    marginTop: spacing.xxl,
-    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+
+  footer: {
+    alignItems: "center",
+    paddingTop: spacing.xxl * 2,
+    paddingBottom: 40,
   },
   brand: {
     fontSize: 10,
@@ -208,7 +296,13 @@ const styles = StyleSheet.create({
     color: colors.gray300,
     textAlign: "center",
     letterSpacing: 2,
-    marginTop: spacing.xxl * 2,
-    marginBottom: spacing.lg,
+  },
+
+  version: {
+    fontSize: 12,
+    color: colors.gray400,
+    textAlign: "center",
+    marginTop: spacing.xxl,
+    marginBottom: spacing.xs,
   },
 });
