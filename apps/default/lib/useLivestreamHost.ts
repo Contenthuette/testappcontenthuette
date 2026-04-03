@@ -166,7 +166,7 @@ export function useLivestreamHost({ livestreamId, enabled, enablePreview, isCoHo
       try {
         const localStream = await rtc.mediaDevices.getUserMedia({
           audio: true,
-          video: { facingMode: "user", width: 480, height: 640, frameRate: 24 },
+          video: { facingMode: "user", width: 1280, height: 720, frameRate: 30 },
         });
         if (cancelled) { localStream.getTracks().forEach((t) => t.stop()); return; }
         localStreamRef.current = localStream;

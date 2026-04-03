@@ -54,6 +54,23 @@ export default function WatchStreamScreen() {
       enabled: !!livestreamId && !!stream && stream.status === "live",
     });
 
+  // Derived state (must be before any conditional returns for hooks below)
+  const canJoinCall = (stream?.participantCount ?? 0) < 2;
+  const joinRequested = myJoinStatus === "pending";
+  const joinAccepted = myJoinStatus === "accepted";
+
+  // Navigate to go-live when request is accepted
+  useEffect(() => {
+    if (joinAccepted && livestreamId) {
+      leaveStream({ livestreamId }).catch(() => {});
+      cleanup();
+      router.replace({
+        pathname: "/(main)/go-live",
+        params: { livestreamId, mode: "cohost" },
+      });
+    }
+  }, [joinAccepted, livestreamId, leaveStream, cleanup]);
+
   // Pulsing LIVE dot
   const pulseOpacity = useSharedValue(1);
   useEffect(() => {
@@ -162,22 +179,6 @@ export default function WatchStreamScreen() {
       </View>
     );
   }
-
-  const canJoinCall = stream.participantCount < 2;
-  const joinRequested = myJoinStatus === "pending";
-  const joinAccepted = myJoinStatus === "accepted";
-
-  // Navigate to go-live when request is accepted
-  useEffect(() => {
-    if (joinAccepted && livestreamId) {
-      leaveStream({ livestreamId }).catch(() => {});
-      cleanup();
-      router.replace({
-        pathname: "/(main)/go-live",
-        params: { livestreamId, mode: "cohost" },
-      });
-    }
-  }, [joinAccepted, livestreamId, leaveStream, cleanup]);
 
   return (
     <View style={styles.fullScreen}>

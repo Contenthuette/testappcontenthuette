@@ -225,9 +225,9 @@ export function useWebRTC({
             video: isVideo
               ? {
                   facingMode: "user",
-                  width: 480,
-                  height: 360,
-                  frameRate: 20,
+                  width: 1280,
+                  height: 720,
+                  frameRate: 30,
                 }
               : false,
           });
