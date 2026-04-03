@@ -71,7 +71,7 @@ export default function PostDetailScreen() {
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ["Abbrechen", "Beitrag l\u00f6schen"],
+          options: ["Abbrechen", "Beitrag löschen"],
           destructiveButtonIndex: 1,
           cancelButtonIndex: 0,
         },
@@ -81,23 +81,23 @@ export default function PostDetailScreen() {
               await deletePost({ postId: post._id });
               safeBack("post-detail");
             } catch {
-              Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
+              Alert.alert("Fehler", "Beitrag konnte nicht gelöscht werden.");
             }
           }
         },
       );
     } else {
-      Alert.alert("Beitrag l\u00f6schen?", "Dieser Beitrag wird unwiderruflich gel\u00f6scht.", [
+      Alert.alert("Beitrag löschen?", "Dieser Beitrag wird unwiderruflich gelöscht.", [
         { text: "Abbrechen", style: "cancel" },
         {
-          text: "L\u00f6schen",
+          text: "Löschen",
           style: "destructive",
           onPress: async () => {
             try {
               await deletePost({ postId: post._id });
               safeBack("post-detail");
             } catch {
-              Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
+              Alert.alert("Fehler", "Beitrag konnte nicht gelöscht werden.");
             }
           },
         },
@@ -204,7 +204,7 @@ export default function PostDetailScreen() {
         <TouchableOpacity
           style={styles.authorRow}
           onPress={() =>
-            router.push({
+            router.navigate({
               pathname: "/(main)/user-profile",
               params: { id: post.authorId },
             })
@@ -237,7 +237,7 @@ export default function PostDetailScreen() {
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() =>
-              router.push({
+              router.navigate({
                 pathname: "/(main)/post-comments",
                 params: { id: post._id },
               })
@@ -282,7 +282,7 @@ export default function PostDetailScreen() {
         {post.commentCount > 0 && (
           <TouchableOpacity
             onPress={() =>
-              router.push({
+              router.navigate({
                 pathname: "/(main)/post-comments",
                 params: { id: post._id },
               })

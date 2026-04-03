@@ -46,7 +46,7 @@ const NOTIFICATION_OPTIONS: NotifOption[] = [
     key: "announcements",
     icon: "megaphone.fill",
     label: "Z Announcements",
-    description: "Offizielle Ank\u00fcndigungen von Z",
+    description: "Offizielle Ankündigungen von Z",
   },
 ];
 
@@ -157,7 +157,7 @@ export default function NotificationSettingsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>Push-Benachrichtigungen</Text>
         <Text style={styles.sectionDesc}>
-          W\u00e4hle aus, f\u00fcr welche Ereignisse du Push-Benachrichtigungen auf dein Ger\u00e4t erhalten m\u00f6chtest.
+          Wähle aus, für welche Ereignisse du Push-Benachrichtigungen auf dein Gerät erhalten möchtest.
         </Text>
 
         {/* Select all */}
@@ -205,7 +205,7 @@ export default function NotificationSettingsScreen() {
         </View>
 
         <Text style={styles.footerNote}>
-          Benachrichtigungen erscheinen als "Z MOVEMENT" auf deinem Ger\u00e4t.
+          Benachrichtigungen erscheinen als "Z MOVEMENT" auf deinem Gerät.
         </Text>
       </ScrollView>
     </SafeAreaView>

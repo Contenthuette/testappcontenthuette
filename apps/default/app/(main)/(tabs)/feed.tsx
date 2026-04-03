@@ -64,7 +64,7 @@ const GridTile = memo(function GridTile({ item, tileSize, index }: TileProps) {
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() =>
-        router.push({
+        router.navigate({
           pathname: "/(main)/feed-loop",
           params: { startIndex: String(index) },
         })
@@ -179,13 +179,13 @@ export default function FeedScreen() {
         <Text style={styles.headerTitle}>Feed</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity
-          onPress={() => router.push("/(main)/conversations")}
+          onPress={() => router.navigate("/(main)/conversations")}
           style={styles.iconBtn}
         >
           <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => router.push("/(main)/notifications")}
+          onPress={() => router.navigate("/(main)/notifications")}
           style={styles.iconBtn}
         >
           <SymbolView name="bell" size={22} tintColor={colors.black} />

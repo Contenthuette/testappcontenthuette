@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -41,8 +41,8 @@ import { useVideoPlayer, VideoView } from "expo-video";
 type PostType = "photo" | "video";
 
 const typeConfig: Record<PostType, { title: string; pickLabel: string; icon: string }> = {
-  photo: { title: "Foto posten", pickLabel: "Foto ausw\u00e4hlen", icon: "photo" },
-  video: { title: "Video posten", pickLabel: "Video ausw\u00e4hlen", icon: "video" },
+  photo: { title: "Foto posten", pickLabel: "Foto auswählen", icon: "photo" },
+  video: { title: "Video posten", pickLabel: "Video auswählen", icon: "video" },
 };
 
 // Video preview fills ~62% of screen width for a nice phone-mockup look
@@ -55,6 +55,8 @@ export default function CreatePostScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const captionInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const createPost = useMutation(api.posts.create);
   const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
@@ -79,11 +81,11 @@ export default function CreatePostScreen() {
 
   const MV_LOCATIONS = [
     "Rostock", "Schwerin", "Neubrandenburg", "Stralsund", "Greifswald",
-    "Wismar", "G\u00fcstrow", "Waren (M\u00fcritz)", "Anklam", "Bergen auf R\u00fcgen",
+    "Wismar", "Güstrow", "Waren (Müritz)", "Anklam", "Bergen auf Rügen",
     "Bad Doberan", "Parchim", "Demmin", "Ribnitz-Damgarten", "Pasewalk",
     "Wolgast", "Sassnitz", "Barth", "Teterow", "Malchin",
-    "Ludwigslust", "Hagenow", "Boizenburg", "Ueckerm\u00fcnde",
-    "Landkreis Rostock", "Landkreis Vorpommern-R\u00fcgen",
+    "Ludwigslust", "Hagenow", "Boizenburg", "Ueckermünde",
+    "Landkreis Rostock", "Landkreis Vorpommern-Rügen",
     "Landkreis Nordwestmecklenburg", "Landkreis Mecklenburgische Seenplatte",
     "Landkreis Vorpommern-Greifswald", "Landkreis Ludwigslust-Parchim",
   ];
@@ -297,7 +299,7 @@ export default function CreatePostScreen() {
       console.error("Post creation failed:", error);
       setPublishing(false);
       if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Beitrag konnte nicht ver\u00f6ffentlicht werden.");
+        Alert.alert("Fehler", "Beitrag konnte nicht veröffentlicht werden.");
       }
     }
   };
@@ -308,7 +310,7 @@ export default function CreatePostScreen() {
         <View style={styles.successBadge}>
           <Icon name="checkmark.circle.fill" size={48} tintColor={colors.success} />
         </View>
-        <Text style={styles.successTitle}>Ver\u00f6ffentlicht!</Text>
+        <Text style={styles.successTitle}>Veröffentlicht!</Text>
         <Text style={styles.successSub}>Dein Beitrag ist jetzt im Feed sichtbar.</Text>
       </View>
     );
@@ -455,7 +457,7 @@ export default function CreatePostScreen() {
         <View style={styles.emptyMedia}>
           <Icon name={config.icon} size={40} tintColor={colors.gray400} />
           <Text style={styles.emptyLabel}>{config.pickLabel}</Text>
-          <Text style={styles.emptyHint}>Tippe hier, um Medien auszuw\u00e4hlen</Text>
+          <Text style={styles.emptyHint}>Tippe hier, um Medien auszuwählen</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -466,6 +468,7 @@ export default function CreatePostScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.top + 56}
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -495,6 +498,7 @@ export default function CreatePostScreen() {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -513,14 +517,20 @@ export default function CreatePostScreen() {
           {/* Caption */}
           <View style={styles.captionSection}>
             <TextInput
+              ref={captionInputRef}
               style={styles.captionInput}
               value={caption}
               onChangeText={setCaption}
-              placeholder={"Bildunterschrift hinzuf\u00fcgen..."}
+              placeholder="Bildunterschrift hinzufügen..."
               placeholderTextColor={colors.gray400}
               multiline
               maxLength={500}
               editable={!publishing}
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollRef.current?.scrollToEnd({ animated: true });
+                }, 300);
+              }}
             />
           </View>
 
@@ -531,7 +541,7 @@ export default function CreatePostScreen() {
           >
             <Icon name="mappin" size={20} tintColor={location ? colors.black : colors.gray400} />
             <Text style={[styles.optionText, !location && { color: colors.gray400 }]}>
-              {location ?? "Standort hinzuf\u00fcgen"}
+              {location ?? "Standort hinzufügen"}
             </Text>
             {location ? (
               <Pressable
@@ -556,7 +566,7 @@ export default function CreatePostScreen() {
           >
             <View style={styles.locationModal}>
               <View style={styles.locationModalHeader}>
-                <Text style={styles.locationModalTitle}>Standort w\u00e4hlen</Text>
+                <Text style={styles.locationModalTitle}>Standort wählen</Text>
                 <Pressable onPress={() => { setShowLocationPicker(false); setLocationSearch(""); }}>
                   <Icon name="xmark.circle.fill" size={28} tintColor={colors.gray400} />
                 </Pressable>

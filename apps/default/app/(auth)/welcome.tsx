@@ -52,7 +52,7 @@ export default function WelcomeScreen() {
         </View>
 
         <Text style={styles.title}>We are Z</Text>
-        <Text style={styles.subtitle}>{"Social Media. Nur f\u00fcr MV."}</Text>
+        <Text style={styles.subtitle}>{"Social Media. Nur für MV."}</Text>
 
         <View style={styles.grid}>
           {FEATURES.map((feature, index) => (
@@ -70,7 +70,7 @@ export default function WelcomeScreen() {
 
         <View style={styles.bottomText}>
           <Text style={styles.statement}>{"Social Media ist\nnicht mehr social."}</Text>
-          <Text style={styles.punchline}>{"Wir \u00e4ndern das."}</Text>
+          <Text style={styles.punchline}>{"Wir ändern das."}</Text>
         </View>
       </ScrollView>
 

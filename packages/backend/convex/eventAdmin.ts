@@ -173,7 +173,7 @@ export const inviteEventAdmin = authMutation({
     const existing = await ctx.db.query("eventAdmins").withIndex("by_eventId_and_userId", (q) => q.eq("eventId", args.eventId).eq("userId", args.userId)).first();
     if (existing) throw new Error("Bereits eingeladen");
     await ctx.db.insert("eventAdmins", { eventId: args.eventId, userId: args.userId, invitedBy: user._id, status: "pending", createdAt: Date.now() });
-    await ctx.db.insert("notifications", { userId: args.userId, type: "event_reminder", title: "Event-Einlass Einladung", body: `Du wurdest als Einlass-Helfer f\u00fcr "${event.name}" eingeladen.`, referenceId: args.eventId, isRead: false, createdAt: Date.now() });
+    await ctx.db.insert("notifications", { userId: args.userId, type: "event_reminder", title: "Event-Einlass Einladung", body: `Du wurdest als Einlass-Helfer für "${event.name}" eingeladen.`, referenceId: args.eventId, isRead: false, createdAt: Date.now() });
     return null;
   },
 });

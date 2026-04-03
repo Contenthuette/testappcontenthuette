@@ -22,7 +22,7 @@ const sections = [
     ],
   },
   {
-    title: "Privatsph\u00e4re & Sicherheit",
+    title: "Privatsphäre & Sicherheit",
     items: [
       { icon: "hand.raised" as const, label: "Blockierte Nutzer", route: "/(main)/blocked-users" },
     ],
@@ -80,7 +80,7 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                   key={ii}
                   style={[styles.row, ii < section.items.length - 1 && styles.rowBorder]}
-                  onPress={() => router.push(item.route as "/")}
+                  onPress={() => router.navigate(item.route as "/")}
                   activeOpacity={0.6}
                 >
                   <View style={styles.rowIcon}>
@@ -101,7 +101,7 @@ export default function SettingsScreen() {
             <View style={styles.sectionCard}>
               <TouchableOpacity
                 style={styles.row}
-                onPress={() => router.push("/(main)/admin-login" as "/")}
+                onPress={() => router.navigate("/(main)/admin-login" as "/")}
                 activeOpacity={0.6}
               >
                 <View style={[styles.rowIcon, { backgroundColor: "rgba(0,0,0,0.06)" }]}>

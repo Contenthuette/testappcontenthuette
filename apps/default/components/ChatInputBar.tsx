@@ -51,7 +51,7 @@ class VoiceRecorderErrorBoundary extends Component<
             <SymbolView name="xmark" size={14} tintColor="#9CA3AF" />
           </Pressable>
           <Text style={ebStyles.errorText}>
-            Sprachaufnahme nicht verf\u00fcgbar
+            Sprachaufnahme nicht verfügbar
           </Text>
         </View>
       );
@@ -167,6 +167,8 @@ export function ChatInputBar({
         mediaTypes: ["images", "videos"],
         quality: 0.8,
         allowsEditing: false,
+        videoQuality: 1,
+        videoExportPreset: ImagePicker.VideoExportPreset.MediumQuality,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {

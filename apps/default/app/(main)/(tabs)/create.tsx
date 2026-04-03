@@ -42,7 +42,7 @@ const createOptions = [
 export default function CreateScreen() {
   const handlePress = (route: string) => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(route as "/");
+    router.navigate(route as "/");
   };
 
   return (

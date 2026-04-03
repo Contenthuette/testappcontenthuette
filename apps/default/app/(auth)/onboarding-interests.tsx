@@ -74,9 +74,9 @@ export default function OnboardingInterestsScreen() {
           <View style={[styles.progressBar, { width: "75%" }]} />
         </View>
         <Text style={styles.step}>Schritt 3 von 4</Text>
-        <Text style={styles.title}>W\u00e4hle deine Interessen</Text>
+        <Text style={styles.title}>Wähle deine Interessen</Text>
         <Text style={styles.subtitle}>
-          W\u00e4hle mindestens 3 Interessen aus
+          Wähle mindestens 3 Interessen aus
         </Text>
       </View>
 
@@ -108,7 +108,7 @@ export default function OnboardingInterestsScreen() {
         {/* Selected count */}
         {selected.length > 0 && (
           <Text style={styles.selectedCount}>
-            {selected.length} ausgew\u00e4hlt
+            {selected.length} ausgewählt
           </Text>
         )}
 

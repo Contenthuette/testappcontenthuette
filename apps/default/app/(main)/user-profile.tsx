@@ -79,7 +79,7 @@ export default function UserProfileScreen() {
     if (!id) return;
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: "/(main)/chat", params: { id: `new-${id}` } });
+    router.navigate({ pathname: "/(main)/chat", params: { id: `new-${id}` } });
   }, [id]);
 
   const handleBlock = useCallback(async () => {
@@ -364,7 +364,7 @@ export default function UserProfileScreen() {
                     ]}
                     activeOpacity={0.85}
                     onPress={() =>
-                      router.push({
+                      router.navigate({
                         pathname: "/(main)/post-detail",
                         params: { id: post._id },
                       })

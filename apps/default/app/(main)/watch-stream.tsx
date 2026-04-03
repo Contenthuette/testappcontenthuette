@@ -134,7 +134,7 @@ export default function WatchStreamScreen() {
         if (Platform.OS !== "web") {
           Alert.alert(
             "Livestream voll",
-            "Mehr als 2 Personen live sind derzeit nicht m\u00f6glich.",
+            "Mehr als 2 Personen live sind derzeit nicht möglich.",
           );
         }
         setIsJoiningCall(false);

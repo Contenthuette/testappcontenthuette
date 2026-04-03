@@ -42,7 +42,7 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
     return (
       <TouchableOpacity
         style={[styles.container, isMine ? styles.meContainer : styles.otherContainer]}
-        onPress={() => router.push({ pathname: "/post-detail", params: { id: postId } })}
+        onPress={() => router.navigate({ pathname: "/post-detail", params: { id: postId } })}
         activeOpacity={0.8}
       >
         <View style={styles.fallback}>
@@ -61,7 +61,7 @@ export function SharedPostBubble({ postId, preview, isMine, timestamp }: SharedP
   return (
     <TouchableOpacity
       style={[styles.container, isMine ? styles.meContainer : styles.otherContainer]}
-      onPress={() => router.push({ pathname: "/post-detail", params: { id: postId } })}
+      onPress={() => router.navigate({ pathname: "/post-detail", params: { id: postId } })}
       activeOpacity={0.8}
     >
       <View style={styles.mediaWrap}>

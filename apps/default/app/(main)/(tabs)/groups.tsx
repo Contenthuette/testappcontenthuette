@@ -134,7 +134,7 @@ export default function GroupsScreen() {
   const renderGroup = ({ item }: { item: NonNullable<typeof groups>[number] }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push({ pathname: "/(main)/group-detail", params: { id: item._id } })}
+      onPress={() => router.navigate({ pathname: "/(main)/group-detail", params: { id: item._id } })}
       activeOpacity={0.65}
     >
       <View style={styles.cardThumb}>
@@ -188,7 +188,7 @@ export default function GroupsScreen() {
   const renderPerson = ({ item }: { item: NonNullable<typeof people>[number] }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item._id } })}
+      onPress={() => router.navigate({ pathname: "/(main)/user-profile", params: { id: item._id } })}
       activeOpacity={0.65}
     >
       <View style={styles.avatarWrap}>
@@ -269,7 +269,7 @@ export default function GroupsScreen() {
         <ZLogo size={47} />
         <Text style={styles.headerTitle}>Community</Text>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => router.push("/(main)/conversations")} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => router.navigate("/(main)/conversations")} style={styles.iconBtn}>
           <SymbolView name="bubble.left.and.bubble.right" size={22} tintColor={colors.black} />
           {(unreadMessages ?? 0) > 0 && (
             <View style={styles.badge}>
@@ -279,7 +279,7 @@ export default function GroupsScreen() {
             </View>
           )}
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/(main)/notifications")} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => router.navigate("/(main)/notifications")} style={styles.iconBtn}>
           <SymbolView name="bell" size={22} tintColor={colors.black} />
           {(unreadNotifications ?? 0) > 0 && (
             <View style={styles.badge}>

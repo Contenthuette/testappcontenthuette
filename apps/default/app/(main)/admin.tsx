@@ -120,7 +120,7 @@ function EventRow({
         <View style={{ flex: 1 }}>
           <Text style={styles.eventName}>{event.name}</Text>
           <Text style={styles.eventMeta}>
-            {event.date} \u00b7 {event.city}
+            {event.date} · {event.city}
           </Text>
         </View>
         {isHidden && (
@@ -158,7 +158,7 @@ function EventRow({
             </TouchableOpacity>
             <TouchableOpacity onPress={onDelete} style={[styles.eventActionBtn, styles.eventDeleteBtn]}>
               <SymbolView name="trash" size={13} tintColor={colors.danger} />
-              <Text style={[styles.eventActionText, { color: colors.danger }]}>L\u00f6schen</Text>
+              <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
             </TouchableOpacity>
           </View>
 
@@ -590,7 +590,7 @@ export default function AdminDashboard() {
           action={
             <TouchableOpacity
               style={styles.addBtn}
-              onPress={() => router.push("/(main)/admin-event-form" as "/")}
+              onPress={() => router.navigate("/(main)/admin-event-form" as "/")}
               activeOpacity={0.7}
             >
               <SymbolView name="plus" size={14} tintColor={colors.white} />
@@ -611,7 +611,7 @@ export default function AdminDashboard() {
                 event={ev}
                 expanded={expandedId === ev._id}
                 onToggle={() => setExpandedId((prev: Id<"events"> | null) => (prev === ev._id ? null : ev._id))}
-                onEdit={() => router.push(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
+                onEdit={() => router.navigate(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
                 onToggleHidden={() => {
                   toggleEventInfoHidden({ eventId: ev._id }).catch(() => {});
@@ -628,7 +628,7 @@ export default function AdminDashboard() {
           action={
             <TouchableOpacity
               style={styles.addBtn}
-              onPress={() => router.push("/(main)/admin-partner-form" as "/")}
+              onPress={() => router.navigate("/(main)/admin-partner-form" as "/")}
               activeOpacity={0.7}
             >
               <SymbolView name="plus" size={14} tintColor={colors.white} />
@@ -661,7 +661,7 @@ export default function AdminDashboard() {
                 <View style={[styles.eventExpanded, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray200 }]}>
                   <View style={styles.eventActions}>
                     <TouchableOpacity
-                      onPress={() => router.push(`/(main)/admin-partner-form?partnerId=${p._id}` as "/")}
+                      onPress={() => router.navigate(`/(main)/admin-partner-form?partnerId=${p._id}` as "/")}
                       style={styles.eventActionBtn}
                     >
                       <SymbolView name="pencil" size={13} tintColor={colors.gray600} />

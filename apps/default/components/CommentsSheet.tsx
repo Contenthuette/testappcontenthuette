@@ -120,16 +120,16 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     if (Platform.OS === "web") {
-      if (confirm("Kommentar l\u00f6schen?")) {
+      if (confirm("Kommentar löschen?")) {
         handleDeleteComment(item._id);
       }
     } else {
       Alert.alert(
-        "Kommentar l\u00f6schen",
-        "M\u00f6chtest du diesen Kommentar l\u00f6schen?",
+        "Kommentar löschen",
+        "Möchtest du diesen Kommentar löschen?",
         [
           { text: "Abbrechen", style: "cancel" },
-          { text: "L\u00f6schen", style: "destructive", onPress: () => handleDeleteComment(item._id) },
+          { text: "Löschen", style: "destructive", onPress: () => handleDeleteComment(item._id) },
         ],
       );
     }

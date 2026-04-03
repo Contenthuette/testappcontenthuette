@@ -75,9 +75,9 @@ export default function NotificationsScreen() {
   const handlePress = useCallback((item: NonNullable<typeof notifications>[number]) => {
     markRead({ notificationId: item._id });
     if (item.type === "message" && item.referenceId) {
-      router.push({ pathname: "/(main)/chat", params: { id: item.referenceId } });
+      router.navigate({ pathname: "/(main)/chat", params: { id: item.referenceId } });
     } else if (item.type === "friend_accepted" && item.referenceId) {
-      router.push({ pathname: "/(main)/user-profile", params: { id: item.referenceId } });
+      router.navigate({ pathname: "/(main)/user-profile", params: { id: item.referenceId } });
     }
   }, [markRead]);
 

@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Platform, Alert, KeyboardAvoidingView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -21,6 +21,8 @@ export default function CreatePollScreen() {
   const [target, setTarget] = useState<Target>("community");
   const [selectedGroupId, setSelectedGroupId] = useState<Id<"groups"> | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
 
   const myGroups = useQuery(api.polls.myGroups);
   const createPoll = useMutation(api.polls.create);
@@ -83,8 +85,10 @@ export default function CreatePollScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.top + 56}
       >
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -176,6 +180,9 @@ export default function CreatePollScreen() {
             onChangeText={setQuestion}
             multiline
             maxLength={200}
+            onFocus={() => {
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300);
+            }}
           />
 
           {/* Options */}
@@ -218,7 +225,7 @@ export default function CreatePollScreen() {
       {/* Submit */}
       <View style={styles.bottomBar}>
         <Text style={styles.expiryNote}>
-          Umfragen werden automatisch nach 24 Stunden gel\u00f6scht.
+          Umfragen werden automatisch nach 24 Stunden gelöscht.
         </Text>
         <TouchableOpacity
           style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
@@ -227,7 +234,7 @@ export default function CreatePollScreen() {
           activeOpacity={0.7}
         >
           <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
-            {submitting ? "Erstellen\u2026" : "Umfrage ver\u00f6ffentlichen"}
+            {submitting ? "Erstellen…" : "Umfrage veröffentlichen"}
           </Text>
         </TouchableOpacity>
       </View>

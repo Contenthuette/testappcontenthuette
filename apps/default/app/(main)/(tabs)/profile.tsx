@@ -61,7 +61,7 @@ export default function ProfileScreen() {
           ) : (
             <View style={styles.bannerGradient} />
           )}
-          <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push("/(main)/settings")}>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => router.navigate("/(main)/settings")}>
             <SymbolView name="gearshape" size={20} tintColor={colors.black} />
           </TouchableOpacity>
         </View>
@@ -99,7 +99,7 @@ export default function ProfileScreen() {
 
           {/* Action buttons */}
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.editBtn} onPress={() => router.push("/(main)/edit-profile")} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.editBtn} onPress={() => router.navigate("/(main)/edit-profile")} activeOpacity={0.7}>
               <Text style={styles.editBtnText}>Profil bearbeiten</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shareBtn} activeOpacity={0.7}>
@@ -137,7 +137,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 key={post._id}
                 style={styles.gridItem}
-                onPress={() => router.push({ pathname: "/(main)/post-detail", params: { id: post._id } })}
+                onPress={() => router.navigate({ pathname: "/(main)/post-detail", params: { id: post._id } })}
                 activeOpacity={0.85}
               >
                 {post.type === "video" ? (
@@ -183,7 +183,7 @@ export default function ProfileScreen() {
           <View style={styles.adminSection}>
             <TouchableOpacity
               style={styles.adminBtn}
-              onPress={() => router.push("/(main)/admin-login" as "/")}
+              onPress={() => router.navigate("/(main)/admin-login" as "/")}
               activeOpacity={0.7}
             >
               <SymbolView name="shield.checkered" size={18} tintColor={colors.white} />

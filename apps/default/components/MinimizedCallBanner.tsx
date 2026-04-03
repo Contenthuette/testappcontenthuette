@@ -245,7 +245,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
             <SymbolView name="phone.fill" size={11} tintColor="#FFF" />
           </View>
           <Text style={styles.audioPillText} numberOfLines={1}>
-            {displayName} \u00b7 {statusText}
+            {displayName} · {statusText}
           </Text>
         </View>
       </Animated.View>

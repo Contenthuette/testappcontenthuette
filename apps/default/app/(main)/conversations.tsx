@@ -98,7 +98,7 @@ export default function ConversationsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.row}
-            onPress={() => router.push({ pathname: "/(main)/chat", params: { id: item._id } })}
+            onPress={() => router.navigate({ pathname: "/(main)/chat", params: { id: item._id } })}
             activeOpacity={0.6}
           >
             <Avatar uri={item.otherUserAvatarUrl} name={item.otherUserName} size={52} />

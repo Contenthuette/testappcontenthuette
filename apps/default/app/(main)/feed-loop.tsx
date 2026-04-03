@@ -170,7 +170,7 @@ const ReelPost = memo(function ReelPost({
   const handleMore = useCallback(() => {
     if (Platform.OS === "ios") {
       const options = item.isOwn
-        ? ["Abbrechen", "Beitrag l\u00f6schen"]
+        ? ["Abbrechen", "Beitrag löschen"]
         : ["Abbrechen", "Beitrag melden"];
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -190,12 +190,12 @@ const ReelPost = memo(function ReelPost({
       );
     } else {
       if (item.isOwn) {
-        Alert.alert("Beitrag l\u00f6schen?", "Unwiderruflich.", [
+        Alert.alert("Beitrag löschen?", "Unwiderruflich.", [
           { text: "Abbrechen", style: "cancel" },
-          { text: "L\u00f6schen", style: "destructive", onPress: () => onDelete(item._id) },
+          { text: "Löschen", style: "destructive", onPress: () => onDelete(item._id) },
         ]);
       } else {
-        Alert.alert("Beitrag melden", "M\u00f6chtest du diesen Beitrag melden?", [
+        Alert.alert("Beitrag melden", "Möchtest du diesen Beitrag melden?", [
           { text: "Abbrechen", style: "cancel" },
           { text: "Melden", style: "destructive", onPress: () => onReport(item._id) },
         ]);
@@ -362,7 +362,7 @@ const ReelPost = memo(function ReelPost({
       <View style={[styles.bottomInfo, { bottom: 16 + bottomInset }]}>
         <TouchableOpacity
           style={styles.authorRow}
-          onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
+          onPress={() => router.navigate({ pathname: "/(main)/user-profile", params: { id: item.authorId } })}
           activeOpacity={0.8}
         >
           <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={36} />
@@ -422,7 +422,7 @@ export default function FeedLoopScreen() {
       await deletePost({ postId });
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      Alert.alert("Fehler", "Beitrag konnte nicht gel\u00f6scht werden.");
+      Alert.alert("Fehler", "Beitrag konnte nicht gelöscht werden.");
     }
   }, [deletePost]);
 
@@ -430,7 +430,7 @@ export default function FeedLoopScreen() {
     try {
       await reportPost({ type: "post" as const, targetId: postId, reason: "Vom Nutzer gemeldet" });
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Gemeldet", "Der Beitrag wurde gemeldet. Danke f\u00fcr dein Feedback.");
+      Alert.alert("Gemeldet", "Der Beitrag wurde gemeldet. Danke für dein Feedback.");
     } catch {
       Alert.alert("Fehler", "Meldung konnte nicht gesendet werden.");
     }

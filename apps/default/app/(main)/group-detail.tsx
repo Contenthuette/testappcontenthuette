@@ -98,7 +98,7 @@ export default function GroupDetailScreen() {
           {isAdmin && (
             <TouchableOpacity
               style={styles.editBtn}
-              onPress={() => router.push({ pathname: "/(main)/edit-group", params: { id: id! } })}
+              onPress={() => router.navigate({ pathname: "/(main)/edit-group", params: { id: id! } })}
             >
               <SymbolView name="pencil" size={16} tintColor={colors.black} />
             </TouchableOpacity>
@@ -158,7 +158,7 @@ export default function GroupDetailScreen() {
           {isAdmin && (
             <TouchableOpacity
               style={styles.adminEditRow}
-              onPress={() => router.push({ pathname: "/(main)/edit-group", params: { id: id! } })}
+              onPress={() => router.navigate({ pathname: "/(main)/edit-group", params: { id: id! } })}
               activeOpacity={0.7}
             >
               <SymbolView name="pencil" size={16} tintColor={colors.black} />
@@ -172,7 +172,7 @@ export default function GroupDetailScreen() {
             {isMember ? (
               <TouchableOpacity
                 style={styles.primaryBtn}
-                onPress={() => router.push({ pathname: "/(main)/group-chat", params: { id: id! } })}
+                onPress={() => router.navigate({ pathname: "/(main)/group-chat", params: { id: id! } })}
                 activeOpacity={0.7}
               >
                 <SymbolView name="bubble.left.and.bubble.right" size={16} tintColor={colors.white} />
@@ -200,7 +200,7 @@ export default function GroupDetailScreen() {
           {activeStream && (
             <TouchableOpacity
               style={styles.liveBanner}
-              onPress={() => router.push({ pathname: "/(main)/watch-stream", params: { id: activeStream._id } })}
+              onPress={() => router.navigate({ pathname: "/(main)/watch-stream", params: { id: activeStream._id } })}
               activeOpacity={0.75}
             >
               <View style={styles.liveBannerBadge}>
@@ -271,7 +271,7 @@ export default function GroupDetailScreen() {
                 <TouchableOpacity
                   key={m._id}
                   style={styles.memberRow}
-                  onPress={() => router.push({ pathname: "/(main)/user-profile", params: { id: m.userId } })}
+                  onPress={() => router.navigate({ pathname: "/(main)/user-profile", params: { id: m.userId } })}
                   activeOpacity={0.65}
                 >
                   <Avatar uri={m.avatarUrl} name={m.name} size={44} />

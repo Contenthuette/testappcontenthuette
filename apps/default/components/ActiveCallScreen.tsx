@@ -274,7 +274,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   // ─── Error ───
   if (phase === "error") {
     const errorMessage = !isSupported
-      ? "Anrufe sind nur in der mobilen App verf\u00fcgbar"
+      ? "Anrufe sind nur in der mobilen App verfügbar"
       : "Verbindungsfehler";
     return (
       <View style={styles.container}>
@@ -300,7 +300,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
                 if (router.canGoBack()) router.back();
               }}
             >
-              <Text style={styles.backBtnText}>Zur\u00fcck</Text>
+              <Text style={styles.backBtnText}>Zurück</Text>
             </Pressable>
           </View>
         </SafeAreaView>

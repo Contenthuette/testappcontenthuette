@@ -73,7 +73,7 @@ export default function GoLiveScreen() {
           if (Platform.OS !== "web") {
             Alert.alert(
               "Livestream voll",
-              "Mehr als 2 Personen live sind derzeit nicht m\u00f6glich. Warte bis jemand den Call verl\u00e4sst.",
+              "Mehr als 2 Personen live sind derzeit nicht möglich. Warte bis jemand den Call verlässt.",
               [{ text: "OK", onPress: () => { cleanup(); safeBack("go-live"); } }],
             );
           } else {
@@ -165,9 +165,9 @@ export default function GoLiveScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.unsupported}>
           <SymbolView name="video.slash" size={48} tintColor={colors.gray400} />
-          <Text style={styles.unsupportedText}>Livestreaming ist nur in der App verf\u00fcgbar.</Text>
+          <Text style={styles.unsupportedText}>Livestreaming ist nur in der App verfügbar.</Text>
           <TouchableOpacity style={styles.backPill} onPress={() => safeBack("go-live")}>
-            <Text style={styles.backPillText}>Zur\u00fcck</Text>
+            <Text style={styles.backPillText}>Zurück</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -362,7 +362,7 @@ export default function GoLiveScreen() {
                 <View key={req._id} style={styles.joinRequestCard}>
                   <Avatar uri={req.userAvatarUrl} name={req.userName} size={28} />
                   <Text style={styles.joinRequestText} numberOfLines={1}>
-                    {req.userName} m\u00f6chte beitreten
+                    {req.userName} möchte beitreten
                   </Text>
                   <TouchableOpacity
                     style={styles.joinRequestAccept}

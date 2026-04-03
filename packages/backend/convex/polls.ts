@@ -131,14 +131,14 @@ export const create = authMutation({
     if (!userId) throw new Error("User not found");
 
     if (args.options.length < 2 || args.options.length > 5) {
-      throw new Error("Eine Umfrage braucht 2\u20135 Optionen");
+      throw new Error("Eine Umfrage braucht 2–5 Optionen");
     }
     if (!args.question.trim()) {
       throw new Error("Bitte stelle eine Frage");
     }
 
     if (args.target === "group") {
-      if (!args.groupId) throw new Error("Gruppe muss ausgew\u00e4hlt werden");
+      if (!args.groupId) throw new Error("Gruppe muss ausgewählt werden");
       const isMember = await isGroupMemberOrAdmin(ctx.db, args.groupId, userId);
       if (!isMember) throw new Error("Du musst Mitglied der Gruppe sein");
     }
@@ -170,7 +170,7 @@ export const vote = authMutation({
     const poll = await ctx.db.get(args.pollId);
     if (!poll || !poll.isActive) throw new Error("Umfrage nicht gefunden");
     if (args.optionIndex < 0 || args.optionIndex >= poll.options.length) {
-      throw new Error("Ung\u00fcltige Option");
+      throw new Error("Ungültige Option");
     }
 
     const existing = await ctx.db
@@ -210,10 +210,10 @@ export const edit = authMutation({
     if (!poll) throw new Error("Umfrage nicht gefunden");
     if (poll.creatorId !== userId) throw new Error("Nur der Ersteller kann bearbeiten");
     if (!poll.isActive) throw new Error("Beendete Umfrage kann nicht bearbeitet werden");
-    if (poll.totalVotes > 0) throw new Error("Umfrage hat bereits Stimmen, Bearbeiten nicht m\u00f6glich");
+    if (poll.totalVotes > 0) throw new Error("Umfrage hat bereits Stimmen, Bearbeiten nicht möglich");
 
     if (args.options.length < 2 || args.options.length > 5) {
-      throw new Error("Eine Umfrage braucht 2\u20135 Optionen");
+      throw new Error("Eine Umfrage braucht 2–5 Optionen");
     }
     if (!args.question.trim()) throw new Error("Bitte stelle eine Frage");
 

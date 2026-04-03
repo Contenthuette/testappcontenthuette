@@ -36,7 +36,7 @@ export function GroupAdminLinks({ groups }: { groups: GroupInfo[] }) {
           key={g.groupId}
           style={styles.adminLinkRow}
           activeOpacity={0.6}
-          onPress={() => router.push(`/(main)/group-detail?id=${g.groupId}` as "/")}
+          onPress={() => router.navigate(`/(main)/group-detail?id=${g.groupId}` as "/")}
         >
           <SymbolView name="crown.fill" size={11} tintColor={colors.gray500} />
           <Text style={styles.adminLinkLabel}>Gruppenadmin: </Text>
@@ -89,7 +89,7 @@ export function MemberInButton({ groups }: { groups: GroupInfo[] }) {
                   activeOpacity={0.6}
                   onPress={() => {
                     setOpen(false);
-                    router.push(`/(main)/group-detail?id=${item.groupId}` as "/");
+                    router.navigate(`/(main)/group-detail?id=${item.groupId}` as "/");
                   }}
                 >
                   <View style={styles.groupIcon}>

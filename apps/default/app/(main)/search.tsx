@@ -27,7 +27,7 @@ export default function SearchScreen() {
     }
   };
 
-  const genderOptions = ["M\u00e4nnlich", "Weiblich", "Divers", "Alle"];
+  const genderOptions = ["Männlich", "Weiblich", "Divers", "Alle"];
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

@@ -39,7 +39,7 @@ export default function EventsScreen() {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => router.push({ pathname: "/(main)/event-detail", params: { id: item._id } })}
+        onPress={() => router.navigate({ pathname: "/(main)/event-detail", params: { id: item._id } })}
         activeOpacity={0.65}
       >
         <View style={styles.cardImageWrap}>

@@ -47,7 +47,7 @@ export function LivestreamCard({
   return (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push({ pathname: "/(main)/watch-stream", params: { id: _id } })}
+      onPress={() => router.navigate({ pathname: "/(main)/watch-stream", params: { id: _id } })}
       activeOpacity={0.75}
     >
       {/* Top: LIVE badge + viewers */}
