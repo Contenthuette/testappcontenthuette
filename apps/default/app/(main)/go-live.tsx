@@ -255,7 +255,7 @@ export default function GoLiveScreen() {
       {/* Video area: 50/50 split or solo */}
       {hasRemotePeer ? (
         <View style={styles.splitContainer}>
-          {/* Top half: local camera */}
+          {/* Top half: local camera (yourself) */}
           <View style={styles.splitHalf}>
             {localStreamUrl && RTCView && !isVideoOff && !isSwitchingCamera ? (
               <RTCView
@@ -273,12 +273,12 @@ export default function GoLiveScreen() {
               </View>
             )}
             <View style={styles.splitLabel}>
-              <Text style={styles.splitLabelText}>{isCoHost ? stream?.hostName ?? "Host" : "Du"}</Text>
+              <Text style={styles.splitLabelText}>Du</Text>
             </View>
           </View>
           {/* Divider */}
           <View style={styles.splitDivider} />
-          {/* Bottom half: remote camera */}
+          {/* Bottom half: remote camera (the other person) */}
           <View style={styles.splitHalf}>
             {RTCView && remoteStreamUrl && (
               <RTCView
@@ -290,7 +290,7 @@ export default function GoLiveScreen() {
             )}
             <View style={styles.splitLabel}>
               <Text style={styles.splitLabelText}>
-                {isCoHost ? "Du" : stream?.coHostName ?? "Gast"}
+                {isCoHost ? stream?.hostName ?? "Host" : stream?.coHostName ?? "Gast"}
               </Text>
             </View>
           </View>

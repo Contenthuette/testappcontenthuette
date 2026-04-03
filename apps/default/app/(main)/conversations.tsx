@@ -1,17 +1,49 @@
 import React from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
+import { PollCard } from "@/components/PollCard";
+import Animated, { FadeIn } from "react-native-reanimated";
+
+/* ─── Community Polls ─── */
+function CommunityPolls() {
+  const { isAuthenticated } = useConvexAuth();
+  const polls = useQuery(api.polls.listCommunity, isAuthenticated ? {} : "skip");
+  if (!polls || polls.length === 0) return null;
+
+  return (
+    <Animated.View entering={FadeIn.duration(300)} style={pollStyles.section}>
+      <View style={pollStyles.header}>
+        <SymbolView name="chart.bar.fill" size={16} tintColor={colors.black} />
+        <Text style={pollStyles.title}>Umfragen</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={pollStyles.scroll}
+        decelerationRate="fast"
+        snapToInterval={220 + spacing.sm}
+      >
+        {polls.map((p: { _id: string }) => (
+          <View key={p._id} style={pollStyles.cardWrap}>
+            <PollCard {...(p as React.ComponentProps<typeof PollCard>)} compact />
+          </View>
+        ))}
+      </ScrollView>
+    </Animated.View>
+  );
+}
 
 export default function ConversationsScreen() {
   const { isAuthenticated } = useConvexAuth();
@@ -34,6 +66,7 @@ export default function ConversationsScreen() {
         keyExtractor={item => item._id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={<CommunityPolls />}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.row}
@@ -83,6 +116,32 @@ function formatTime(ts: number): string {
   }
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
 }
+
+const pollStyles = StyleSheet.create({
+  section: {
+    marginBottom: spacing.md,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    gap: 6,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.black,
+    letterSpacing: -0.2,
+  },
+  scroll: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.sm,
+  },
+  cardWrap: {
+    width: 220,
+  },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.white },
