@@ -567,7 +567,8 @@ export const sendSignal = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    await rateLimiter.limit(ctx, "livestreamSignal", { key: userId });
+    // No rate limiting on WebRTC signaling – ICE candidates arrive in rapid
+    // bursts during connection setup and rate-limiter writes cause OCC conflicts.
 
     await ctx.db.insert("livestreamSignaling", {
       livestreamId: args.livestreamId,
