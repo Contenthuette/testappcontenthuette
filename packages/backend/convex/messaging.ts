@@ -351,6 +351,27 @@ export const markConversationAsRead = authMutation({
   },
 });
 
+// Mark ALL conversations as read (when user opens conversations list)
+export const markAllConversationsAsRead = authMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) return null;
+
+    const readStatuses = await ctx.db
+      .query("conversationReadStatus")
+      .withIndex("by_userId", (q) => q.eq("userId", myUserId))
+      .take(100);
+
+    const now = Date.now();
+    for (const rs of readStatuses) {
+      await ctx.db.patch(rs._id, { lastReadAt: now });
+    }
+    return null;
+  },
+});
+
 // Get or create DM conversation
 export const getOrCreateDM = authMutation({
   args: { otherUserId: v.id("users") },

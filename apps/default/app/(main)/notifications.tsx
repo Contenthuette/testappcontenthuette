@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
   Platform, Alert,
@@ -41,8 +41,16 @@ export default function NotificationsScreen() {
     initialNumItems: 20,
   });
   const markRead = useMutation(api.notifications.markRead);
+  const markAllRead = useMutation(api.notifications.markAllRead);
   const acceptFriend = useMutation(api.friends.acceptRequest);
   const rejectFriend = useMutation(api.friends.declineRequest);
+
+  // Mark all notifications as read when screen opens
+  useEffect(() => {
+    if (isAuthenticated) {
+      markAllRead().catch(() => {});
+    }
+  }, [isAuthenticated, markAllRead]);
 
   const handleAcceptFriend = useCallback(async (requestId: string, notificationId: Id<"notifications">) => {
     try {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
   ScrollView, LayoutAnimation, UIManager, Platform as RNPlatform,
@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 import { PollCard } from "@/components/PollCard";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useMutation } from "convex/react";
 
 // Enable LayoutAnimation on Android
 if (RNPlatform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -66,7 +67,15 @@ function CommunityPolls() {
 
 export default function ConversationsScreen() {
   const { isAuthenticated } = useConvexAuth();
+  const markAllConversationsAsRead = useMutation(api.messaging.markAllConversationsAsRead);
   const conversations = useQuery(api.messaging.listConversations, isAuthenticated ? {} : "skip");
+
+  // Mark all conversations as read when opening this screen
+  useEffect(() => {
+    if (isAuthenticated) {
+      markAllConversationsAsRead().catch(() => {});
+    }
+  }, [isAuthenticated, markAllConversationsAsRead]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
