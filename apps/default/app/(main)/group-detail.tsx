@@ -15,6 +15,7 @@ import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from "react-native-reanimated";
 import { useEffect } from "react";
+import { PollCard } from "@/components/PollCard";
 
 interface GroupMember { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; role: string; status: string }
 interface PendingRequest { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; requestedAt: number }
@@ -26,6 +27,7 @@ export default function GroupDetailScreen() {
   const members = useQuery(api.groups.getMembers, id ? { groupId: id as Id<"groups"> } : "skip");
   const pendingRequests = useQuery(api.groups.getPendingRequests, id ? { groupId: id as Id<"groups"> } : "skip");
   const activeStream = useQuery(api.livestreams.getActiveForGroup, id ? { groupId: id as Id<"groups"> } : "skip");
+  const groupPolls = useQuery(api.polls.listByGroup, id ? { groupId: id as Id<"groups"> } : "skip");
   const joinGroup = useMutation(api.groups.join);
   const acceptRequest = useMutation(api.groups.acceptRequest);
   const rejectRequest = useMutation(api.groups.rejectRequest);
@@ -246,6 +248,18 @@ export default function GroupDetailScreen() {
                   </TouchableOpacity>
                 </View>
               ))}
+            </View>
+          )}
+
+          {/* Group Polls */}
+          {groupPolls && groupPolls.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Umfragen</Text>
+              <View style={{ gap: spacing.md }}>
+                {groupPolls.map((p) => (
+                  <PollCard key={p._id} {...p} />
+                ))}
+              </View>
             </View>
           )}
 

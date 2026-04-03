@@ -17,6 +17,7 @@ import { LivestreamCard } from "@/components/LivestreamCard";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { PollCard } from "@/components/PollCard";
 
 type Tab = "groups" | "people";
 
@@ -68,6 +69,35 @@ function LiveNowSection() {
             participantCount={s.participantCount}
             viewerCount={s.viewerCount}
           />
+        ))}
+      </ScrollView>
+    </Animated.View>
+  );
+}
+
+/* ─── Community Polls ─── */
+function CommunityPolls() {
+  const { isAuthenticated } = useConvexAuth();
+  const polls = useQuery(api.polls.listCommunity, isAuthenticated ? {} : "skip");
+  if (!polls || polls.length === 0) return null;
+
+  return (
+    <Animated.View entering={FadeIn.duration(300)} style={styles.pollsSection}>
+      <View style={styles.pollsSectionHeader}>
+        <SymbolView name="chart.bar.fill" size={16} tintColor={colors.black} />
+        <Text style={styles.pollsSectionTitle}>Umfragen</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pollsScroll}
+        decelerationRate="fast"
+        snapToInterval={300 + spacing.sm}
+      >
+        {polls.map((p) => (
+          <View key={p._id} style={styles.pollCardWrap}>
+            <PollCard {...p} />
+          </View>
         ))}
       </ScrollView>
     </Animated.View>
@@ -225,6 +255,9 @@ export default function GroupsScreen() {
 
       {/* Live Now */}
       <LiveNowSection />
+
+      {/* Community Polls */}
+      <CommunityPolls />
 
       {/* Tab Toggle */}
       <View style={styles.tabRow}>
@@ -394,6 +427,31 @@ const styles = StyleSheet.create({
   liveScroll: {
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
+  },
+
+  /* Polls Section */
+  pollsSection: {
+    marginBottom: spacing.md,
+  },
+  pollsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    gap: 6,
+  },
+  pollsSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.black,
+    letterSpacing: -0.2,
+  },
+  pollsScroll: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.sm,
+  },
+  pollCardWrap: {
+    width: 300,
   },
 
   header: {

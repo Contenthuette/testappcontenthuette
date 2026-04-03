@@ -73,6 +73,7 @@ export default function MainLayout() {
         <Stack.Screen name="subscription" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="user-profile" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="create-post" options={{ presentation: "modal" }} />
+        <Stack.Screen name="create-poll" options={{ presentation: "modal" }} />
         <Stack.Screen name="post-comments" options={{
           presentation: "formSheet",
           sheetGrabberVisible: true,

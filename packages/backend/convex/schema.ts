@@ -512,4 +512,28 @@ export default defineSchema({
     updatedAt: v.optional(v.number()),
   })
     .index("by_isActive", ["isActive"]),
+
+  // ── Polls / Umfragen ──────────────────────────────────────────
+  polls: defineTable({
+    question: v.string(),
+    options: v.array(v.string()),
+    creatorId: v.id("users"),
+    target: v.union(v.literal("community"), v.literal("group")),
+    groupId: v.optional(v.id("groups")),
+    totalVotes: v.number(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_target_and_createdAt", ["target", "createdAt"])
+    .index("by_groupId_and_createdAt", ["groupId", "createdAt"])
+    .index("by_creatorId", ["creatorId"]),
+
+  pollVotes: defineTable({
+    pollId: v.id("polls"),
+    userId: v.id("users"),
+    optionIndex: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_pollId", ["pollId"])
+    .index("by_pollId_and_userId", ["pollId", "userId"]),
 });

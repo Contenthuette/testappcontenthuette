@@ -20,6 +20,12 @@ const createOptions = [
     route: "/(main)/create-post?type=video" as const,
   },
   {
+    icon: "chart.bar.fill" as const,
+    label: "Umfrage erstellen",
+    desc: "Starte eine Abstimmung in der Community oder Gruppe",
+    route: "/(main)/create-poll" as const,
+  },
+  {
     icon: "video.badge.waveform" as const,
     label: "Live gehen",
     desc: "Starte einen Z Livestream",
