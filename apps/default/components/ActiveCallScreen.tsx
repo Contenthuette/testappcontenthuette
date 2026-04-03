@@ -70,6 +70,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     connectionState,
     isMuted,
     isVideoOff,
+    isFrontCamera,
     toggleMute,
     toggleVideo,
     flipCamera,
@@ -412,7 +413,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               streamURL={localStreamUrl}
               style={styles.localVideo}
               objectFit="cover"
-              mirror={true}
+              mirror={isFrontCamera}
               zOrder={1}
             />
           )}

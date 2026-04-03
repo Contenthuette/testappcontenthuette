@@ -105,6 +105,7 @@ export function useWebRTC({
   const [setupComplete, setSetupComplete] = useState(false);
   const [iceServers, setIceServers] = useState<Array<IceServerConfig>>(DEFAULT_ICE_SERVERS);
   const [iceServersLoaded, setIceServersLoaded] = useState(false);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
   const peerConnectionRef = useRef<RTCPeerConnectionLike | null>(null);
   const localStreamRef = useRef<MediaStreamLike | null>(null);
@@ -225,9 +226,9 @@ export function useWebRTC({
             video: isVideo
               ? {
                   facingMode: "user",
-                  width: 1920,
-                  height: 1080,
-                  frameRate: 30,
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 },
+                  frameRate: { ideal: 30 },
                 }
               : false,
           });
@@ -457,6 +458,7 @@ export function useWebRTC({
   const flipCamera = useCallback(() => {
     const videoTrack = localStreamRef.current?.getVideoTracks()?.[0];
     videoTrack?._switchCamera?.();
+    setIsFrontCamera((prev) => !prev);
   }, []);
 
   const cleanup = useCallback(() => {
@@ -489,6 +491,7 @@ export function useWebRTC({
     connectionState,
     isMuted,
     isVideoOff,
+    isFrontCamera,
     toggleMute,
     toggleVideo,
     flipCamera,
