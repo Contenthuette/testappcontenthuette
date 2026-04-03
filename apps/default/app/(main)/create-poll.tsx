@@ -138,7 +138,7 @@ export default function CreatePollScreen() {
                 {(!myGroups || myGroups.length === 0) && (
                   <Text style={styles.noGroups}>Du bist noch keiner Gruppe beigetreten.</Text>
                 )}
-                {myGroups?.map((g) => (
+                {myGroups?.map((g: { _id: Id<"groups">; name: string }) => (
                   <TouchableOpacity
                     key={g._id}
                     style={[

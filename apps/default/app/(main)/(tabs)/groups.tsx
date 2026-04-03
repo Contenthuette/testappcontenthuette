@@ -94,9 +94,9 @@ function CommunityPolls() {
         decelerationRate="fast"
         snapToInterval={300 + spacing.sm}
       >
-        {polls.map((p) => (
+        {polls.map((p: { _id: string }) => (
           <View key={p._id} style={styles.pollCardWrap}>
-            <PollCard {...p} />
+            <PollCard {...(p as React.ComponentProps<typeof PollCard>)} />
           </View>
         ))}
       </ScrollView>

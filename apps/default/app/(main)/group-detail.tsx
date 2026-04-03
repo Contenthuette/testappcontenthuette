@@ -256,8 +256,8 @@ export default function GroupDetailScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Umfragen</Text>
               <View style={{ gap: spacing.md }}>
-                {groupPolls.map((p) => (
-                  <PollCard key={p._id} {...p} />
+                {groupPolls.map((p: { _id: string }) => (
+                  <PollCard key={p._id} {...(p as React.ComponentProps<typeof PollCard>)} />
                 ))}
               </View>
             </View>

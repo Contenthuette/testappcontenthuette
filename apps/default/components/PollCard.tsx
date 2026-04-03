@@ -26,7 +26,7 @@ export function PollCard({
   question,
   options,
   creatorName,
-  _creatorAvatarUrl,
+  creatorAvatarUrl,
   totalVotes,
   voteCounts,
   myVote,
