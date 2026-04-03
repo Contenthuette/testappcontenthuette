@@ -49,7 +49,7 @@ export default function OnboardingProfileScreen() {
           onChangeText={setBio} multiline numberOfLines={3}
           style={{ minHeight: 80, textAlignVertical: "top" }} />
 
-        <Button title="Weiter" onPress={() => router.push("/(auth)/onboarding-location")} fullWidth style={{ marginTop: spacing.xl }} />
+        <Button title="Weiter" onPress={() => router.navigate("/(auth)/onboarding-location")} fullWidth style={{ marginTop: spacing.xl }} />
       </ScrollView>
     </SafeAreaView>
   );

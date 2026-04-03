@@ -49,7 +49,7 @@ export default function OnboardingLocationScreen() {
 
         <Button
           title="Weiter"
-          onPress={() => router.push({ pathname: "/(auth)/onboarding-interests", params: { county, city } })}
+          onPress={() => router.navigate({ pathname: "/(auth)/onboarding-interests", params: { county, city } })}
           fullWidth
           style={{ marginTop: spacing.xl }}
         />

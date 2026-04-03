@@ -37,7 +37,7 @@ export default function WelcomeScreen() {
   const [agbAccepted, setAgbAccepted] = useState(false);
 
   const handleJoin = useCallback(() => {
-    router.push("/(auth)/signup");
+    router.navigate("/(auth)/signup");
   }, []);
 
   return (
@@ -99,7 +99,7 @@ export default function WelcomeScreen() {
               style={styles.agbLink}
               onPress={(e) => {
                 e.stopPropagation();
-                router.push("/(main)/privacy-center");
+                router.navigate("/(main)/privacy-center" as "/");
               }}
             >
               AGB
@@ -109,7 +109,7 @@ export default function WelcomeScreen() {
               style={styles.agbLink}
               onPress={(e) => {
                 e.stopPropagation();
-                router.push("/(main)/privacy-center");
+                router.navigate("/(main)/privacy-center" as "/");
               }}
             >
               Datenschutzerklärung
@@ -119,7 +119,7 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => router.push("/(auth)/login")}
+          onPress={() => router.navigate("/(auth)/login")}
           style={styles.loginLink}
         >
           <Text style={styles.loginText}>

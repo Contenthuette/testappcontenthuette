@@ -32,7 +32,7 @@ export default function OnboardingInterestsScreen() {
   };
 
   const handleNext = () => {
-    router.push({
+    router.navigate({
       pathname: "/(auth)/onboarding-notifications",
       params: {
         county: params.county || "",
