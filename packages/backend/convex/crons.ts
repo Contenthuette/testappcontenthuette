@@ -17,4 +17,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "delete expired polls",
+  { hours: 1 },
+  internal.polls.deleteExpiredPolls,
+  {},
+);
+
 export default crons;

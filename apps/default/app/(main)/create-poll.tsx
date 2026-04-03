@@ -217,6 +217,9 @@ export default function CreatePollScreen() {
 
       {/* Submit */}
       <View style={styles.bottomBar}>
+        <Text style={styles.expiryNote}>
+          Umfragen werden automatisch nach 24 Stunden gel\u00f6scht.
+        </Text>
         <TouchableOpacity
           style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
           onPress={handleSubmit}
@@ -224,7 +227,7 @@ export default function CreatePollScreen() {
           activeOpacity={0.7}
         >
           <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
-            {submitting ? "Erstellen…" : "Umfrage veröffentlichen"}
+            {submitting ? "Erstellen\u2026" : "Umfrage ver\u00f6ffentlichen"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -405,5 +408,12 @@ const styles = StyleSheet.create({
   },
   submitTextDisabled: {
     color: colors.gray400,
+  },
+  expiryNote: {
+    fontSize: 12,
+    color: colors.gray400,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+    letterSpacing: -0.1,
   },
 });

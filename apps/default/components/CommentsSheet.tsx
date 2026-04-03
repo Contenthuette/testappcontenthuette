@@ -14,7 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Animated, {
   SlideInDown, SlideOutDown,
+  useSharedValue, useAnimatedStyle, withSpring, runOnJS,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 
 interface CommentsSheetProps {
   postId: Id<"posts"> | null;
@@ -40,10 +42,40 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
   const deleteComment = useMutation(api.posts.deleteComment);
   const toggleCommentLike = useMutation(api.posts.toggleCommentLike);
 
-  // Reset text when sheet closes
+  // Swipe-to-dismiss
+  const translateY = useSharedValue(0);
+  const sheetHeight = screenHeight * 0.7;
+  const DISMISS_THRESHOLD = sheetHeight * 0.25;
+
+  const dismissSheet = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      // Only allow dragging down
+      translateY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (e.translationY > DISMISS_THRESHOLD || e.velocityY > 800) {
+        translateY.value = withSpring(sheetHeight, { damping: 20, stiffness: 200 });
+        runOnJS(dismissSheet)();
+      } else {
+        translateY.value = withSpring(0, { damping: 25, stiffness: 300 });
+      }
+    });
+
+  const animatedSheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  // Reset when sheet opens/closes
   useEffect(() => {
-    if (!visible) setText("");
-  }, [visible]);
+    if (!visible) {
+      setText("");
+      translateY.value = 0;
+    }
+  }, [visible, translateY]);
 
   const handleSend = useCallback(async () => {
     const msg = text.trim();
@@ -88,22 +120,20 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     if (Platform.OS === "web") {
-      if (confirm("Kommentar löschen?")) {
+      if (confirm("Kommentar l\u00f6schen?")) {
         handleDeleteComment(item._id);
       }
     } else {
       Alert.alert(
-        "Kommentar löschen",
-        "Möchtest du diesen Kommentar löschen?",
+        "Kommentar l\u00f6schen",
+        "M\u00f6chtest du diesen Kommentar l\u00f6schen?",
         [
           { text: "Abbrechen", style: "cancel" },
-          { text: "Löschen", style: "destructive", onPress: () => handleDeleteComment(item._id) },
+          { text: "L\u00f6schen", style: "destructive", onPress: () => handleDeleteComment(item._id) },
         ],
       );
     }
   }, [meId, handleDeleteComment]);
-
-  const sheetHeight = screenHeight * 0.7;
 
   if (!visible) return null;
 
@@ -115,115 +145,119 @@ export function CommentsSheet({ postId, visible, onClose }: CommentsSheetProps) 
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      {/* Backdrop */}
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        {/* Backdrop */}
+        <Pressable style={styles.backdrop} onPress={onClose} />
 
-      {/* Sheet */}
-      <Animated.View
-        entering={SlideInDown.duration(350)}
-        exiting={SlideOutDown.duration(200)}
-        style={[styles.sheet, { height: sheetHeight }]}
-      >
-        {/* Grabber + Header */}
-        <View style={styles.grabberWrap}>
-          <View style={styles.grabber} />
-        </View>
-        <View style={styles.header}>
-          <Text style={styles.title}>Kommentare</Text>
-        </View>
-
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={screenHeight - sheetHeight}
+        {/* Sheet */}
+        <Animated.View
+          entering={SlideInDown.duration(350)}
+          exiting={SlideOutDown.duration(200)}
+          style={[styles.sheet, { height: sheetHeight }, animatedSheetStyle]}
         >
-          {/* Comments list */}
-          <FlatList
-            style={styles.list}
-            data={comments ?? []}
-            keyExtractor={(item) => item._id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onLongPress={() => handleLongPress(item)}
-                delayLongPress={500}
-                disabled={item.authorId !== meId}
-              >
-                <View style={styles.commentRow}>
-                  <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={32} />
-                  <View style={styles.commentBody}>
-                    <Text style={styles.commentAuthor}>{item.authorName}</Text>
-                    <Text style={styles.commentText}>{item.text}</Text>
-                    <View style={styles.commentMeta}>
-                      <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
-                      {item.likeCount > 0 && (
-                        <Text style={styles.commentLikeCount}>
-                          {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.likeBtn}
-                    onPress={() => handleToggleLike(item._id)}
-                    hitSlop={12}
-                  >
-                    <SymbolView
-                      name={item.isLiked ? "heart.fill" : "heart"}
-                      size={14}
-                      tintColor={item.isLiked ? "#FF3B30" : "rgba(255,255,255,0.5)"}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              comments === undefined ? (
-                <View style={styles.emptyWrap}>
-                  <ActivityIndicator color="rgba(255,255,255,0.4)" />
-                </View>
-              ) : (
-                <View style={styles.emptyWrap}>
-                  <Text style={styles.emptyText}>Noch keine Kommentare</Text>
-                  <Text style={styles.emptySub}>Sei der Erste!</Text>
-                </View>
-              )
-            }
-          />
+          {/* Draggable Grabber area */}
+          <GestureDetector gesture={panGesture}>
+            <View style={styles.grabberArea}>
+              <View style={styles.grabber} />
+              <View style={styles.header}>
+                <Text style={styles.title}>Kommentare</Text>
+              </View>
+            </View>
+          </GestureDetector>
 
-          {/* Input bar */}
-          <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              placeholder="Kommentar schreiben..."
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              value={text}
-              onChangeText={setText}
-              multiline
-              maxLength={1000}
-              returnKeyType="send"
-              blurOnSubmit
-              onSubmitEditing={handleSend}
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={screenHeight - sheetHeight}
+          >
+            {/* Comments list */}
+            <FlatList
+              style={styles.list}
+              data={comments ?? []}
+              keyExtractor={(item) => item._id}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="interactive"
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onLongPress={() => handleLongPress(item)}
+                  delayLongPress={500}
+                  disabled={item.authorId !== meId}
+                >
+                  <View style={styles.commentRow}>
+                    <Avatar uri={item.authorAvatarUrl} name={item.authorName} size={32} />
+                    <View style={styles.commentBody}>
+                      <Text style={styles.commentAuthor}>{item.authorName}</Text>
+                      <Text style={styles.commentText}>{item.text}</Text>
+                      <View style={styles.commentMeta}>
+                        <Text style={styles.commentTime}>{formatTime(item.createdAt)}</Text>
+                        {item.likeCount > 0 && (
+                          <Text style={styles.commentLikeCount}>
+                            {item.likeCount} {item.likeCount === 1 ? "Like" : "Likes"}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.likeBtn}
+                      onPress={() => handleToggleLike(item._id)}
+                      hitSlop={12}
+                    >
+                      <SymbolView
+                        name={item.isLiked ? "heart.fill" : "heart"}
+                        size={14}
+                        tintColor={item.isLiked ? "#FF3B30" : "rgba(255,255,255,0.5)"}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                comments === undefined ? (
+                  <View style={styles.emptyWrap}>
+                    <ActivityIndicator color="rgba(255,255,255,0.4)" />
+                  </View>
+                ) : (
+                  <View style={styles.emptyWrap}>
+                    <Text style={styles.emptyText}>Noch keine Kommentare</Text>
+                    <Text style={styles.emptySub}>Sei der Erste!</Text>
+                  </View>
+                )
+              }
             />
-            <TouchableOpacity
-              onPress={handleSend}
-              disabled={text.trim().length === 0}
-              activeOpacity={0.7}
-              style={[
-                styles.sendBtn,
-                text.trim().length === 0 && styles.sendBtnDisabled,
-              ]}
-            >
-              <SymbolView name="arrow.up" size={14} tintColor="#000" />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Animated.View>
+
+            {/* Input bar */}
+            <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                placeholder="Kommentar schreiben..."
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                value={text}
+                onChangeText={setText}
+                multiline
+                maxLength={1000}
+                returnKeyType="send"
+                blurOnSubmit
+                onSubmitEditing={handleSend}
+              />
+              <TouchableOpacity
+                onPress={handleSend}
+                disabled={text.trim().length === 0}
+                activeOpacity={0.7}
+                style={[
+                  styles.sendBtn,
+                  text.trim().length === 0 && styles.sendBtnDisabled,
+                ]}
+              >
+                <SymbolView name="arrow.up" size={14} tintColor="#000" />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -252,16 +286,16 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     overflow: "hidden",
   },
-  grabberWrap: {
-    alignItems: "center",
+  grabberArea: {
     paddingTop: 10,
-    paddingBottom: 4,
   },
   grabber: {
     width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.3)",
+    alignSelf: "center",
+    marginBottom: 4,
   },
   header: {
     alignItems: "center",

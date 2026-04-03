@@ -1,12 +1,12 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, TextInput } from "react-native";
 import { colors, spacing, radius } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 interface PollCardProps {
   _id: Id<"polls">;
@@ -18,7 +18,10 @@ interface PollCardProps {
   voteCounts: number[];
   myVote?: number;
   isActive: boolean;
+  isOwner: boolean;
+  canDelete: boolean;
   createdAt: number;
+  expiresAt: number;
   compact?: boolean;
 }
 
@@ -32,11 +35,21 @@ export function PollCard({
   voteCounts,
   myVote,
   isActive,
+  isOwner,
+  canDelete,
   createdAt,
+  expiresAt,
   compact,
 }: PollCardProps) {
   const castVote = useMutation(api.polls.vote);
+  const removePoll = useMutation(api.polls.remove);
+  const editPoll = useMutation(api.polls.edit);
   const hasVoted = myVote !== undefined;
+
+  const [showMenu, setShowMenu] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editQuestion, setEditQuestion] = useState(question);
+  const [editOptions, setEditOptions] = useState(options);
 
   const handleVote = async (index: number) => {
     if (hasVoted || !isActive) return;
@@ -48,8 +61,138 @@ export function PollCard({
     }
   };
 
-  const timeAgo = getTimeAgo(createdAt);
+  const handleDelete = () => {
+    setShowMenu(false);
+    const doDelete = async () => {
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      try {
+        await removePoll({ pollId: _id });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Fehler beim L\u00f6schen";
+        if (Platform.OS !== "web") Alert.alert("Fehler", msg);
+      }
+    };
 
+    if (Platform.OS === "web") {
+      if (confirm("Umfrage l\u00f6schen?")) doDelete();
+    } else {
+      Alert.alert(
+        "Umfrage l\u00f6schen",
+        "M\u00f6chtest du diese Umfrage unwiderruflich l\u00f6schen?",
+        [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "L\u00f6schen", style: "destructive", onPress: doDelete },
+        ],
+      );
+    }
+  };
+
+  const handleStartEdit = () => {
+    setShowMenu(false);
+    if (totalVotes > 0) {
+      if (Platform.OS === "web") {
+        alert("Umfrage hat bereits Stimmen, Bearbeiten nicht m\u00f6glich");
+      } else {
+        Alert.alert("Nicht m\u00f6glich", "Umfrage hat bereits Stimmen, Bearbeiten nicht m\u00f6glich");
+      }
+      return;
+    }
+    setEditQuestion(question);
+    setEditOptions([...options]);
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    const cleanOptions = editOptions.map((o) => o.trim()).filter(Boolean);
+    if (!editQuestion.trim() || cleanOptions.length < 2) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await editPoll({ pollId: _id, question: editQuestion, options: cleanOptions });
+      setEditing(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Fehler";
+      if (Platform.OS !== "web") Alert.alert("Fehler", msg);
+    }
+  };
+
+  const timeAgo = getTimeAgo(createdAt);
+  const timeLeft = getTimeLeft(expiresAt);
+
+  /* ── Edit mode ── */
+  if (editing) {
+    return (
+      <Animated.View entering={FadeIn.duration(200)} style={[styles.card, compact && styles.cardCompact]}>
+        <View style={styles.header}>
+          <View style={[styles.pollIcon, compact && styles.pollIconCompact]}>
+            <SymbolView name="chart.bar.fill" size={compact ? 12 : 16} tintColor={colors.white} />
+          </View>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerLabel, compact && styles.headerLabelCompact]}>Umfrage bearbeiten</Text>
+          </View>
+        </View>
+
+        <TextInput
+          style={styles.editInput}
+          value={editQuestion}
+          onChangeText={setEditQuestion}
+          placeholder="Frage..."
+          placeholderTextColor={colors.gray400}
+          multiline
+          maxLength={200}
+        />
+
+        {editOptions.map((opt, i) => (
+          <View key={i} style={styles.editOptionRow}>
+            <TextInput
+              style={styles.editOptionInput}
+              value={opt}
+              onChangeText={(t) => {
+                const updated = [...editOptions];
+                updated[i] = t;
+                setEditOptions(updated);
+              }}
+              placeholder={`Option ${i + 1}`}
+              placeholderTextColor={colors.gray400}
+              maxLength={100}
+            />
+            {editOptions.length > 2 && (
+              <TouchableOpacity onPress={() => setEditOptions(editOptions.filter((_, j) => j !== i))}>
+                <SymbolView name="xmark.circle.fill" size={18} tintColor={colors.gray300} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+
+        {editOptions.length < 5 && (
+          <TouchableOpacity
+            style={styles.addOptBtn}
+            onPress={() => setEditOptions([...editOptions, ""])}
+          >
+            <SymbolView name="plus.circle.fill" size={16} tintColor={colors.black} />
+            <Text style={styles.addOptText}>Option hinzuf\u00fcgen</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.editActions}>
+          <TouchableOpacity style={styles.editCancelBtn} onPress={() => setEditing(false)}>
+            <Text style={styles.editCancelText}>Abbrechen</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.editSaveBtn,
+              (!editQuestion.trim() || editOptions.filter((o) => o.trim()).length < 2) && styles.editSaveBtnDisabled,
+            ]}
+            onPress={handleSaveEdit}
+            disabled={!editQuestion.trim() || editOptions.filter((o) => o.trim()).length < 2}
+          >
+            <Text style={styles.editSaveText}>Speichern</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  /* ── Normal view ── */
   return (
     <Animated.View entering={FadeIn.duration(300)} style={[styles.card, compact && styles.cardCompact]}>
       {/* Header */}
@@ -61,16 +204,47 @@ export function PollCard({
           <Text style={[styles.headerLabel, compact && styles.headerLabelCompact]}>Umfrage</Text>
           {!compact && (
             <Text style={styles.headerMeta}>
-              von {creatorName} · {timeAgo}
+              von {creatorName} \u00b7 {timeAgo}
             </Text>
           )}
         </View>
-        {!isActive && (
+
+        {/* Menu button */}
+        {canDelete && (
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => {
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowMenu(!showMenu);
+            }}
+            hitSlop={8}
+          >
+            <SymbolView name="ellipsis" size={16} tintColor={colors.gray400} />
+          </TouchableOpacity>
+        )}
+
+        {!isActive && !canDelete && (
           <View style={styles.closedBadge}>
             <Text style={styles.closedText}>Beendet</Text>
           </View>
         )}
       </View>
+
+      {/* Dropdown menu */}
+      {showMenu && (
+        <Animated.View entering={FadeIn.duration(150)} style={styles.menuDropdown}>
+          {isOwner && isActive && totalVotes === 0 && (
+            <TouchableOpacity style={styles.menuItem} onPress={handleStartEdit}>
+              <SymbolView name="pencil" size={14} tintColor={colors.black} />
+              <Text style={styles.menuItemText}>Bearbeiten</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.menuItemDanger} onPress={handleDelete}>
+            <SymbolView name="trash.fill" size={14} tintColor="#FF3B30" />
+            <Text style={styles.menuItemTextDanger}>L\u00f6schen</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* Question */}
       <Text style={[styles.question, compact && styles.questionCompact]} numberOfLines={compact ? 2 : undefined}>{question}</Text>
@@ -95,7 +269,6 @@ export function PollCard({
               activeOpacity={hasVoted ? 1 : 0.65}
               disabled={hasVoted || !isActive}
             >
-              {/* Progress bar fill */}
               {hasVoted && (
                 <View
                   style={[
@@ -130,10 +303,23 @@ export function PollCard({
         })}
       </View>
 
-      {/* Footer */}
-      <Text style={[styles.footer, compact && styles.footerCompact]}>
-        {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"}{compact ? "" : ` · ${timeAgo}`}
-      </Text>
+      {/* Footer with countdown */}
+      <View style={[styles.footerRow, compact && styles.footerRowCompact]}>
+        <Text style={[styles.footer, compact && styles.footerCompact]}>
+          {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"}{compact ? "" : ` \u00b7 ${timeAgo}`}
+        </Text>
+        {isActive && timeLeft && (
+          <View style={styles.expiryBadge}>
+            <SymbolView name="clock" size={10} tintColor={colors.gray500} />
+            <Text style={[styles.expiryText, compact && styles.expiryTextCompact]}>{timeLeft}</Text>
+          </View>
+        )}
+        {!isActive && (
+          <View style={styles.closedBadgeSmall}>
+            <Text style={styles.closedTextSmall}>Beendet</Text>
+          </View>
+        )}
+      </View>
     </Animated.View>
   );
 }
@@ -148,6 +334,15 @@ function getTimeAgo(timestamp: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `vor ${days} ${days === 1 ? "Tag" : "Tagen"}`;
   return new Date(timestamp).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+}
+
+function getTimeLeft(expiresAt: number): string | null {
+  const diff = expiresAt - Date.now();
+  if (diff <= 0) return null;
+  const hours = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (hours > 0) return `${hours} Std. ${mins} Min.`;
+  return `${mins} Min.`;
 }
 
 const styles = StyleSheet.create({
@@ -195,6 +390,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.gray400,
     letterSpacing: -0.1,
+  },
+  menuBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuDropdown: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+    marginBottom: spacing.md,
+    overflow: "hidden",
+    boxShadow: "0px 4px 12px rgba(0,0,0,0.08)",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray100,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.black,
+  },
+  menuItemDanger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  menuItemTextDanger: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#FF3B30",
   },
   closedBadge: {
     paddingHorizontal: 10,
@@ -288,14 +526,124 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.black,
   },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing.md,
+  },
+  footerRowCompact: {
+    marginTop: spacing.sm,
+  },
   footer: {
     fontSize: 12,
     color: colors.gray400,
-    marginTop: spacing.md,
     letterSpacing: -0.1,
   },
   footerCompact: {
     fontSize: 11,
-    marginTop: spacing.sm,
+  },
+  expiryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.gray100,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  expiryText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: colors.gray500,
+    fontVariant: ["tabular-nums"],
+  },
+  expiryTextCompact: {
+    fontSize: 10,
+  },
+  closedBadgeSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  closedTextSmall: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
+  /* Edit mode styles */
+  editInput: {
+    fontSize: 15,
+    color: colors.black,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    minHeight: 60,
+    textAlignVertical: "top",
+    marginBottom: spacing.sm,
+    borderCurve: "continuous",
+  },
+  editOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  editOptionInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.black,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderCurve: "continuous",
+  },
+  addOptBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  addOptText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  editActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  editCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    borderCurve: "continuous",
+  },
+  editCancelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
+  editSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    borderCurve: "continuous",
+  },
+  editSaveBtnDisabled: {
+    backgroundColor: colors.gray200,
+  },
+  editSaveText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.white,
   },
 });
