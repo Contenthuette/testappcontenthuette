@@ -87,6 +87,7 @@ import {
   Crown,
   CircleAlert,
   Handshake,
+  ChartBar,
   type LucideProps,
 } from "lucide-react-native";
 
@@ -247,6 +248,10 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   handshake: Handshake,
   "hands.sparkles": Handshake,
   "handshake.fill": Handshake,
+
+  // Charts
+  "chart.bar": ChartBar,
+  "chart.bar.fill": ChartBar,
 };
 
 interface SymbolViewProps {
