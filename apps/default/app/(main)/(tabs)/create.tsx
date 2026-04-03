@@ -22,7 +22,7 @@ const createOptions = [
   {
     icon: "chart.bar.fill" as const,
     label: "Umfrage erstellen",
-    desc: "Starte eine Abstimmung in der Community oder Gruppe",
+    desc: "Erstelle eine Z Umfrage",
     route: "/(main)/create-poll" as const,
   },
   {
