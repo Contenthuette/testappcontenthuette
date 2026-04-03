@@ -167,8 +167,6 @@ export function ChatInputBar({
         mediaTypes: ["images", "videos"],
         quality: 0.8,
         allowsEditing: false,
-        videoQuality: 1,
-        videoExportPreset: ImagePicker.VideoExportPreset.MediumQuality,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {

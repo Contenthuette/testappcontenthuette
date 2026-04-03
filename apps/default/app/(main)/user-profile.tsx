@@ -29,7 +29,7 @@ import {
   ShieldBan,
 } from "lucide-react-native";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
-import { GroupAdminLinks, MemberInButton, LocationBadge } from "@/components/ProfileBadges";
+import { GroupAdminLinks, LocationBadge } from "@/components/ProfileBadges";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface UserPostItem { _id: string; type: string; thumbnailUrl?: string; mediaUrl?: string; cropOffsetX?: number; cropOffsetY?: number; cropZoom?: number }
@@ -283,7 +283,6 @@ export default function UserProfileScreen() {
           {userGroups && userGroups.length > 0 && <GroupAdminLinks groups={userGroups} />}
           <View style={styles.locationAndMemberContainer}>
             <LocationBadge city={user.city} county={user.county} />
-            {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
           </View>
           {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
 
@@ -294,10 +293,23 @@ export default function UserProfileScreen() {
               <Text style={styles.statLabel}>Beiträge</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statItem}>
+            <TouchableOpacity
+              style={styles.statItem}
+              activeOpacity={0.6}
+              onPress={() => router.navigate({ pathname: "/(main)/friends-list", params: { userId: id!, title: `${user.name} – Freunde` } })}
+            >
               <Text style={styles.statNumber}>{user.friendCount ?? 0}</Text>
               <Text style={styles.statLabel}>Freunde</Text>
-            </View>
+            </TouchableOpacity>
+            <View style={styles.statDivider} />
+            <TouchableOpacity
+              style={styles.statItem}
+              activeOpacity={0.6}
+              onPress={() => router.navigate({ pathname: "/(main)/groups-list", params: { userId: id!, title: `${user.name} – Gruppen` } })}
+            >
+              <Text style={styles.statNumber}>{userGroups?.length ?? 0}</Text>
+              <Text style={styles.statLabel}>Gruppen</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

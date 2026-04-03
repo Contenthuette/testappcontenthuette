@@ -11,7 +11,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
-import { ZAdminBadge, GroupAdminLinks, MemberInButton, LocationBadge } from "@/components/ProfileBadges";
+import { ZAdminBadge, GroupAdminLinks, LocationBadge } from "@/components/ProfileBadges";
 import { VideoGridThumbnail } from "@/components/VideoGridThumbnail";
 import { useThumbnailRepair } from "@/lib/useThumbnailRepair";
 
@@ -77,14 +77,22 @@ export default function ProfileScreen() {
                 <Text style={styles.statValue}>{myPosts?.length ?? 0}</Text>
                 <Text style={styles.statLabel}>Beiträge</Text>
               </View>
-              <View style={styles.stat}>
+              <TouchableOpacity
+                style={styles.stat}
+                activeOpacity={0.6}
+                onPress={() => router.navigate({ pathname: "/(main)/friends-list", params: { userId: me._id, title: "Meine Freunde" } })}
+              >
                 <Text style={styles.statValue}>{myFriends?.length ?? 0}</Text>
                 <Text style={styles.statLabel}>Freunde</Text>
-              </View>
-              <View style={styles.stat}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.stat}
+                activeOpacity={0.6}
+                onPress={() => router.navigate({ pathname: "/(main)/groups-list", params: { userId: me._id, title: "Meine Gruppen" } })}
+              >
                 <Text style={styles.statValue}>{userGroups?.length ?? 0}</Text>
                 <Text style={styles.statLabel}>Gruppen</Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -93,7 +101,6 @@ export default function ProfileScreen() {
           {userGroups && userGroups.length > 0 && <GroupAdminLinks groups={userGroups} />}
           <View style={styles.widgetRow}>
             <LocationBadge city={me.city} county={me.county} />
-            {userGroups && userGroups.length > 0 && <MemberInButton groups={userGroups} />}
           </View>
           {me.bio ? <Text style={styles.bio}>{me.bio}</Text> : null}
 

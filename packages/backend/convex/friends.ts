@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { authQuery, authMutation } from "./functions";
+import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -315,6 +316,58 @@ export const getMyFriends = authQuery({
     const avatarUrls = await batchGetAvatarUrls(
       ctx,
       [...userCache.values()].map((user) => user?.avatarStorageId),
+    );
+
+    return friendIds.flatMap((friendId) => {
+      const user = userCache.get(friendId);
+      if (!user) return [];
+      return [{
+        _id: user._id,
+        name: user.name,
+        avatarUrl: getAvatarUrl(user, avatarUrls),
+        city: user.city,
+      }];
+    });
+  },
+});
+
+// Public: Get friends of any user
+export const getFriendsOfUser = query({
+  args: { userId: v.id("users") },
+  returns: v.array(
+    v.object({
+      _id: v.id("users"),
+      name: v.string(),
+      avatarUrl: v.optional(v.string()),
+      city: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const [sentAccepted, receivedAccepted] = await Promise.all([
+      ctx.db
+        .query("friendRequests")
+        .withIndex("by_senderId_and_status", (q) =>
+          q.eq("senderId", args.userId).eq("status", "accepted"),
+        )
+        .collect(),
+      ctx.db
+        .query("friendRequests")
+        .withIndex("by_receiverId_and_status", (q) =>
+          q.eq("receiverId", args.userId).eq("status", "accepted"),
+        )
+        .collect(),
+    ]);
+
+    const friendIds = [
+      ...sentAccepted.map((r) => r.receiverId),
+      ...receivedAccepted.map((r) => r.senderId),
+    ];
+    if (friendIds.length === 0) return [];
+
+    const userCache = await batchGetUsers(ctx, friendIds);
+    const avatarUrls = await batchGetAvatarUrls(
+      ctx,
+      [...userCache.values()].map((u) => u?.avatarStorageId),
     );
 
     return friendIds.flatMap((friendId) => {

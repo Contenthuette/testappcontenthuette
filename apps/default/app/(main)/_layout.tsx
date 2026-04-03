@@ -87,6 +87,8 @@ export default function MainLayout() {
         <Stack.Screen name="admin" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="admin-event-form" options={{ presentation: "modal" }} />
         <Stack.Screen name="admin-partner-form" options={{ presentation: "modal" }} />
+        <Stack.Screen name="friends-list" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="groups-list" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="call" options={{ animation: "fade", headerShown: false }} />
       </Stack>
     </CallProvider>
