@@ -103,7 +103,7 @@ export default function CreatePollScreen() {
               activeOpacity={0.7}
             >
               <SymbolView
-                name="globe.europe.africa.fill"
+                name="globe"
                 size={16}
                 tintColor={target === "community" ? colors.white : colors.gray500}
               />
