@@ -13,6 +13,7 @@ import {
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { SymbolView } from "@/components/Icon";
 import { useSound } from "@/lib/sounds";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
@@ -50,7 +51,7 @@ class VoiceRecorderErrorBoundary extends Component<
             <SymbolView name="xmark" size={14} tintColor="#9CA3AF" />
           </Pressable>
           <Text style={ebStyles.errorText}>
-            Sprachaufnahme nicht verfügbar
+            Sprachaufnahme nicht verf\u00fcgbar
           </Text>
         </View>
       );
@@ -93,7 +94,7 @@ export interface MediaPickResult {
 interface ChatInputBarProps {
   onSend: (text: string) => void;
   onSendVoice?: (uri: string, durationMs: number) => void;
-  onSendMedia?: (media: MediaPickResult) => void;
+  onSendMedia?: (media: MediaPickResult) => Promise<void> | void;
   onPlusPress?: () => void;
   placeholder?: string;
   bottomInset?: number;
@@ -111,8 +112,28 @@ export function ChatInputBar({
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [isPickingMedia, setIsPickingMedia] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<MediaPickResult | null>(null);
+  const [isSendingMedia, setIsSendingMedia] = useState(false);
   const { playSound } = useSound();
   const { width: screenWidth } = useWindowDimensions();
+
+  // Video player for preview modal
+  const previewPlayer = useVideoPlayer(
+    mediaPreview?.type === "video" ? mediaPreview.uri : null,
+    (p) => {
+      p.loop = true;
+      p.muted = false;
+      p.play();
+    },
+  );
+
+  const dismissPreview = () => {
+    setMediaPreview(null);
+    try {
+      previewPlayer?.pause();
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -161,6 +182,20 @@ export function ChatInputBar({
       console.error("Media picker error:", err);
     } finally {
       setIsPickingMedia(false);
+    }
+  };
+
+  const handleConfirmSend = async () => {
+    if (!mediaPreview || !onSendMedia || isSendingMedia) return;
+    setIsSendingMedia(true);
+    try {
+      await onSendMedia(mediaPreview);
+      playSound("send");
+    } catch (err) {
+      console.error("Failed to send media:", err);
+    } finally {
+      setIsSendingMedia(false);
+      dismissPreview();
     }
   };
 
@@ -266,45 +301,52 @@ export function ChatInputBar({
         transparent
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => setMediaPreview(null)}
+        onRequestClose={dismissPreview}
       >
         <View style={styles.previewBg}>
           <View style={styles.previewContent}>
-            {mediaPreview && (
+            {mediaPreview?.type === "video" && previewPlayer ? (
+              <VideoView
+                player={previewPlayer}
+                style={{
+                  width: screenWidth * 0.85,
+                  height: screenWidth * 0.85 * (16 / 9),
+                  borderRadius: 16,
+                  overflow: "hidden" as const,
+                }}
+                nativeControls
+                contentFit="contain"
+              />
+            ) : mediaPreview ? (
               <Image
                 source={{ uri: mediaPreview.uri }}
                 style={{
                   width: screenWidth * 0.85,
-                  height: screenWidth * 0.85 * (4 / 3),
+                  height: screenWidth * 0.85,
                   borderRadius: 16,
                 }}
-                contentFit="cover"
+                contentFit="contain"
               />
-            )}
-            {mediaPreview?.type === "video" && (
-              <View style={styles.previewVideoBadge}>
-                <SymbolView name="video.fill" size={14} tintColor="#FFF" />
-                <Text style={styles.previewVideoText}>Video</Text>
-              </View>
-            )}
+            ) : null}
           </View>
           <View style={styles.previewActions}>
             <Pressable
               style={styles.previewCancel}
-              onPress={() => setMediaPreview(null)}
+              onPress={dismissPreview}
+              disabled={isSendingMedia}
             >
               <SymbolView name="xmark" size={20} tintColor="#FFF" />
             </Pressable>
             <Pressable
-              style={styles.previewSend}
-              onPress={() => {
-                if (mediaPreview && onSendMedia) {
-                  onSendMedia(mediaPreview);
-                }
-                setMediaPreview(null);
-              }}
+              style={[styles.previewSend, isSendingMedia && { opacity: 0.5 }]}
+              disabled={isSendingMedia}
+              onPress={handleConfirmSend}
             >
-              <SymbolView name="arrow.up" size={20} tintColor="#FFF" />
+              {isSendingMedia ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <SymbolView name="arrow.up" size={20} tintColor="#FFF" />
+              )}
             </Pressable>
           </View>
         </View>
@@ -373,27 +415,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   previewContent: {
-    position: "relative" as const,
-  },
-  previewVideoBadge: {
-    position: "absolute" as const,
-    top: 12,
-    left: 12,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  previewVideoText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "600" as const,
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 16,
   },
   previewActions: {
-    flexDirection: "row" as const,
+    flexDirection: "row",
     gap: 32,
     marginTop: 32,
   },
@@ -402,15 +429,15 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    alignItems: "center",
+    justifyContent: "center",
   },
   previewSend: {
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: "#000",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
