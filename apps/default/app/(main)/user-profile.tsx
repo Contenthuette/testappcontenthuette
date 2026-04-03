@@ -51,12 +51,15 @@ export default function UserProfileScreen() {
 
   const user = useQuery(api.users.getById, userId ? { userId } : "skip");
   const userGroups = useQuery(api.users.getUserGroups, userId ? { userId } : "skip");
-  const friendStatus = useQuery(
+  const friendStatusData = useQuery(
     api.friends.getStatus,
     userId ? { otherUserId: userId } : "skip"
   );
+  const friendStatusVal = friendStatusData?.status ?? "none";
+  const friendRequestId = friendStatusData?.requestId;
 
   const sendFriendRequest = useMutation(api.friends.sendRequest);
+  const acceptFriendRequest = useMutation(api.friends.acceptRequest);
   const blockUser = useMutation(api.users.blockUser);
 
   const handleFriendAction = useCallback(async () => {
@@ -65,15 +68,17 @@ export default function UserProfileScreen() {
     try {
       if (Platform.OS !== "web")
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      if (friendStatus === "none") {
+      if (friendStatusVal === "none") {
         await sendFriendRequest({ receiverId: userId });
+      } else if (friendStatusVal === "pending_received" && friendRequestId) {
+        await acceptFriendRequest({ requestId: friendRequestId });
       }
     } catch (e: unknown) {
       console.error("Friend action error:", e);
     } finally {
       setFriendLoading(false);
     }
-  }, [userId, friendLoading, friendStatus, sendFriendRequest]);
+  }, [userId, friendLoading, friendStatusVal, friendRequestId, sendFriendRequest, acceptFriendRequest]);
 
   const handleMessage = useCallback(() => {
     if (!id) return;
@@ -140,7 +145,7 @@ export default function UserProfileScreen() {
   }
 
   const getFriendButtonConfig = () => {
-    switch (friendStatus) {
+    switch (friendStatusVal) {
       case "friends":
         return {
           label: "Befreundet",
@@ -161,12 +166,12 @@ export default function UserProfileScreen() {
         };
       case "pending_received":
         return {
-          label: "Antworten",
-          icon: UserPlus,
-          style: styles.friendBtnReceived,
-          textStyle: styles.friendBtnReceivedText,
-          iconColor: "#888",
-          disabled: true,
+          label: "Akzeptieren",
+          icon: UserCheck,
+          style: styles.friendBtnDefault,
+          textStyle: styles.friendBtnDefaultText,
+          iconColor: "#fff",
+          disabled: false,
         };
       default:
         return {

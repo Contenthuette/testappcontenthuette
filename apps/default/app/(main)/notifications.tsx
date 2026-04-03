@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
   Platform, Alert,
@@ -33,6 +33,7 @@ const ICON_MAP: Record<string, string> = {
 
 export default function NotificationsScreen() {
   const { isAuthenticated } = useConvexAuth();
+  const [handledRequests, setHandledRequests] = useState<Set<string>>(new Set());
   const {
     results: notifications,
     status: notificationsStatus,
@@ -56,6 +57,7 @@ export default function NotificationsScreen() {
     try {
       await acceptFriend({ requestId: requestId as Id<"friendRequests"> });
       await markRead({ notificationId });
+      setHandledRequests((prev) => new Set(prev).add(notificationId));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Fehler";
       if (Platform.OS !== "web") Alert.alert("Fehler", msg);
@@ -66,6 +68,7 @@ export default function NotificationsScreen() {
     try {
       await rejectFriend({ requestId: requestId as Id<"friendRequests"> });
       await markRead({ notificationId });
+      setHandledRequests((prev) => new Set(prev).add(notificationId));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Fehler";
       if (Platform.OS !== "web") Alert.alert("Fehler", msg);
@@ -138,7 +141,7 @@ export default function NotificationsScreen() {
                 <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
 
                 {/* Friend request actions */}
-                {item.type === "friend_request" && !item.isRead && item.referenceId && (
+                {item.type === "friend_request" && item.referenceId && !handledRequests.has(item._id) && (
                   <View style={styles.friendActions}>
                     <TouchableOpacity
                       style={styles.acceptBtn}

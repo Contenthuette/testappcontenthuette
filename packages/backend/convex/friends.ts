@@ -66,16 +66,19 @@ function getAvatarUrl(user: Doc<"users"> | null | undefined, avatarUrls: UrlCach
 // Get friendship status between me and another user
 export const getStatus = authQuery({
   args: { otherUserId: v.id("users") },
-  returns: v.union(
-    v.literal("none"),
-    v.literal("pending_sent"),
-    v.literal("pending_received"),
-    v.literal("friends"),
-  ),
+  returns: v.object({
+    status: v.union(
+      v.literal("none"),
+      v.literal("pending_sent"),
+      v.literal("pending_received"),
+      v.literal("friends"),
+    ),
+    requestId: v.optional(v.id("friendRequests")),
+  }),
   handler: async (ctx, args) => {
     const myUserId = await getMyUserId(ctx);
-    if (!myUserId) return "none";
-    if (myUserId === args.otherUserId) return "none";
+    if (!myUserId) return { status: "none" as const };
+    if (myUserId === args.otherUserId) return { status: "none" as const };
 
     const sent = await ctx.db
       .query("friendRequests")
@@ -83,8 +86,8 @@ export const getStatus = authQuery({
         q.eq("senderId", myUserId).eq("receiverId", args.otherUserId),
       )
       .first();
-    if (sent?.status === "accepted") return "friends";
-    if (sent?.status === "pending") return "pending_sent";
+    if (sent?.status === "accepted") return { status: "friends" as const, requestId: sent._id };
+    if (sent?.status === "pending") return { status: "pending_sent" as const, requestId: sent._id };
 
     const received = await ctx.db
       .query("friendRequests")
@@ -92,10 +95,10 @@ export const getStatus = authQuery({
         q.eq("senderId", args.otherUserId).eq("receiverId", myUserId),
       )
       .first();
-    if (received?.status === "accepted") return "friends";
-    if (received?.status === "pending") return "pending_received";
+    if (received?.status === "accepted") return { status: "friends" as const, requestId: received._id };
+    if (received?.status === "pending") return { status: "pending_received" as const, requestId: received._id };
 
-    return "none";
+    return { status: "none" as const };
   },
 });
 
