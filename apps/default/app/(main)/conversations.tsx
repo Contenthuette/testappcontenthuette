@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
   ScrollView, LayoutAnimation, UIManager, Platform as RNPlatform,
+  Modal, Pressable, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { colors, spacing } from "@/lib/theme";
+import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { SymbolView } from "@/components/Icon";
 import { PollCard } from "@/components/PollCard";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { useMutation } from "convex/react";
+import * as Haptics from "expo-haptics";
+import type { Id } from "@/convex/_generated/dataModel";
 
 // Enable LayoutAnimation on Android
 if (RNPlatform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -59,16 +61,35 @@ function CommunityPolls() {
           </View>
         ))}
       </ScrollView>
-      {/* Separator line */}
       <View style={pollStyles.separator} />
     </Animated.View>
   );
+}
+
+interface ConversationItem {
+  _id: string;
+  type: string;
+  otherUserId?: string;
+  otherUserName?: string;
+  otherUserAvatarUrl?: string;
+  lastMessage?: string;
+  lastMessageAt?: number;
+  unreadCount: number;
+  isPinned: boolean;
 }
 
 export default function ConversationsScreen() {
   const { isAuthenticated } = useConvexAuth();
   const markAllConversationsAsRead = useMutation(api.messaging.markAllConversationsAsRead);
   const conversations = useQuery(api.messaging.listConversations, isAuthenticated ? {} : "skip");
+  const pinConversation = useMutation(api.messaging.pinConversation);
+  const unpinConversation = useMutation(api.messaging.unpinConversation);
+  const deleteConversation = useMutation(api.messaging.deleteConversation);
+
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    conversation: ConversationItem | null;
+  }>({ visible: false, conversation: null });
 
   // Mark all conversations as read when opening this screen
   useEffect(() => {
@@ -77,6 +98,55 @@ export default function ConversationsScreen() {
     }
   }, [isAuthenticated, markAllConversationsAsRead]);
 
+  const handleLongPress = useCallback((item: ConversationItem) => {
+    if (RNPlatform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setContextMenu({ visible: true, conversation: item });
+  }, []);
+
+  const handlePin = useCallback(async () => {
+    const conv = contextMenu.conversation;
+    if (!conv) return;
+    setContextMenu({ visible: false, conversation: null });
+    try {
+      if (conv.isPinned) {
+        await unpinConversation({ conversationId: conv._id as Id<"conversations"> });
+      } else {
+        await pinConversation({ conversationId: conv._id as Id<"conversations"> });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Fehler";
+      if (RNPlatform.OS !== "web") Alert.alert("Fehler", msg);
+    }
+  }, [contextMenu.conversation, pinConversation, unpinConversation]);
+
+  const handleDelete = useCallback(() => {
+    const conv = contextMenu.conversation;
+    if (!conv) return;
+    setContextMenu({ visible: false, conversation: null });
+
+    if (RNPlatform.OS === "web") {
+      deleteConversation({ conversationId: conv._id as Id<"conversations"> }).catch(() => {});
+      return;
+    }
+
+    Alert.alert(
+      "Chat löschen",
+      `Chat mit ${conv.otherUserName ?? "diesem Nutzer"} löschen? Die andere Person hat den Chat noch.`,
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Löschen",
+          style: "destructive",
+          onPress: () => {
+            deleteConversation({ conversationId: conv._id as Id<"conversations"> }).catch(() => {});
+          },
+        },
+      ],
+    );
+  }, [contextMenu.conversation, deleteConversation]);
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
@@ -84,9 +154,8 @@ export default function ConversationsScreen() {
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>Nachrichten</Text>
-        <TouchableOpacity style={styles.composeBtn} hitSlop={12}>
-          <SymbolView name="square.and.pencil" size={20} tintColor={colors.black} />
-        </TouchableOpacity>
+        {/* Empty spacer to keep title centered */}
+        <View style={{ width: 36 }} />
       </View>
 
       <FlatList
@@ -99,12 +168,19 @@ export default function ConversationsScreen() {
           <TouchableOpacity
             style={styles.row}
             onPress={() => router.navigate({ pathname: "/(main)/chat", params: { id: item._id } })}
+            onLongPress={() => handleLongPress(item as ConversationItem)}
             activeOpacity={0.6}
+            delayLongPress={400}
           >
             <Avatar uri={item.otherUserAvatarUrl} name={item.otherUserName} size={52} />
             <View style={styles.rowBody}>
               <View style={styles.rowTop}>
-                <Text style={styles.rowName} numberOfLines={1}>{item.otherUserName}</Text>
+                <View style={styles.nameRow}>
+                  {item.isPinned && (
+                    <SymbolView name="pin.fill" size={11} tintColor={colors.gray400} />
+                  )}
+                  <Text style={styles.rowName} numberOfLines={1}>{item.otherUserName}</Text>
+                </View>
                 {item.lastMessageAt ? (
                   <Text style={styles.rowTime}>{formatTime(item.lastMessageAt)}</Text>
                 ) : null}
@@ -132,6 +208,61 @@ export default function ConversationsScreen() {
           )
         }
       />
+
+      {/* Context Menu Modal */}
+      <Modal
+        visible={contextMenu.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setContextMenu({ visible: false, conversation: null })}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setContextMenu({ visible: false, conversation: null })}
+        >
+          <View style={styles.menuSheet}>
+            <Text style={styles.menuTitle} numberOfLines={1}>
+              {contextMenu.conversation?.otherUserName ?? "Chat"}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handlePin}
+              activeOpacity={0.6}
+            >
+              <SymbolView
+                name={contextMenu.conversation?.isPinned ? "pin.slash.fill" : "pin.fill"}
+                size={18}
+                tintColor={colors.black}
+              />
+              <Text style={styles.menuItemText}>
+                {contextMenu.conversation?.isPinned ? "Nicht mehr anpinnen" : "Anpinnen"}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleDelete}
+              activeOpacity={0.6}
+            >
+              <SymbolView name="trash.fill" size={18} tintColor="#EF4444" />
+              <Text style={styles.menuItemTextDanger}>Chat löschen</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuCancel}
+              onPress={() => setContextMenu({ visible: false, conversation: null })}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.menuCancelText}>Abbrechen</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -196,7 +327,6 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 36, height: 36, justifyContent: "center" },
   title: { flex: 1, fontSize: 17, fontWeight: "600", color: colors.black, textAlign: "center" },
-  composeBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   list: { paddingBottom: 40 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
 
@@ -209,6 +339,7 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1 },
   rowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4, flex: 1 },
   rowName: { fontSize: 16, fontWeight: "600", color: colors.black, flex: 1, letterSpacing: -0.2 },
   rowTime: { fontSize: 13, color: colors.gray400 },
   rowPreview: { fontSize: 14, color: colors.gray500, marginTop: 2, letterSpacing: -0.1 },
@@ -223,4 +354,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   unreadText: { fontSize: 11, fontWeight: "700", color: colors.white, fontVariant: ["tabular-nums"] },
+
+  // Context menu
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  menuSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 34,
+    paddingHorizontal: spacing.xl,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.black,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.black,
+  },
+  menuItemTextDanger: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#EF4444",
+  },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.gray200,
+  },
+  menuCancel: {
+    alignItems: "center",
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  menuCancelText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
 });

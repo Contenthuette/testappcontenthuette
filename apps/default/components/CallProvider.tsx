@@ -1,13 +1,15 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { router } from "expo-router";
 import { IncomingCallOverlay } from "./IncomingCallOverlay";
 import { MinimizedCallBanner } from "./MinimizedCallBanner";
 import { CallContext } from "@/lib/call-context";
+import type { WebRTCState } from "@/lib/call-context";
+import { useWebRTC } from "@/lib/useWebRTC";
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useConvexAuth();
@@ -19,6 +21,34 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const declineCall = useMutation(api.calls.declineCall);
 
   const [minimizedCallId, setMinimizedCallId] = useState<Id<"calls"> | null>(null);
+
+  // WebRTC session state - persists across screen navigation
+  const [activeCallId, setActiveCallId] = useState<Id<"calls"> | null>(null);
+  const [rtcConfig, setRtcConfig] = useState<{
+    callId: Id<"calls">;
+    isInitiator: boolean;
+    isVideo: boolean;
+  } | null>(null);
+
+  const webrtc = useWebRTC({
+    callId: rtcConfig?.callId ?? null,
+    isInitiator: rtcConfig?.isInitiator ?? false,
+    isVideo: rtcConfig?.isVideo ?? false,
+    enabled: rtcConfig !== null,
+  });
+
+  const startWebRTC = useCallback((callId: Id<"calls">, isInitiator: boolean, isVideo: boolean) => {
+    // Only start if not already running for this call
+    if (rtcConfig?.callId === callId) return;
+    setActiveCallId(callId);
+    setRtcConfig({ callId, isInitiator, isVideo });
+  }, [rtcConfig?.callId]);
+
+  const stopWebRTC = useCallback(() => {
+    webrtc.cleanup();
+    setActiveCallId(null);
+    setRtcConfig(null);
+  }, [webrtc]);
 
   const minimizeCall = useCallback((callId: Id<"calls">) => {
     setMinimizedCallId(callId);
@@ -33,16 +63,40 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     api.calls.getCallDetails,
     minimizedCallId ? { callId: minimizedCallId } : "skip"
   );
-  if (
-    minimizedCallId &&
-    minimizedCall &&
-    (minimizedCall.status === "ended" ||
-      minimizedCall.status === "declined" ||
-      minimizedCall.status === "missed")
-  ) {
-    // Schedule clear on next tick to avoid render-during-render
-    setTimeout(() => setMinimizedCallId(null), 0);
-  }
+
+  useEffect(() => {
+    if (
+      minimizedCallId &&
+      minimizedCall &&
+      (minimizedCall.status === "ended" ||
+        minimizedCall.status === "declined" ||
+        minimizedCall.status === "missed")
+    ) {
+      setMinimizedCallId(null);
+      // Also stop WebRTC if it was running for this call
+      if (activeCallId === minimizedCallId) {
+        stopWebRTC();
+      }
+    }
+  }, [minimizedCallId, minimizedCall, activeCallId, stopWebRTC]);
+
+  // Also monitor active call state to auto-cleanup ended calls
+  const activeCallDetails = useQuery(
+    api.calls.getCallDetails,
+    activeCallId && activeCallId !== minimizedCallId ? { callId: activeCallId } : "skip"
+  );
+
+  useEffect(() => {
+    if (
+      activeCallId &&
+      activeCallDetails &&
+      (activeCallDetails.status === "ended" ||
+        activeCallDetails.status === "declined" ||
+        activeCallDetails.status === "missed")
+    ) {
+      stopWebRTC();
+    }
+  }, [activeCallId, activeCallDetails, stopWebRTC]);
 
   const handleAccept = useCallback(async () => {
     if (!incomingCall) return;
@@ -67,8 +121,18 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     }
   }, [incomingCall, declineCall]);
 
+  const webrtcState: WebRTCState | null = rtcConfig ? webrtc : null;
+
   return (
-    <CallContext.Provider value={{ minimizedCallId, minimizeCall, expandCall }}>
+    <CallContext.Provider value={{
+      minimizedCallId,
+      minimizeCall,
+      expandCall,
+      activeCallId,
+      webrtc: webrtcState,
+      startWebRTC,
+      stopWebRTC,
+    }}>
       <View style={styles.root}>
         {children}
         {minimizedCallId && (

@@ -80,11 +80,13 @@ export const getStatus = authQuery({
     if (!myUserId) return { status: "none" as const };
     if (myUserId === args.otherUserId) return { status: "none" as const };
 
+    // Use .order("desc") to get the most recent request (in case of re-sends after decline)
     const sent = await ctx.db
       .query("friendRequests")
       .withIndex("by_senderId_and_receiverId", (q) =>
         q.eq("senderId", myUserId).eq("receiverId", args.otherUserId),
       )
+      .order("desc")
       .first();
     if (sent?.status === "accepted") return { status: "friends" as const, requestId: sent._id };
     if (sent?.status === "pending") return { status: "pending_sent" as const, requestId: sent._id };
@@ -94,6 +96,7 @@ export const getStatus = authQuery({
       .withIndex("by_senderId_and_receiverId", (q) =>
         q.eq("senderId", args.otherUserId).eq("receiverId", myUserId),
       )
+      .order("desc")
       .first();
     if (received?.status === "accepted") return { status: "friends" as const, requestId: received._id };
     if (received?.status === "pending") return { status: "pending_received" as const, requestId: received._id };
@@ -116,6 +119,7 @@ export const sendRequest = authMutation({
       .withIndex("by_senderId_and_receiverId", (q) =>
         q.eq("senderId", myUserId).eq("receiverId", args.receiverId),
       )
+      .order("desc")
       .first();
     if (existing?.status === "pending") throw new Error("Request already sent");
     if (existing?.status === "accepted") throw new Error("Already friends");
@@ -125,6 +129,7 @@ export const sendRequest = authMutation({
       .withIndex("by_senderId_and_receiverId", (q) =>
         q.eq("senderId", args.receiverId).eq("receiverId", myUserId),
       )
+      .order("desc")
       .first();
     if (reverse?.status === "accepted") throw new Error("Already friends");
     if (reverse?.status === "pending") {

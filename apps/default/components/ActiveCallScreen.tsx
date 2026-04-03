@@ -18,7 +18,6 @@ import { SymbolView } from "@/components/Icon";
 import { router } from "expo-router";
 import { useCallContext } from "@/lib/call-context";
 import { useSound } from "@/lib/sounds";
-import { useWebRTC } from "@/lib/useWebRTC";
 import { setSpeakerOn } from "@/lib/audioRouting";
 import { BlurView } from "expo-blur";
 
@@ -48,7 +47,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const endCallMutation = useMutation(api.calls.endCall);
   const toggleVideoMutation = useMutation(api.calls.toggleVideo);
   const me = useQuery(api.users.me);
-  const { minimizeCall } = useCallContext();
+  const { minimizeCall, startWebRTC, stopWebRTC, webrtc, activeCallId } = useCallContext();
   const { playSound, stopSound } = useSound();
 
   const hangingUpRef = useRef(false);
@@ -57,34 +56,29 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
 
   const isVideoCall = call?.type === "video";
   const isInitiator = !!(call && me && call.callerId === me._id);
-  // CRITICAL: Don't enable WebRTC until `me` is loaded so isInitiator is correct
+
+  // Start WebRTC via the provider (persists across minimize/expand)
   const webrtcEnabled = !!(
     call &&
     me &&
     (call.status === "ringing" || call.status === "active")
   );
 
-  const {
-    localStreamUrl,
-    remoteStreamUrl,
-    connectionState,
-    isMuted,
-    isVideoOff,
-    isFrontCamera,
-    toggleMute,
-    toggleVideo,
-    flipCamera,
-    cleanup: cleanupWebRTC,
-    isSupported,
-    RTCView,
-  } = useWebRTC({
-    callId: webrtcEnabled ? callId : null,
-    isInitiator,
-    isVideo: isVideoCall ?? false,
-    enabled: webrtcEnabled,
-  });
+  useEffect(() => {
+    if (webrtcEnabled && call) {
+      startWebRTC(callId, isInitiator, isVideoCall ?? false);
+    }
+  }, [webrtcEnabled, callId, isInitiator, isVideoCall, startWebRTC, call]);
 
-  const RTCViewComponent = RTCView as ComponentType<RTCViewProps> | null;
+  // Use the provider's WebRTC state
+  const localStreamUrl = webrtc?.localStreamUrl ?? null;
+  const remoteStreamUrl = webrtc?.remoteStreamUrl ?? null;
+  const connectionState = webrtc?.connectionState ?? "new";
+  const isMuted = webrtc?.isMuted ?? false;
+  const isVideoOff = webrtc?.isVideoOff ?? false;
+  const isFrontCamera = webrtc?.isFrontCamera ?? true;
+  const isSupported = webrtc?.isSupported ?? false;
+  const RTCViewComponent = webrtc?.RTCView as ComponentType<RTCViewProps> | null;
 
   // Derive phase from call status + WebRTC state
   const phase = useMemo(() => {
@@ -123,14 +117,14 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   useEffect(() => {
     if (phase === "ended") {
       stopSound("ringback");
-      cleanupWebRTC();
+      stopWebRTC();
       setSpeakerOn(false);
       const timeout = setTimeout(() => {
         if (router.canGoBack()) router.back();
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [phase, cleanupWebRTC, stopSound]);
+  }, [phase, stopWebRTC, stopSound]);
 
   function formatTime(secs: number) {
     const m = Math.floor(secs / 60);
@@ -147,36 +141,35 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
     playSound("hangup");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    cleanupWebRTC();
+    stopWebRTC();
     setSpeakerOn(false);
     endCallMutation({ callId }).catch(() => {});
     setTimeout(() => {
       if (router.canGoBack()) router.back();
     }, 400);
-  }, [callId, endCallMutation, playSound, cleanupWebRTC, stopSound]);
+  }, [callId, endCallMutation, playSound, stopWebRTC, stopSound]);
 
   const handleToggleMute = useCallback(() => {
     playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleMute();
-  }, [playSound, toggleMute]);
+    webrtc?.toggleMute();
+  }, [playSound, webrtc]);
 
   const handleToggleVideo = useCallback(() => {
     playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleVideo();
-    // Sync video state to backend so other participant sees the change
+    webrtc?.toggleVideo();
     toggleVideoMutation({ callId }).catch(() => {});
-  }, [playSound, toggleVideo, toggleVideoMutation, callId]);
+  }, [playSound, webrtc, toggleVideoMutation, callId]);
 
   const handleFlipCamera = useCallback(() => {
     playSound("tap");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    flipCamera();
-  }, [playSound, flipCamera]);
+    webrtc?.flipCamera();
+  }, [playSound, webrtc]);
 
   const handleToggleSpeaker = useCallback(() => {
     playSound("tap");
@@ -275,7 +268,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   // ─── Error ───
   if (phase === "error") {
     const errorMessage = !isSupported
-      ? "Anrufe sind nur in der mobilen App verfügbar"
+      ? "Anrufe sind nur in der mobilen App verf\u00FCgbar"
       : "Verbindungsfehler";
     return (
       <View style={styles.container}>
@@ -296,12 +289,12 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
               ]}
               onPress={() => {
                 stopSound("ringback");
-                cleanupWebRTC();
+                stopWebRTC();
                 endCallMutation({ callId }).catch(() => {});
                 if (router.canGoBack()) router.back();
               }}
             >
-              <Text style={styles.backBtnText}>Zurück</Text>
+              <Text style={styles.backBtnText}>Zur\u00FCck</Text>
             </Pressable>
           </View>
         </SafeAreaView>

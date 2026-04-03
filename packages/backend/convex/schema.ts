@@ -132,6 +132,17 @@ export default defineSchema({
     .index("by_conversationId_and_userId", ["conversationId", "userId"])
     .index("by_userId", ["userId"]),
 
+  // ── Conversation Settings (per-user pin/delete) ────────────────
+  conversationSettings: defineTable({
+    conversationId: v.id("conversations"),
+    userId: v.id("users"),
+    isPinned: v.optional(v.boolean()),
+    isDeleted: v.optional(v.boolean()),
+    pinnedAt: v.optional(v.number()),
+  })
+    .index("by_userId_and_conversationId", ["userId", "conversationId"])
+    .index("by_userId", ["userId"]),
+
   // ── Posts / Feed ───────────────────────────────────────────────
   posts: defineTable({
     authorId: v.id("users"),

@@ -198,6 +198,7 @@ export const listConversations = authQuery({
       lastMessage: v.optional(v.string()),
       lastMessageAt: v.optional(v.number()),
       unreadCount: v.number(),
+      isPinned: v.boolean(),
     }),
   ),
   handler: async (ctx) => {
@@ -215,7 +216,20 @@ export const listConversations = authQuery({
         conversation.participantIds?.includes(myUserId),
     );
 
-    const otherUserIds = myConversations.flatMap((conversation) => {
+    // Fetch per-user conversation settings (pin/delete)
+    const settings = await ctx.db
+      .query("conversationSettings")
+      .withIndex("by_userId", (q) => q.eq("userId", myUserId))
+      .collect();
+    const settingsMap = new Map(settings.map((s) => [s.conversationId as string, s]));
+
+    // Filter out deleted conversations
+    const activeConversations = myConversations.filter((c) => {
+      const s = settingsMap.get(c._id as string);
+      return !s?.isDeleted;
+    });
+
+    const otherUserIds = activeConversations.flatMap((conversation) => {
       const otherUserId = conversation.participantIds?.find(
         (participantId) => participantId !== myUserId,
       );
@@ -224,7 +238,7 @@ export const listConversations = authQuery({
 
     // Fetch read statuses for all conversations
     const readStatuses = await Promise.all(
-      myConversations.map((conversation) =>
+      activeConversations.map((conversation) =>
         ctx.db
           .query("conversationReadStatus")
           .withIndex("by_conversationId_and_userId", (q) =>
@@ -237,7 +251,7 @@ export const listConversations = authQuery({
     const [userCache, lastMessages, unreadCounts] = await Promise.all([
       batchGetUsers(ctx, otherUserIds),
       Promise.all(
-        myConversations.map((conversation) =>
+        activeConversations.map((conversation) =>
           ctx.db
             .query("messages")
             .withIndex("by_conversationId", (q) =>
@@ -248,7 +262,7 @@ export const listConversations = authQuery({
         ),
       ),
       Promise.all(
-        myConversations.map(async (conversation, index) => {
+        activeConversations.map(async (conversation, index) => {
           const readStatus = readStatuses[index];
           const lastReadAt = readStatus?.lastReadAt ?? 0;
           // Count messages after lastReadAt that are NOT from me
@@ -268,12 +282,13 @@ export const listConversations = authQuery({
       [...userCache.values()].map((user) => user?.avatarStorageId),
     );
 
-    return myConversations.map((conversation, index) => {
+    const result = activeConversations.map((conversation, index) => {
       const otherUserId = conversation.participantIds?.find(
         (participantId) => participantId !== myUserId,
       );
       const otherUser = otherUserId ? userCache.get(otherUserId) : null;
       const lastMessage = lastMessages[index];
+      const s = settingsMap.get(conversation._id as string);
       return {
         _id: conversation._id,
         type: conversation.type,
@@ -283,14 +298,24 @@ export const listConversations = authQuery({
         lastMessage:
           lastMessage?.text ??
           (lastMessage?.type === "image"
-            ? "🖼 Foto"
+            ? "\uD83D\uDDBC Foto"
             : lastMessage?.type === "voice"
-              ? "🎙 Sprachmemo"
+              ? "\uD83C\uDF99 Sprachmemo"
               : undefined),
         lastMessageAt: conversation.lastMessageAt,
         unreadCount: unreadCounts[index],
+        isPinned: s?.isPinned === true,
       };
     });
+
+    // Sort: pinned first (by pinnedAt desc), then by lastMessageAt (already sorted)
+    result.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return 0;
+    });
+
+    return result;
   },
 });
 
@@ -662,6 +687,94 @@ export const deleteMessage = authMutation({
     if (message.senderId !== myUserId) throw new Error("Not your message");
 
     await ctx.db.delete(args.messageId);
+    return null;
+  },
+});
+
+// Pin a conversation (max 3)
+export const pinConversation = authMutation({
+  args: { conversationId: v.id("conversations") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
+    const existingSettings = await ctx.db
+      .query("conversationSettings")
+      .withIndex("by_userId", (q) => q.eq("userId", myUserId))
+      .collect();
+    const pinnedCount = existingSettings.filter((s) => s.isPinned).length;
+
+    const existing = await ctx.db
+      .query("conversationSettings")
+      .withIndex("by_userId_and_conversationId", (q) =>
+        q.eq("userId", myUserId).eq("conversationId", args.conversationId),
+      )
+      .unique();
+
+    if (existing?.isPinned) return null; // already pinned
+    if (pinnedCount >= 3) throw new Error("Maximal 3 Chats können angepinnt werden");
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { isPinned: true, pinnedAt: Date.now() });
+    } else {
+      await ctx.db.insert("conversationSettings", {
+        conversationId: args.conversationId,
+        userId: myUserId,
+        isPinned: true,
+        pinnedAt: Date.now(),
+      });
+    }
+    return null;
+  },
+});
+
+// Unpin a conversation
+export const unpinConversation = authMutation({
+  args: { conversationId: v.id("conversations") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
+    const existing = await ctx.db
+      .query("conversationSettings")
+      .withIndex("by_userId_and_conversationId", (q) =>
+        q.eq("userId", myUserId).eq("conversationId", args.conversationId),
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { isPinned: false, pinnedAt: undefined });
+    }
+    return null;
+  },
+});
+
+// Soft-delete a conversation (only for this user)
+export const deleteConversation = authMutation({
+  args: { conversationId: v.id("conversations") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
+    const existing = await ctx.db
+      .query("conversationSettings")
+      .withIndex("by_userId_and_conversationId", (q) =>
+        q.eq("userId", myUserId).eq("conversationId", args.conversationId),
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { isDeleted: true, isPinned: false });
+    } else {
+      await ctx.db.insert("conversationSettings", {
+        conversationId: args.conversationId,
+        userId: myUserId,
+        isDeleted: true,
+      });
+    }
     return null;
   },
 });

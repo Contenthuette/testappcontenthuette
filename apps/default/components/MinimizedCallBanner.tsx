@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import type { ComponentType } from "react";
 import {
   Platform,
   StyleSheet,
@@ -25,6 +26,14 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCallContext } from "@/lib/call-context";
 
+interface RTCViewProps {
+  streamURL: string;
+  style?: unknown;
+  objectFit?: "contain" | "cover";
+  mirror?: boolean;
+  zOrder?: number;
+}
+
 interface MinimizedCallBannerProps {
   callId: Id<"calls">;
 }
@@ -47,13 +56,16 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
   const call = useQuery(api.calls.getCallDetails, { callId });
   const heartbeat = useMutation(api.calls.heartbeat);
   const endCallMutation = useMutation(api.calls.endCall);
-  const { expandCall } = useCallContext();
+  const { expandCall, webrtc, stopWebRTC } = useCallContext();
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isVideo = call?.type === "video";
+  const hasRemoteVideo = isVideo && !!webrtc?.remoteStreamUrl;
   const itemWidth = isVideo ? PIP_WIDTH : PILL_WIDTH;
   const itemHeight = isVideo ? PIP_HEIGHT : PILL_HEIGHT;
+
+  const RTCViewComponent = webrtc?.RTCView as ComponentType<RTCViewProps> | null;
 
   // Draggable position
   const translateX = useSharedValue(
@@ -112,6 +124,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
+    stopWebRTC();
     endCallMutation({ callId }).catch(() => {});
   }
 
@@ -193,7 +206,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
         ? formatTime(elapsed)
         : "Verbinde\u2026";
 
-  // \u2500\u2500\u2500 Video PiP Card \u2500\u2500\u2500
+  // ─── Video PiP Card (with live remote stream) ───
   if (isVideo) {
     return (
       <GestureDetector gesture={composedGesture}>
@@ -203,20 +216,44 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
           style={[styles.pipContainer, animatedStyle]}
         >
           <View style={styles.pipCard}>
-            <View style={styles.pipAvatarArea}>
-              <Avatar uri={displayAvatar} name={displayName} size={52} />
-              <View style={styles.pipLiveIndicator}>
-                <View style={styles.pipLiveDot} />
+            {/* Show remote video stream if available */}
+            {hasRemoteVideo && RTCViewComponent && webrtc?.remoteStreamUrl ? (
+              <View style={styles.pipVideoFill}>
+                <RTCViewComponent
+                  streamURL={webrtc.remoteStreamUrl}
+                  style={styles.pipVideo}
+                  objectFit="cover"
+                  zOrder={0}
+                />
+                {/* Overlay with name + timer */}
+                <View style={styles.pipVideoOverlay}>
+                  <Text style={styles.pipVideoName} numberOfLines={1}>
+                    {displayName}
+                  </Text>
+                  <View style={styles.pipStatusRow}>
+                    <SymbolView name="video.fill" size={10} tintColor="#34C759" />
+                    <Text style={styles.pipStatus}>{statusText}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
-
-            <Text style={styles.pipName} numberOfLines={1}>
-              {displayName}
-            </Text>
-            <View style={styles.pipStatusRow}>
-              <SymbolView name="video.fill" size={10} tintColor="#34C759" />
-              <Text style={styles.pipStatus}>{statusText}</Text>
-            </View>
+            ) : (
+              /* Fallback: avatar when no remote stream */
+              <>
+                <View style={styles.pipAvatarArea}>
+                  <Avatar uri={displayAvatar} name={displayName} size={52} />
+                  <View style={styles.pipLiveIndicator}>
+                    <View style={styles.pipLiveDot} />
+                  </View>
+                </View>
+                <Text style={styles.pipName} numberOfLines={1}>
+                  {displayName}
+                </Text>
+                <View style={styles.pipStatusRow}>
+                  <SymbolView name="video.fill" size={10} tintColor="#34C759" />
+                  <Text style={styles.pipStatus}>{statusText}</Text>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Expand hint */}
@@ -232,7 +269,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
     );
   }
 
-  // \u2500\u2500\u2500 Audio Call Pill \u2500\u2500\u2500
+  // ─── Audio Call Pill ───
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View
@@ -254,7 +291,7 @@ export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
 }
 
 const styles = StyleSheet.create({
-  // \u2500\u2500\u2500 Video PiP \u2500\u2500\u2500
+  // ─── Video PiP ───
   pipContainer: {
     position: "absolute",
     width: PIP_WIDTH,
@@ -269,15 +306,43 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    gap: 8,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     boxShadow: "0px 4px 20px rgba(0,0,0,0.4)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
+  pipVideoFill: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  pipVideo: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000",
+  },
+  pipVideoOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    gap: 2,
+  },
+  pipVideoName: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFF",
+    textAlign: "center",
+  },
   pipAvatarArea: {
     position: "relative",
+    marginTop: 16,
   },
   pipLiveIndicator: {
     position: "absolute",
@@ -302,6 +367,7 @@ const styles = StyleSheet.create({
     color: "#FFF",
     textAlign: "center",
     maxWidth: PIP_WIDTH - 16,
+    marginTop: 8,
   },
   pipStatusRow: {
     flexDirection: "row",
@@ -326,7 +392,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // \u2500\u2500\u2500 Audio Pill \u2500\u2500\u2500
+  // ─── Audio Pill ───
   audioPillContainer: {
     position: "absolute",
     width: PILL_WIDTH,
