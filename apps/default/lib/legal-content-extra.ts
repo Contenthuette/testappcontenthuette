@@ -9,7 +9,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     body: [
       "Verantwortlich für die Datenverarbeitung im Sinne der Datenschutz-Grundverordnung (DSGVO) ist:",
       "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstr. 135\n19055 Schwerin\nDeutschland",
-      "Tel.: 01734506873\nE-Mail: info@contenthuette.de",
+      "Tel.: 01734506873\nE-Mail: leif@z-social.com",
       "Bei Fragen zum Datenschutz können Sie sich jederzeit an die oben genannte E-Mail-Adresse wenden.",
     ].join("\n\n"),
   },
@@ -152,7 +152,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     body: [
       "Wenn Sie uns Ihre E-Mail-Adresse zur Verf\u00fcgung gestellt haben, behalten wir uns vor, Ihnen regelm\u00e4\u00dfig Informationen zu unseren Angeboten per E-Mail oder In-App-Benachrichtigung zuzusenden. Hierf\u00fcr m\u00fcssen wir gem\u00e4\u00df \u00a7 7 Abs. 3 UWG keine gesonderte Einwilligung einholen.",
       "Die Datenverarbeitung erfolgt auf Basis unseres berechtigten Interesses an personalisierter Direktwerbung gem\u00e4\u00df Art. 6 Abs. 1 lit. f DSGVO.",
-      "Sie sind berechtigt, der Nutzung Ihrer E-Mail-Adresse zu dem vorbezeichneten Werbezweck jederzeit mit Wirkung f\u00fcr die Zukunft durch eine Mitteilung an info@contenthuette.de zu widersprechen.",
+      "Sie sind berechtigt, der Nutzung Ihrer E-Mail-Adresse zu dem vorbezeichneten Werbezweck jederzeit mit Wirkung f\u00fcr die Zukunft durch eine Mitteilung an leif@z-social.com zu widersprechen.",
     ].join("\n\n"),
   },
   {
@@ -176,7 +176,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "\u2022 Recht auf Daten\u00fcbertragbarkeit (Art. 20 DSGVO): Erhalt Ihrer Daten in maschinenlesbarem Format.",
       "\u2022 Widerspruchsrecht (Art. 21 DSGVO): Widerspruch gegen Verarbeitung auf Grundlage berechtigter Interessen.",
       "\u2022 Recht auf Widerruf der Einwilligung (Art. 7 Abs. 3 DSGVO): Jederzeit mit Wirkung f\u00fcr die Zukunft. Die Rechtm\u00e4\u00dfigkeit der bis zum Widerruf erfolgten Verarbeitung wird dadurch nicht ber\u00fchrt.",
-      "Anfragen richten Sie bitte an: info@contenthuette.de\n\nWir beantworten Ihre Anfrage innerhalb eines Monats.",
+      "Anfragen richten Sie bitte an: leif@z-social.com\n\nWir beantworten Ihre Anfrage innerhalb eines Monats.",
     ].join("\n\n"),
   },
   {
@@ -224,7 +224,7 @@ export const IMPRESSUM_SECTIONS: LegalSection[] = [
   },
   {
     heading: "Kontakt",
-    body: "Tel.: 01734506873\nE-Mail: info@contenthuette.de",
+    body: "Tel.: 01734506873\nE-Mail: leif@z-social.com",
   },
   {
     heading: "Verantwortliche/r i.S.d. \u00a7 18 Abs. 2 MStV",
@@ -236,7 +236,7 @@ export const IMPRESSUM_SECTIONS: LegalSection[] = [
   },
   {
     heading: "Zentrale Kontaktstelle (Digital Services Act \u2013 DSA)",
-    body: "Der Anbieter hat f\u00fcr beh\u00f6rdliche Entfernungsanordnungen sowie f\u00fcr Anfragen und Beschwerden von Beh\u00f6rden und Nutzern in Bezug auf angebotene Hosting-Leistungen die folgende zentrale Kontaktstelle eingerichtet:\n\ninfo@contenthuette.de\n\nEine Kommunikation \u00fcber diese Kontaktstelle ist in den Sprachen Deutsch und Englisch m\u00f6glich.",
+    body: "Der Anbieter hat f\u00fcr beh\u00f6rdliche Entfernungsanordnungen sowie f\u00fcr Anfragen und Beschwerden von Beh\u00f6rden und Nutzern in Bezug auf angebotene Hosting-Leistungen die folgende zentrale Kontaktstelle eingerichtet:\n\nleif@z-social.com\n\nEine Kommunikation \u00fcber diese Kontaktstelle ist in den Sprachen Deutsch und Englisch m\u00f6glich.",
   },
   {
     heading: "Online-Streitbeilegung",
