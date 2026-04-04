@@ -36,7 +36,7 @@ export interface CallContextType {
   stopWebRTC: () => void;
 }
 
-const defaultWebRTC: WebRTCState = {
+const _defaultWebRTC: WebRTCState = {
   localStreamUrl: null,
   remoteStreamUrl: null,
   connectionState: "new",

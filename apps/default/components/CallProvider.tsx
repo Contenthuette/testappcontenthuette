@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { useConvexAuth } from "convex/react";

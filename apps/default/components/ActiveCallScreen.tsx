@@ -47,7 +47,7 @@ export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
   const endCallMutation = useMutation(api.calls.endCall);
   const toggleVideoMutation = useMutation(api.calls.toggleVideo);
   const me = useQuery(api.users.me);
-  const { minimizeCall, startWebRTC, stopWebRTC, webrtc, activeCallId } = useCallContext();
+  const { minimizeCall, startWebRTC, stopWebRTC, webrtc } = useCallContext();
   const { playSound, stopSound } = useSound();
 
   const hangingUpRef = useRef(false);
