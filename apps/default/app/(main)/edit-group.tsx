@@ -167,7 +167,7 @@ export default function EditGroupScreen() {
                   ) : (
                     <View style={styles.editBadge}>
                       <Icon name="camera" size={14} tintColor={colors.white} />
-                      <Text style={styles.editBadgeText}>Aendern</Text>
+                      <Text style={styles.editBadgeText}>Ändern</Text>
                     </View>
                   )}
                 </View>

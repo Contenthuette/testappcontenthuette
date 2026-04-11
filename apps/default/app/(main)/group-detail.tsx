@@ -191,9 +191,6 @@ export default function GroupDetailScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.7}>
-              <SymbolView name="square.and.arrow.up" size={16} tintColor={colors.black} />
-            </TouchableOpacity>
           </View>
 
           {/* Live Stream Banner */}
