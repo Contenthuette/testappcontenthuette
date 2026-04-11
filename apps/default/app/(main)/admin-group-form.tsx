@@ -357,7 +357,7 @@ export default function AdminGroupForm() {
                         </Text>
                       </View>
                       <TouchableOpacity
-                        onPress={() => handleRemoveMember(m.userId, m.name)}
+                        onPress={() => handleRemoveMember(m.userId as Id<"users">, m.name)}
                         style={styles.removeMemberBtn}
                         hitSlop={8}
                       >

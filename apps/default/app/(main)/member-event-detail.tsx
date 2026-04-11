@@ -366,7 +366,7 @@ export default function MemberEventDetailScreen() {
                     {iAmAdmin && a.role !== "admin" && (
                       <TouchableOpacity
                         style={styles.kickBtn}
-                        onPress={() => handleKick(a.userId, a.name)}
+                        onPress={() => handleKick(a.userId as Id<"users">, a.name)}
                       >
                         <SymbolView name="xmark" size={12} tintColor={colors.gray400} />
                       </TouchableOpacity>
