@@ -22,8 +22,9 @@ import * as Haptics from "expo-haptics";
 
 interface Attendee {
   _id: string;
+  userId: string;
   name: string;
-  avatarUrl: string | null;
+  avatarUrl: string | undefined;
   role: string;
 }
 

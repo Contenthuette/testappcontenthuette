@@ -336,7 +336,7 @@ export default function AdminGroupForm() {
                 ) : members.length === 0 ? (
                   <Text style={styles.emptyMembers}>Keine Mitglieder</Text>
                 ) : (
-                  members.map((m: { _id: string; name: string; avatarUrl: string | null; role: string }) => (
+                  members.map((m: { _id: string; userId: string; name: string; email?: string; avatarUrl: string | undefined; role: string; status: string }) => (
                     <View key={m._id} style={styles.memberRow}>
                       {m.avatarUrl ? (
                         <Image source={{ uri: m.avatarUrl }} style={styles.memberAvatar} />
