@@ -38,9 +38,9 @@ const createOptions = [
     route: "/(main)/create-group" as const,
   },
   {
-    icon: "party.popper" as const,
-    label: "Member Event erstellen",
-    desc: "Organisiere ein kostenloses Community Event",
+    icon: "calendar.badge.plus" as const,
+    label: "Z Member Event erstellen",
+    desc: "Starte dein eigenes Z Member Event!",
     route: "/(main)/create-member-event" as const,
   },
 ];

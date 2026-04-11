@@ -268,7 +268,7 @@ export default function EventsScreen() {
               activeTab === "member" && styles.tabTextActive,
             ]}
           >
-            Member Events
+            Z Member Events
           </Text>
         </TouchableOpacity>
       </View>
@@ -314,8 +314,8 @@ export default function EventsScreen() {
             />
           ) : (
             <EmptyState
-              icon="party.popper"
-              title="Keine Member Events"
+              icon="calendar.badge.plus"
+              title="Keine Z Member Events"
               subtitle="Erstelle dein eigenes kostenloses Event und lade die Community ein!"
             />
           )

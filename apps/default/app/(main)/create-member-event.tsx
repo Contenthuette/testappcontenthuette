@@ -116,7 +116,7 @@ export default function CreateMemberEventScreen() {
         <TouchableOpacity onPress={() => safeBack("create-member-event")} style={styles.backBtn}>
           <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Member Event</Text>
+        <Text style={styles.headerTitle}>Z Member Event</Text>
         <View style={{ width: 36 }} />
       </View>
 
