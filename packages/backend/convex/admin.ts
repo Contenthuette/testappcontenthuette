@@ -1046,22 +1046,226 @@ export const listGroups = authQuery({
         v.literal("invite_only"),
         v.literal("request"),
       ),
+      creatorName: v.string(),
+      createdAt: v.number(),
     }),
   ),
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const groups = await ctx.db.query("groups").order("desc").take(500);
-    return groups.map((g) => ({
-      _id: g._id,
-      name: g.name,
-      memberCount: g.memberCount,
-      city: g.city,
-      visibility: g.visibility,
-    }));
+    return await Promise.all(
+      groups.map(async (g) => {
+        const creator = await ctx.db.get(g.creatorId);
+        return {
+          _id: g._id,
+          name: g.name,
+          memberCount: g.memberCount,
+          city: g.city,
+          visibility: g.visibility,
+          creatorName: creator?.name ?? "Unbekannt",
+          createdAt: g.createdAt,
+        };
+      }),
+    );
   },
 });
 
-/* ─── Announcements ────────────────────────────────────────────── */
+/* ─── Group detail (admin) ────────────────────────────────── */
+export const getGroupDetailAdmin = authQuery({
+  args: { groupId: v.id("groups") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("groups"),
+      name: v.string(),
+      description: v.optional(v.string()),
+      thumbnailUrl: v.optional(v.string()),
+      county: v.optional(v.string()),
+      city: v.optional(v.string()),
+      topic: v.optional(v.string()),
+      interests: v.optional(v.array(v.string())),
+      visibility: v.union(v.literal("public"), v.literal("invite_only"), v.literal("request")),
+      memberCount: v.number(),
+      creatorId: v.id("users"),
+      creatorName: v.string(),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const g = await ctx.db.get(args.groupId);
+    if (!g) return null;
+    const creator = await ctx.db.get(g.creatorId);
+    return {
+      _id: g._id,
+      name: g.name,
+      description: g.description,
+      thumbnailUrl: g.thumbnailStorageId
+        ? ((await ctx.storage.getUrl(g.thumbnailStorageId)) ?? undefined)
+        : g.thumbnailUrl,
+      county: g.county,
+      city: g.city,
+      topic: g.topic,
+      interests: g.interests,
+      visibility: g.visibility,
+      memberCount: g.memberCount,
+      creatorId: g.creatorId,
+      creatorName: creator?.name ?? "Unbekannt",
+      createdAt: g.createdAt,
+    };
+  },
+});
+
+/* ─── Update group (admin – bypasses group-admin check) ───── */
+export const updateGroupAdmin = authMutation({
+  args: {
+    groupId: v.id("groups"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    county: v.optional(v.string()),
+    city: v.optional(v.string()),
+    topic: v.optional(v.string()),
+    interests: v.optional(v.array(v.string())),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("invite_only"), v.literal("request"))),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const { groupId, ...updates } = args;
+    const group = await ctx.db.get(groupId);
+    if (!group) throw new Error("Gruppe nicht gefunden");
+
+    const patch: Record<string, unknown> = {};
+    if (updates.name !== undefined) patch.name = updates.name;
+    if (updates.description !== undefined) patch.description = updates.description;
+    if (updates.county !== undefined) patch.county = updates.county;
+    if (updates.city !== undefined) patch.city = updates.city;
+    if (updates.topic !== undefined) patch.topic = updates.topic;
+    if (updates.interests !== undefined) patch.interests = updates.interests;
+    if (updates.visibility !== undefined) patch.visibility = updates.visibility;
+    if (updates.thumbnailStorageId !== undefined) patch.thumbnailStorageId = updates.thumbnailStorageId;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(groupId, patch);
+    }
+    return null;
+  },
+});
+
+/* ─── Delete group (admin) ────────────────────────────────── */
+export const deleteGroupAdmin = authMutation({
+  args: { groupId: v.id("groups") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const group = await ctx.db.get(args.groupId);
+    if (!group) throw new Error("Gruppe nicht gefunden");
+
+    // Delete all members
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const m of members) {
+      await ctx.db.delete(m._id);
+    }
+
+    // Delete group conversation and its messages
+    const conversations = await ctx.db
+      .query("conversations")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const conv of conversations) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversationId", (q) => q.eq("conversationId", conv._id))
+        .collect();
+      for (const msg of messages) {
+        await ctx.db.delete(msg._id);
+      }
+      await ctx.db.delete(conv._id);
+    }
+
+    // Delete thumbnail from storage
+    if (group.thumbnailStorageId) {
+      await ctx.storage.delete(group.thumbnailStorageId);
+    }
+
+    await ctx.db.delete(args.groupId);
+    return null;
+  },
+});
+
+/* ─── List group members (admin) ──────────────────────────── */
+export const listGroupMembersAdmin = authQuery({
+  args: { groupId: v.id("groups") },
+  returns: v.array(
+    v.object({
+      _id: v.id("groupMembers"),
+      userId: v.id("users"),
+      name: v.string(),
+      email: v.string(),
+      avatarUrl: v.optional(v.string()),
+      role: v.union(v.literal("admin"), v.literal("member")),
+      status: v.union(v.literal("active"), v.literal("pending")),
+      joinedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    const results = [];
+    for (const m of members) {
+      const user = await ctx.db.get(m.userId);
+      if (user) {
+        results.push({
+          _id: m._id,
+          userId: m.userId,
+          name: user.name,
+          email: user.email,
+          avatarUrl: user.avatarStorageId
+            ? ((await ctx.storage.getUrl(user.avatarStorageId)) ?? undefined)
+            : user.avatarUrl,
+          role: m.role,
+          status: m.status,
+          joinedAt: m.joinedAt,
+        });
+      }
+    }
+    return results;
+  },
+});
+
+/* ─── Remove member from group (admin) ────────────────────── */
+export const removeGroupMemberAdmin = authMutation({
+  args: {
+    groupId: v.id("groups"),
+    userId: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_and_userId", (q) =>
+        q.eq("groupId", args.groupId).eq("userId", args.userId),
+      )
+      .unique();
+    if (!membership) throw new Error("Mitglied nicht gefunden");
+    await ctx.db.delete(membership._id);
+    const group = await ctx.db.get(args.groupId);
+    if (group && group.memberCount > 0) {
+      await ctx.db.patch(args.groupId, { memberCount: group.memberCount - 1 });
+    }
+    return null;
+  },
+});
+
+/* ─── Announcements ────────────────────────────────────────── */
 
 /** Public: returns the currently active announcement (or null). */
 export const getActiveAnnouncement = query({

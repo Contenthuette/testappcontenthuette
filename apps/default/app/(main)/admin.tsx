@@ -181,6 +181,10 @@ export default function AdminDashboard() {
   const refreshAnalyticsSnapshot = useMutation(api.admin.refreshAnalyticsSnapshot);
   const [expandedId, setExpandedId] = useState<Id<"events"> | null>(null);
 
+  /* ── Groups ── */
+  const groups = useQuery(api.admin.listGroups, isAuthenticated ? {} : "skip");
+  const deleteGroupMut = useMutation(api.admin.deleteGroupAdmin);
+
   /* ── Partners ── */
   const partners = useQuery(api.admin.listPartners, isAuthenticated ? {} : "skip");
   const deletePartnerMut = useMutation(api.admin.deletePartner);
@@ -285,6 +289,27 @@ export default function AdminDashboard() {
       }
     },
     [deletePartnerMut],
+  );
+
+  const handleDeleteGroup = useCallback(
+    (groupId: Id<"groups">, groupName: string) => {
+      const doDelete = async () => {
+        try {
+          await deleteGroupMut({ groupId });
+        } catch {
+          if (Platform.OS !== "web") Alert.alert("Fehler", "Gruppe konnte nicht gelöscht werden");
+        }
+      };
+      if (Platform.OS !== "web") {
+        Alert.alert("Gruppe löschen", `"${groupName}" wirklich löschen? Alle Mitglieder und Nachrichten werden gelöscht.`, [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Löschen", style: "destructive", onPress: doDelete },
+        ]);
+      } else {
+        doDelete();
+      }
+    },
+    [deleteGroupMut],
   );
 
   if (!stats) {
@@ -621,7 +646,7 @@ export default function AdminDashboard() {
           )}
         </Card>
 
-        {/* ── Z Partner ────────────────────────────────── */}
+        {/* ── Z Partner ──────────────────────────────────────── */}
         <Card
           title="Z Partner"
           icon="building.2"
@@ -669,6 +694,54 @@ export default function AdminDashboard() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDeletePartner(p._id, p.businessName)}
+                      style={[styles.eventActionBtn, styles.eventDeleteBtn]}
+                    >
+                      <SymbolView name="trash" size={13} tintColor={colors.danger} />
+                      <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
+
+        {/* ── Gruppen ────────────────────────────────────────── */}
+        <Card title="Gruppen" icon="person.3">
+          {!groups ? (
+            <ActivityIndicator size="small" color={colors.gray400} />
+          ) : groups.length === 0 ? (
+            <View style={styles.emptyEvents}>
+              <SymbolView name="person.3" size={28} tintColor={colors.gray300} />
+              <Text style={styles.emptyText}>Noch keine Gruppen</Text>
+            </View>
+          ) : (
+            groups.map((g: { _id: Id<"groups">; name: string; memberCount: number; city?: string; visibility: string; creatorName: string; createdAt: number }) => (
+              <View key={g._id} style={styles.eventCard}>
+                <View style={styles.eventHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.eventName}>{g.name}</Text>
+                    <Text style={styles.eventMeta}>
+                      {g.memberCount} Mitglieder · {g.city || "Kein Ort"} · von {g.creatorName}
+                    </Text>
+                  </View>
+                  <View style={styles.eventBadge}>
+                    <Text style={styles.eventBadgeText}>
+                      {g.visibility === "public" ? "Öffentlich" : g.visibility === "invite_only" ? "Einladung" : "Anfrage"}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.eventExpanded, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray200 }]}>
+                  <View style={styles.eventActions}>
+                    <TouchableOpacity
+                      onPress={() => router.navigate(`/(main)/admin-group-form?groupId=${g._id}` as "/")}
+                      style={styles.eventActionBtn}
+                    >
+                      <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
+                      <Text style={styles.eventActionText}>Bearbeiten</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteGroup(g._id, g.name)}
                       style={[styles.eventActionBtn, styles.eventDeleteBtn]}
                     >
                       <SymbolView name="trash" size={13} tintColor={colors.danger} />
