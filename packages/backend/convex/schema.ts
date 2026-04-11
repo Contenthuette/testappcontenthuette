@@ -76,11 +76,16 @@ export default defineSchema({
     creatorId: v.id("users"),
     memberCount: v.number(),
     createdAt: v.number(),
+    // If true, this group is an auto-created event group (hidden from Community tab)
+    isMemberEventGroup: v.optional(v.boolean()),
+    // Link back to the member event that owns this group
+    memberEventId: v.optional(v.id("memberEvents")),
   })
     .index("by_creatorId", ["creatorId"])
     .index("by_county_and_city", ["county", "city"])
     .index("by_topic", ["topic"])
     .index("by_createdAt", ["createdAt"])
+    .index("by_memberEventId", ["memberEventId"])
     .searchIndex("search_name", { searchField: "name" })
     .searchIndex("search_text", { searchField: "searchText" }),
 
@@ -270,6 +275,32 @@ export default defineSchema({
     .index("by_eventId_and_userId", ["eventId", "userId"])
     .index("by_userId_and_status", ["userId", "status"]),
 
+  // ── Member Events (community events by users) ───────────────
+  memberEvents: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+    thumbnailUrl: v.optional(v.string()),
+    venue: v.string(),
+    city: v.string(),
+    county: v.optional(v.string()),
+    date: v.string(),          // "2026-05-15"
+    startTime: v.string(),     // "19:00"
+    durationMinutes: v.number(),
+    maxAttendees: v.optional(v.number()),  // optional cap
+    attendeeCount: v.number(),
+    creatorId: v.id("users"),
+    groupId: v.id("groups"),   // auto-created event group
+    status: v.union(v.literal("upcoming"), v.literal("ongoing"), v.literal("completed"), v.literal("canceled")),
+    createdAt: v.number(),
+  })
+    .index("by_creatorId", ["creatorId"])
+    .index("by_city", ["city"])
+    .index("by_status", ["status"])
+    .index("by_date", ["date"])
+    .index("by_groupId", ["groupId"])
+    .index("by_createdAt", ["createdAt"]),
+
   // ── Partners ───────────────────────────────────────────────────
   partners: defineTable({
     businessName: v.string(),
@@ -319,7 +350,11 @@ export default defineSchema({
       v.literal("join_rejected"),
       v.literal("post_share"),
       v.literal("friend_request"),
-      v.literal("friend_accepted")
+      v.literal("friend_accepted"),
+      v.literal("event_join"),
+      v.literal("event_kicked"),
+      v.literal("event_invite"),
+      v.literal("event_canceled")
     ),
     title: v.string(),
     body: v.string(),

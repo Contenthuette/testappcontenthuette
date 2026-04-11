@@ -37,6 +37,12 @@ const createOptions = [
     desc: "Starte deine eigene Z Gruppe",
     route: "/(main)/create-group" as const,
   },
+  {
+    icon: "party.popper" as const,
+    label: "Member Event erstellen",
+    desc: "Organisiere ein kostenloses Community Event",
+    route: "/(main)/create-member-event" as const,
+  },
 ];
 
 export default function CreateScreen() {

@@ -66,32 +66,34 @@ export const list = authQuery({
     return {
       ...results,
       page: await Promise.all(
-        results.page.map(async (group) => {
-          const membership = myUserId
-            ? await ctx.db
-                .query("groupMembers")
-                .withIndex("by_groupId_and_userId", (q) =>
-                  q.eq("groupId", group._id).eq("userId", myUserId),
-                )
-                .unique()
-            : null;
-          return {
-            _id: group._id,
-            name: group.name,
-            description: group.description,
-            thumbnailUrl: group.thumbnailStorageId
-              ? ((await ctx.storage.getUrl(group.thumbnailStorageId)) ?? undefined)
-              : group.thumbnailUrl,
-            county: group.county,
-            city: group.city,
-            topic: group.topic,
-            interests: group.interests,
-            visibility: group.visibility,
-            memberCount: group.memberCount,
-            isMember: membership?.status === "active",
-            createdAt: group.createdAt,
-          };
-        }),
+        results.page
+          .filter((group) => !group.isMemberEventGroup)
+          .map(async (group) => {
+            const membership = myUserId
+              ? await ctx.db
+                  .query("groupMembers")
+                  .withIndex("by_groupId_and_userId", (q) =>
+                    q.eq("groupId", group._id).eq("userId", myUserId),
+                  )
+                  .unique()
+              : null;
+            return {
+              _id: group._id,
+              name: group.name,
+              description: group.description,
+              thumbnailUrl: group.thumbnailStorageId
+                ? ((await ctx.storage.getUrl(group.thumbnailStorageId)) ?? undefined)
+                : group.thumbnailUrl,
+              county: group.county,
+              city: group.city,
+              topic: group.topic,
+              interests: group.interests,
+              visibility: group.visibility,
+              memberCount: group.memberCount,
+              isMember: membership?.status === "active",
+              createdAt: group.createdAt,
+            };
+          }),
       ),
     };
   },

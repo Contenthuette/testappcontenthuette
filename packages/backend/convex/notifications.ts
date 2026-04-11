@@ -25,6 +25,10 @@ const notificationTypeValidator = v.union(
   v.literal("post_share"),
   v.literal("friend_request"),
   v.literal("friend_accepted"),
+  v.literal("event_join"),
+  v.literal("event_kicked"),
+  v.literal("event_invite"),
+  v.literal("event_canceled"),
 );
 
 const notificationValidator = v.object({
