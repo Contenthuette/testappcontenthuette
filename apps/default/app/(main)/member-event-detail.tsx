@@ -20,6 +20,13 @@ import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 
+interface Attendee {
+  _id: string;
+  name: string;
+  avatarUrl: string | null;
+  role: string;
+}
+
 function calcEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
   const totalMin = h * 60 + m + durationMinutes;
@@ -47,7 +54,7 @@ export default function MemberEventDetailScreen() {
   const [showAttendees, setShowAttendees] = useState(false);
 
   // Determine current user's membership
-  const iAmAdmin = attendees?.some((a) => a.role === "admin") ?? false;
+  const iAmAdmin = attendees?.some((a: Attendee) => a.role === "admin") ?? false;
 
   const handleJoin = useCallback(async () => {
     if (!id) return;
@@ -340,7 +347,7 @@ export default function MemberEventDetailScreen() {
 
             {showAttendees && attendees && (
               <View style={styles.attendeesList}>
-                {attendees.map((a) => (
+                {attendees.map((a: Attendee) => (
                   <View key={a._id} style={styles.attendeeRow}>
                     {a.avatarUrl ? (
                       <Image source={{ uri: a.avatarUrl }} style={styles.attendeeAvatar} />

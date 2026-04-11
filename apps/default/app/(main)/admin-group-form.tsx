@@ -75,7 +75,7 @@ export default function AdminGroupForm() {
       aspect: [16, 9],
       quality: 0.8,
     });
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
     setThumbnailPreview(asset.uri);
 
@@ -336,7 +336,7 @@ export default function AdminGroupForm() {
                 ) : members.length === 0 ? (
                   <Text style={styles.emptyMembers}>Keine Mitglieder</Text>
                 ) : (
-                  members.map((m) => (
+                  members.map((m: { _id: string; name: string; avatarUrl: string | null; role: string }) => (
                     <View key={m._id} style={styles.memberRow}>
                       {m.avatarUrl ? (
                         <Image source={{ uri: m.avatarUrl }} style={styles.memberAvatar} />
