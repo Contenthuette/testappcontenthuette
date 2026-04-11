@@ -80,6 +80,9 @@ export default function EventsScreen() {
               <SymbolView name="sparkles" size={32} tintColor={colors.gray300} />
             </View>
           )}
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>Z EVENT</Text>
+          </View>
           {!isHidden && (
             <View style={styles.priceBadge}>
               <Text style={styles.priceText}>€{item.ticketPrice.toFixed(0)}</Text>
@@ -153,9 +156,12 @@ export default function EventsScreen() {
             />
           ) : (
             <View style={styles.cardImagePlaceholder}>
-              <SymbolView name="party.popper" size={32} tintColor={colors.gray300} />
+              <SymbolView name="calendar.badge.plus" size={32} tintColor={colors.gray300} />
             </View>
           )}
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>Z MEMBER EVENT</Text>
+          </View>
           <View style={styles.freeBadge}>
             <Text style={styles.freeText}>Kostenlos</Text>
           </View>
@@ -410,6 +416,21 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   priceText: { fontSize: 16, fontWeight: "800", color: colors.white },
+  typeBadge: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.white,
+    letterSpacing: 0.8,
+  },
   freeBadge: {
     position: "absolute",
     bottom: spacing.md,
@@ -423,7 +444,7 @@ const styles = StyleSheet.create({
   attendingBadge: {
     position: "absolute",
     top: spacing.md,
-    right: spacing.md,
+    left: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
