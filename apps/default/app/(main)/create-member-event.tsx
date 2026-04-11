@@ -36,7 +36,7 @@ export default function CreateMemberEventScreen() {
   const [county, setCounty] = useState("");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("120");
+  const [endTime, setEndTime] = useState("");
   const [maxAttendees, setMaxAttendees] = useState("");
 
   const [thumbPreview, setThumbPreview] = useState<string | null>(null);
@@ -69,7 +69,11 @@ export default function CreateMemberEventScreen() {
       return;
     }
     if (!startTime.trim() || !/^\d{2}:\d{2}$/.test(startTime)) {
-      Alert.alert("Fehler", "Bitte gib eine Uhrzeit im Format HH:MM ein.");
+      Alert.alert("Fehler", "Bitte gib eine Startzeit im Format HH:MM ein.");
+      return;
+    }
+    if (!endTime.trim() || !/^\d{2}:\d{2}$/.test(endTime)) {
+      Alert.alert("Fehler", "Bitte gib eine Endzeit im Format HH:MM ein.");
       return;
     }
 
@@ -91,7 +95,13 @@ export default function CreateMemberEventScreen() {
         county: county || undefined,
         date: date.trim(),
         startTime: startTime.trim(),
-        durationMinutes: parseInt(durationMinutes, 10) || 120,
+        durationMinutes: (() => {
+          const [sh, sm] = startTime.split(":").map(Number);
+          const [eh, em] = endTime.split(":").map(Number);
+          let diff = (eh * 60 + em) - (sh * 60 + sm);
+          if (diff <= 0) diff += 24 * 60;
+          return diff;
+        })(),
         maxAttendees: maxAttendees ? parseInt(maxAttendees, 10) : undefined,
         thumbnailStorageId: thumbnailStorageId as never,
       });
@@ -105,7 +115,7 @@ export default function CreateMemberEventScreen() {
     }
   };
 
-  const canCreate = name.trim() && venue.trim() && city.trim() && date.trim() && startTime.trim();
+  const canCreate = name.trim() && venue.trim() && city.trim() && date.trim() && startTime.trim() && endTime.trim();
 
   return (
     <KeyboardAvoidingView
@@ -225,7 +235,7 @@ export default function CreateMemberEventScreen() {
             />
           </View>
           <View style={styles.halfInput}>
-            <Text style={styles.label}>Uhrzeit * (HH:MM)</Text>
+            <Text style={styles.label}>Startzeit *</Text>
             <TextInput
               style={styles.input}
               placeholder="19:00"
@@ -240,14 +250,14 @@ export default function CreateMemberEventScreen() {
         {/* Duration & Max */}
         <View style={styles.row}>
           <View style={styles.halfInput}>
-            <Text style={styles.label}>Dauer (Minuten)</Text>
+            <Text style={styles.label}>Endzeit *</Text>
             <TextInput
               style={styles.input}
-              placeholder="120"
+              placeholder="23:00"
               placeholderTextColor={colors.gray300}
-              value={durationMinutes}
-              onChangeText={setDurationMinutes}
-              keyboardType="number-pad"
+              value={endTime}
+              onChangeText={setEndTime}
+              maxLength={5}
             />
           </View>
           <View style={styles.halfInput}>
