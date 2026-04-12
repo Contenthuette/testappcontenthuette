@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
 
   /* Bottom */
   bottomText: {
-    marginTop: spacing.xl,
+    marginTop: spacing.xl * 2,
     gap: spacing.xs,
   },
   statement: {
