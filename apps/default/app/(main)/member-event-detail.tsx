@@ -148,6 +148,14 @@ export default function MemberEventDetailScreen() {
     });
   }, [event?.groupId]);
 
+  const handleEdit = useCallback(() => {
+    if (!id) return;
+    router.navigate({
+      pathname: "/(main)/edit-member-event",
+      params: { id },
+    });
+  }, [id]);
+
   if (!event) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -192,6 +200,14 @@ export default function MemberEventDetailScreen() {
           >
             <SymbolView name="chevron.left" size={18} tintColor={colors.black} />
           </TouchableOpacity>
+          {iAmAdmin && !isCanceled && (
+            <TouchableOpacity
+              style={styles.editHeroBtn}
+              onPress={handleEdit}
+            >
+              <SymbolView name="pencil" size={16} tintColor={colors.black} />
+            </TouchableOpacity>
+          )}
           {isCanceled && (
             <View style={styles.canceledBadge}>
               <Text style={styles.canceledText}>Abgesagt</Text>
@@ -310,6 +326,16 @@ export default function MemberEventDetailScreen() {
                 <SymbolView name="bubble.left.and.bubble.right" size={18} tintColor={colors.black} />
                 <Text style={styles.groupBtnText}>Event-Gruppe öffnen</Text>
               </TouchableOpacity>
+              {iAmAdmin && (
+                <TouchableOpacity
+                  style={styles.editBtn}
+                  onPress={handleEdit}
+                  activeOpacity={0.7}
+                >
+                  <SymbolView name="pencil" size={18} tintColor={colors.black} />
+                  <Text style={styles.editBtnText}>Bearbeiten</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -576,6 +602,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#dc2626",
+  },
+  editHeroBtn: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    paddingVertical: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  editBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+    letterSpacing: -0.2,
   },
   attendeesSection: { marginTop: spacing.md },
   attendeesHeader: {

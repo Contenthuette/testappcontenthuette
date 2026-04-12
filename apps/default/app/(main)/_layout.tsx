@@ -90,6 +90,9 @@ export default function MainLayout() {
         <Stack.Screen name="friends-list" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="groups-list" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="call" options={{ animation: "fade", headerShown: false }} />
+        <Stack.Screen name="create-member-event" options={{ presentation: "modal" }} />
+        <Stack.Screen name="edit-member-event" options={{ presentation: "modal" }} />
+        <Stack.Screen name="member-event-detail" options={{ animation: "slide_from_right" }} />
       </Stack>
     </CallProvider>
   );

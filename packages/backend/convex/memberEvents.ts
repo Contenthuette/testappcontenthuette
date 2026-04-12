@@ -527,6 +527,7 @@ export const update = authMutation({
     eventId: v.id("memberEvents"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
+    clearDescription: v.optional(v.boolean()),
     venue: v.optional(v.string()),
     city: v.optional(v.string()),
     county: v.optional(v.string()),
@@ -534,7 +535,9 @@ export const update = authMutation({
     startTime: v.optional(v.string()),
     durationMinutes: v.optional(v.number()),
     maxAttendees: v.optional(v.number()),
+    clearMaxAttendees: v.optional(v.boolean()),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    removeThumbnail: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -546,11 +549,25 @@ export const update = authMutation({
     if (event.creatorId !== myUserId)
       throw new Error("Nur der Event-Admin kann das Event bearbeiten");
 
-    const { eventId: _id, ...updates } = args;
     const patch: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(updates)) {
-      if (value !== undefined) patch[key] = value;
+
+    if (args.name !== undefined) patch.name = args.name;
+    if (args.description !== undefined) patch.description = args.description;
+    if (args.clearDescription) patch.description = undefined;
+    if (args.venue !== undefined) patch.venue = args.venue;
+    if (args.city !== undefined) patch.city = args.city;
+    if (args.county !== undefined) patch.county = args.county;
+    if (args.date !== undefined) patch.date = args.date;
+    if (args.startTime !== undefined) patch.startTime = args.startTime;
+    if (args.durationMinutes !== undefined) patch.durationMinutes = args.durationMinutes;
+    if (args.maxAttendees !== undefined) patch.maxAttendees = args.maxAttendees;
+    if (args.clearMaxAttendees) patch.maxAttendees = undefined;
+    if (args.thumbnailStorageId !== undefined) patch.thumbnailStorageId = args.thumbnailStorageId;
+    if (args.removeThumbnail) {
+      patch.thumbnailStorageId = undefined;
+      patch.thumbnailUrl = undefined;
     }
+
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(args.eventId, patch);
     }
