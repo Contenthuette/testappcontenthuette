@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
   TouchableOpacity, Pressable,
@@ -7,6 +7,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEvent } from "expo";
+import Animated, {
+  useAnimatedStyle, useSharedValue, withRepeat, withTiming,
+  withDelay, withSequence, Easing,
+} from "react-native-reanimated";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
@@ -41,10 +45,31 @@ export default function WelcomeScreen() {
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
+  const [showThumbnail, setShowThumbnail] = useState(true);
+
+  // Pulse animation for play button
+  const pulseScale = useSharedValue(1);
+
+  useEffect(() => {
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.08, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, [pulseScale]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   const player = useVideoPlayer(VIDEO_URL, (p) => {
     p.loop = false;
     p.muted = false;
+    // Seek to first frame so it's visible as thumbnail
+    p.currentTime = 0.01;
   });
 
   const { isPlaying } = useEvent(player, "playingChange", {
@@ -55,6 +80,7 @@ export default function WelcomeScreen() {
     if (isPlaying) {
       player.pause();
     } else {
+      setShowThumbnail(false);
       player.play();
     }
   }, [isPlaying, player]);
@@ -83,15 +109,15 @@ export default function WelcomeScreen() {
           <VideoView
             player={player}
             style={StyleSheet.absoluteFill}
-            contentFit="cover"
+            contentFit="contain"
             nativeControls={false}
             allowsPictureInPicture={false}
           />
           {!isPlaying && (
             <View style={styles.playOverlay}>
-              <View style={styles.playButton}>
+              <Animated.View style={[styles.playButton, pulseStyle]}>
                 <SymbolView name="play.fill" size={28} tintColor={colors.white} />
-              </View>
+              </Animated.View>
             </View>
           )}
         </Pressable>
@@ -212,23 +238,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderCurve: "continuous",
     overflow: "hidden",
-    backgroundColor: colors.gray100,
+    backgroundColor: colors.black,
     alignSelf: "center",
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.25)",
   },
   playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
     paddingLeft: 3,
+    boxShadow: "0px 4px 20px rgba(0,0,0,0.3)",
   },
 
   /* Compact Feature Chips */
