@@ -17,6 +17,9 @@ import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const VIDEO_THUMBNAIL = require("../../../assets/images/video-thumbnail.jpg");
+
 const VIDEO_URL =
   "https://glad-canary-992.convex.cloud/api/storage/d660c790-7509-42a7-877d-434fd7f82efc";
 
@@ -109,9 +112,20 @@ export default function WelcomeScreen() {
 
         {/* Video */}
         <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
+          {/* Thumbnail shown before play */}
+          {!hasStarted && (
+            <Image
+              source={VIDEO_THUMBNAIL}
+              style={[StyleSheet.absoluteFill, { borderRadius: radius.xl }]}
+              contentFit="cover"
+            />
+          )}
           <VideoView
             player={player}
-            style={{ width: videoWidth, height: videoHeight }}
+            style={[
+              { width: videoWidth, height: videoHeight },
+              !hasStarted && { opacity: 0 },
+            ]}
             contentFit="contain"
             nativeControls={hasStarted}
             allowsPictureInPicture={false}
