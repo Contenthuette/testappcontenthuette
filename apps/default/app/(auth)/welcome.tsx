@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
-  TouchableOpacity,
+  TouchableOpacity, Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { useEvent } from "expo";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
@@ -36,16 +37,27 @@ const FEATURES = [
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   const videoWidth = width - spacing.xl * 2;
-  const videoHeight = videoWidth * (16 / 9);
+  const videoHeight = videoWidth * (9 / 16);
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
 
   const player = useVideoPlayer(VIDEO_URL, (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
+    p.loop = false;
+    p.muted = false;
   });
+
+  const { isPlaying } = useEvent(player, "playingChange", {
+    isPlaying: player.playing,
+  });
+
+  const togglePlay = useCallback(() => {
+    if (isPlaying) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }, [isPlaying, player]);
 
   const handleJoin = useCallback(() => {
     router.navigate("/(auth)/signup");
@@ -67,7 +79,7 @@ export default function WelcomeScreen() {
         <Text style={styles.subtitle}>{"Social Media. Nur für MV."}</Text>
 
         {/* Video */}
-        <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
+        <Pressable onPress={togglePlay} style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
           <VideoView
             player={player}
             style={StyleSheet.absoluteFill}
@@ -75,7 +87,14 @@ export default function WelcomeScreen() {
             nativeControls={false}
             allowsPictureInPicture={false}
           />
-        </View>
+          {!isPlaying && (
+            <View style={styles.playOverlay}>
+              <View style={styles.playButton}>
+                <SymbolView name="play.fill" size={28} tintColor={colors.white} />
+              </View>
+            </View>
+          )}
+        </Pressable>
 
         {/* Compact Feature Chips */}
         <View style={styles.featureRow}>
@@ -195,6 +214,21 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: colors.gray100,
     alignSelf: "center",
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  playButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 3,
   },
 
   /* Compact Feature Chips */
