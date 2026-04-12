@@ -23,6 +23,12 @@ import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CITIES, COUNTIES } from "@/lib/constants";
 
+function parseDateDE(input: string): string | null {
+  const m = input.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
 export default function CreateMemberEventScreen() {
   const router = useRouter();
   const createEvent = useMutation(api.memberEvents.create);
@@ -64,8 +70,8 @@ export default function CreateMemberEventScreen() {
       Alert.alert("Fehler", "Bitte wähle eine Stadt.");
       return;
     }
-    if (!date.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert("Fehler", "Bitte gib ein Datum im Format JJJJ-MM-TT ein.");
+    if (!date.trim() || !parseDateDE(date.trim())) {
+      Alert.alert("Fehler", "Bitte gib ein Datum im Format TT.MM.JJJJ ein (z.B. 24.04.2026).");
       return;
     }
     if (!startTime.trim() || !/^\d{2}:\d{2}$/.test(startTime)) {
@@ -93,7 +99,7 @@ export default function CreateMemberEventScreen() {
         venue: venue.trim(),
         city: city.trim(),
         county: county || undefined,
-        date: date.trim(),
+        date: parseDateDE(date.trim()) as string,
         startTime: startTime.trim(),
         durationMinutes: (() => {
           const [sh, sm] = startTime.split(":").map(Number);
@@ -224,10 +230,10 @@ export default function CreateMemberEventScreen() {
         {/* Date & Time */}
         <View style={styles.row}>
           <View style={styles.halfInput}>
-            <Text style={styles.label}>Datum * (JJJJ-MM-TT)</Text>
+            <Text style={styles.label}>Datum * (TT.MM.JJJJ)</Text>
             <TextInput
               style={styles.input}
-              placeholder="2026-06-15"
+              placeholder="24.04.2026"
               placeholderTextColor={colors.gray300}
               value={date}
               onChangeText={setDate}

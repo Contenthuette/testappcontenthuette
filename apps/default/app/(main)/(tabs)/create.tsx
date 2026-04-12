@@ -39,7 +39,7 @@ const createOptions = [
   },
   {
     icon: "calendar.badge.plus" as const,
-    label: "Z Member Event erstellen",
+    label: "Member Event erstellen",
     desc: "Starte dein eigenes Z Member Event!",
     route: "/(main)/create-member-event" as const,
   },

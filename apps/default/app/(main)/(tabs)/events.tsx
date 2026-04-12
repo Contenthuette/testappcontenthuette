@@ -28,6 +28,12 @@ function calcEndTime(startTime: string, durationMinutes: number): string {
   return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 }
 
+function formatDateDE(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  return iso;
+}
+
 export default function EventsScreen() {
   const { isAuthenticated } = useConvexAuth();
   const [activeTab, setActiveTab] = useState<TabKey>("official");
@@ -112,7 +118,7 @@ export default function EventsScreen() {
               <RedactedBar width={140} height={12} />
             ) : (
               <Text style={styles.infoText}>
-                {item.date} · {item.startTime} -{" "}
+                {formatDateDE(item.date)} · {item.startTime} -{" "}
                 {calcEndTime(item.startTime, item.durationMinutes)} Uhr
               </Text>
             )}
@@ -185,7 +191,7 @@ export default function EventsScreen() {
           <View style={styles.infoRow}>
             <SymbolView name="calendar" size={13} tintColor={colors.gray400} />
             <Text style={styles.infoText}>
-              {item.date} · {item.startTime} –{" "}
+              {formatDateDE(item.date)} · {item.startTime} –{" "}
               {calcEndTime(item.startTime, item.durationMinutes)} Uhr
             </Text>
           </View>

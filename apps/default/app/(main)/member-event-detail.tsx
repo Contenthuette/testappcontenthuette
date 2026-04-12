@@ -44,6 +44,7 @@ export default function MemberEventDetailScreen() {
     api.memberEvents.getAttendees,
     id ? { eventId: id as Id<"memberEvents"> } : "skip",
   );
+  const currentUser = useQuery(api.users.me, isAuthenticated ? {} : "skip");
 
   const joinEvent = useMutation(api.memberEvents.join);
   const leaveEvent = useMutation(api.memberEvents.leave);
@@ -55,7 +56,9 @@ export default function MemberEventDetailScreen() {
   const [showAttendees, setShowAttendees] = useState(false);
 
   // Determine current user's membership
-  const iAmAdmin = attendees?.some((a: Attendee) => a.role === "admin") ?? false;
+  const myAttendance = attendees?.find((a: Attendee) => currentUser && a.userId === currentUser._id);
+  const isAttending = !!myAttendance;
+  const iAmAdmin = myAttendance?.role === "admin";
 
   const handleJoin = useCallback(async () => {
     if (!id) return;
@@ -159,6 +162,13 @@ export default function MemberEventDetailScreen() {
   const isCanceled = event.status === "canceled";
   const isFull = !!event.maxAttendees && event.attendeeCount >= event.maxAttendees;
 
+  // Format date for display (YYYY-MM-DD → DD.MM.YYYY)
+  const displayDate = (() => {
+    const m = event.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+    return event.date;
+  })();
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -220,7 +230,7 @@ export default function MemberEventDetailScreen() {
                 <SymbolView name="calendar" size={18} tintColor={colors.gray500} />
               </View>
               <View style={styles.infoTextWrap}>
-                <Text style={styles.infoLabel}>{event.date}</Text>
+                <Text style={styles.infoLabel}>{displayDate}</Text>
                 <Text style={styles.infoSub}>
                   {event.startTime} – {calcEndTime(event.startTime, event.durationMinutes)} Uhr
                 </Text>
@@ -279,7 +289,7 @@ export default function MemberEventDetailScreen() {
           ) : null}
 
           {/* Action buttons */}
-          {!isCanceled && isAuthenticated && (
+          {!isCanceled && isAuthenticated && !isAttending && (
             <View style={styles.actions}>
               <TouchableOpacity
                 style={[styles.joinBtn, isFull && styles.joinBtnDisabled]}
@@ -298,20 +308,25 @@ export default function MemberEventDetailScreen() {
                   </>
                 )}
               </TouchableOpacity>
+            </View>
+          )}
 
+          {/* Event-Gruppe button for attendees */}
+          {!isCanceled && isAuthenticated && isAttending && (
+            <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.groupBtn}
                 onPress={handleOpenGroup}
                 activeOpacity={0.7}
               >
                 <SymbolView name="bubble.left.and.bubble.right" size={18} tintColor={colors.black} />
-                <Text style={styles.groupBtnText}>Event-Gruppe</Text>
+                <Text style={styles.groupBtnText}>Event-Gruppe öffnen</Text>
               </TouchableOpacity>
             </View>
           )}
 
           {/* Leave / Cancel for attendees/creators */}
-          {!isCanceled && isAuthenticated && (
+          {!isCanceled && isAuthenticated && isAttending && (
             <View style={styles.secondaryActions}>
               <TouchableOpacity style={styles.leaveBtn} onPress={handleLeave}>
                 {leaving ? (
