@@ -563,7 +563,14 @@ export const update = authMutation({
 
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new Error("Event nicht gefunden");
-    if (event.creatorId !== myUserId)
+
+    // Allow creator OR admin
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_authId", (q) => q.eq("authId", ctx.user._id))
+      .unique();
+    const isAdmin = user?.role === "admin";
+    if (event.creatorId !== myUserId && !isAdmin)
       throw new Error("Nur der Event-Admin kann das Event bearbeiten");
 
     const patch: Record<string, unknown> = {};

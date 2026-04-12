@@ -855,6 +855,13 @@ export default function AdminDashboard() {
                   <View style={[styles.eventExpanded, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray200 }]}>
                     <View style={styles.eventActions}>
                       <TouchableOpacity
+                        onPress={() => router.navigate(`/(main)/edit-member-event?id=${me._id}` as "/")}
+                        style={styles.eventActionBtn}
+                      >
+                        <SymbolView name="pencil" size={13} tintColor={colors.gray600} />
+                        <Text style={styles.eventActionText}>Bearbeiten</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
                         onPress={() => handleDeleteMemberEvent(me._id, me.name)}
                         style={[styles.eventActionBtn, styles.eventDeleteBtn]}
                       >
