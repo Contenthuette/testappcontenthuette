@@ -91,6 +91,7 @@ import {
   Link2,
   Tag,
   Pin,
+  CalendarPlus,
   type LucideProps,
 } from "lucide-react-native";
 
@@ -268,6 +269,9 @@ const iconMap: Record<string, React.FC<LucideProps>> = {
   // Charts
   "chart.bar": ChartBar,
   "chart.bar.fill": ChartBar,
+
+  // Calendar
+  "calendar.badge.plus": CalendarPlus,
 };
 
 interface SymbolViewProps {
