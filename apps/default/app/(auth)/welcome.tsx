@@ -42,8 +42,12 @@ const FEATURES = [
   },
 ];
 
+// Design baseline: 390pt (iPhone 12/13 width used in preview)
+const BASE_WIDTH = 390;
+
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
+  const s = width / BASE_WIDTH; // scale factor
   const videoWidth = width - spacing.xl * 2;
   const videoHeight = videoWidth * (9 / 16);
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
@@ -107,8 +111,8 @@ export default function WelcomeScreen() {
           <ZLogo size={72} />
         </View>
 
-        <Text style={styles.title}>We are Z</Text>
-        <Text style={styles.subtitle}>{"Social Media. Nur für MV."}</Text>
+        <Text style={[styles.title, { fontSize: 34 * s, lineHeight: 38 * s }]}>We are Z</Text>
+        <Text style={[styles.subtitle, { fontSize: 15 * s }]}>{"Social Media. Nur für MV."}</Text>
 
         {/* Video */}
         <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
@@ -139,8 +143,8 @@ export default function WelcomeScreen() {
           />
           {!hasStarted && (
             <Pressable onPress={togglePlay} style={styles.playOverlay}>
-              <Animated.View style={[styles.playButton, pulseStyle]}>
-                <SymbolView name="play.fill" size={28} tintColor={colors.white} />
+              <Animated.View style={[styles.playButton, pulseStyle, { width: 60 * s, height: 60 * s, borderRadius: 30 * s }]}>
+                <SymbolView name="play.fill" size={28 * s} tintColor={colors.white} />
               </Animated.View>
             </Pressable>
           )}
@@ -153,18 +157,18 @@ export default function WelcomeScreen() {
               key={index}
               style={[styles.featureChip, { width: featureSize }]}
             >
-              <View style={styles.chipIcon}>
-                <SymbolView name={feature.icon} size={18} tintColor={colors.gray500} />
+              <View style={[styles.chipIcon, { width: 36 * s, height: 36 * s, borderRadius: 18 * s }]}>
+                <SymbolView name={feature.icon} size={18 * s} tintColor={colors.gray500} />
               </View>
-              <Text style={styles.chipLabel}>{feature.label}</Text>
+              <Text style={[styles.chipLabel, { fontSize: 10 * s, lineHeight: 13 * s }]}>{feature.label}</Text>
             </View>
           ))}
         </View>
 
         {/* Bottom Statement */}
         <View style={styles.bottomText}>
-          <Text style={styles.statement}>{"Social Media ist\nnicht mehr social."}</Text>
-          <Text style={styles.punchline}>{"Wir ändern das."}</Text>
+          <Text style={[styles.statement, { fontSize: 22 * s, lineHeight: 28 * s }]}>{"Social Media ist\nnicht mehr social."}</Text>
+          <Text style={[styles.punchline, { fontSize: 15 * s }]}>{"Wir ändern das."}</Text>
         </View>
       </ScrollView>
 
