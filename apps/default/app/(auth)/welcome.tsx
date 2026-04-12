@@ -8,7 +8,6 @@ import { router } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEvent } from "expo";
 import { Image } from "expo-image";
-import * as VideoThumbnails from "expo-video-thumbnails";
 import Animated, {
   useAnimatedStyle, useSharedValue, withRepeat, withTiming,
   withSequence, Easing,
@@ -47,18 +46,6 @@ export default function WelcomeScreen() {
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
-  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
-
-  // Generate thumbnail from first frame
-  useEffect(() => {
-    let mounted = true;
-    VideoThumbnails.getThumbnailAsync(VIDEO_URL, { time: 500 })
-      .then(({ uri }) => {
-        if (mounted) setThumbnailUri(uri);
-      })
-      .catch(() => {});
-    return () => { mounted = false; };
-  }, []);
 
   // Pulse animation for play button
   const pulseScale = useSharedValue(1);
@@ -81,6 +68,7 @@ export default function WelcomeScreen() {
   const player = useVideoPlayer(VIDEO_URL, (p) => {
     p.loop = false;
     p.muted = false;
+    p.pause();
   });
 
   const { isPlaying } = useEvent(player, "playingChange", {
@@ -121,20 +109,9 @@ export default function WelcomeScreen() {
 
         {/* Video */}
         <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
-          {/* Thumbnail shown before play */}
-          {!hasStarted && thumbnailUri && (
-            <Image
-              source={{ uri: thumbnailUri }}
-              style={[StyleSheet.absoluteFill, { borderRadius: radius.xl }]}
-              contentFit="cover"
-            />
-          )}
           <VideoView
             player={player}
-            style={[
-              { width: videoWidth, height: videoHeight },
-              !hasStarted && { opacity: 0 },
-            ]}
+            style={{ width: videoWidth, height: videoHeight }}
             contentFit="contain"
             nativeControls={hasStarted}
             allowsPictureInPicture={false}
