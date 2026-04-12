@@ -17,8 +17,8 @@ import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const VIDEO_THUMBNAIL = require("../../../assets/images/video-thumbnail.jpg");
+// eslint-disable-next-line
+const VIDEO_THUMBNAIL = require("../../../../assets/images/video-thumbnail.jpg");
 
 const VIDEO_URL =
   "https://glad-canary-992.convex.cloud/api/storage/d660c790-7509-42a7-877d-434fd7f82efc";
