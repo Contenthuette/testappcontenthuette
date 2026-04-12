@@ -190,6 +190,12 @@ export default function AdminDashboard() {
   const deleteMemberEventMut = useMutation(api.admin.deleteMemberEventAdmin);
   const [expandedMemberEventId, setExpandedMemberEventId] = useState<Id<"memberEvents"> | null>(null);
 
+  /* ── Nutzer ── */
+  const users = useQuery(api.admin.listUsers, isAuthenticated ? {} : "skip");
+  const deleteUserMut = useMutation(api.admin.deleteUserAdmin);
+  const [userSearch, setUserSearch] = useState("");
+  const [deletingUserId, setDeletingUserId] = useState<Id<"users"> | null>(null);
+
   /* ── Partners ── */
   const partners = useQuery(api.admin.listPartners, isAuthenticated ? {} : "skip");
   const deletePartnerMut = useMutation(api.admin.deletePartner);
@@ -336,6 +342,34 @@ export default function AdminDashboard() {
       }
     },
     [deleteMemberEventMut],
+  );
+
+  const handleDeleteUser = useCallback(
+    (userId: Id<"users">, userName: string, email: string) => {
+      const doDelete = async () => {
+        setDeletingUserId(userId);
+        try {
+          await deleteUserMut({ userId });
+        } catch {
+          if (Platform.OS !== "web") Alert.alert("Fehler", "Nutzer konnte nicht gel\u00f6scht werden");
+        } finally {
+          setDeletingUserId(null);
+        }
+      };
+      if (Platform.OS !== "web") {
+        Alert.alert(
+          "Profil l\u00f6schen",
+          `"${userName}" (${email}) wirklich l\u00f6schen?\n\n\u2022 Alle Daten werden gel\u00f6scht\n\u2022 Stripe-Abo wird gek\u00fcndigt\n\u2022 E-Mail-Benachrichtigung wird versendet`,
+          [
+            { text: "Abbrechen", style: "cancel" },
+            { text: "Profil l\u00f6schen", style: "destructive", onPress: doDelete },
+          ],
+        );
+      } else {
+        doDelete();
+      }
+    },
+    [deleteUserMut],
   );
 
   if (!stats) {
@@ -780,7 +814,7 @@ export default function AdminDashboard() {
           )}
         </Card>
 
-        {/* ── Member Events ───────────────────────────────────── */}
+        {/* ── Member Events ───────────────────────────────────────── */}
         <Card title="Member Events" icon="calendar.badge.plus">
           {!memberEvents ? (
             <ActivityIndicator size="small" color={colors.gray400} />
@@ -832,6 +866,86 @@ export default function AdminDashboard() {
                 )}
               </View>
             ))
+          )}
+        </Card>
+
+        {/* ── Nutzer-Verwaltung ────────────────────────────── */}
+        <Card title="Nutzer" icon="person.2">
+          {!users ? (
+            <ActivityIndicator size="small" color={colors.gray400} />
+          ) : (
+            <>
+              <View style={styles.userSearchWrap}>
+                <SymbolView name="magnifyingglass" size={14} tintColor={colors.gray400} />
+                <TextInput
+                  style={styles.userSearchInput}
+                  placeholder="Nutzer suchen..."
+                  placeholderTextColor={colors.gray300}
+                  value={userSearch}
+                  onChangeText={setUserSearch}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {userSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setUserSearch("")} hitSlop={8}>
+                    <SymbolView name="xmark.circle.fill" size={16} tintColor={colors.gray300} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.userCountLabel}>{users.length} Nutzer insgesamt</Text>
+              {users
+                .filter((u) => {
+                  if (!userSearch.trim()) return true;
+                  const q = userSearch.toLowerCase();
+                  return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+                })
+                .map((u) => (
+                  <View key={u._id} style={styles.userRow}>
+                    <View style={styles.userInfo}>
+                      <View style={styles.userNameRow}>
+                        <Text style={styles.userName}>{u.name}</Text>
+                        {u.role === "admin" && (
+                          <View style={styles.adminBadge}>
+                            <Text style={styles.adminBadgeText}>Admin</Text>
+                          </View>
+                        )}
+                        <View style={[
+                          styles.subBadge,
+                          u.subscriptionStatus === "active" && styles.subBadgeActive,
+                          u.subscriptionStatus === "canceled" && styles.subBadgeCanceled,
+                        ]}>
+                          <Text style={[
+                            styles.subBadgeText,
+                            u.subscriptionStatus === "active" && styles.subBadgeTextActive,
+                            u.subscriptionStatus === "canceled" && styles.subBadgeTextCanceled,
+                          ]}>
+                            {u.subscriptionStatus === "active" ? "Abo aktiv" : u.subscriptionStatus === "canceled" ? "Gek\u00fcndigt" : u.subscriptionStatus === "expired" ? "Abgelaufen" : "Kein Abo"}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.userEmail}>{u.email}</Text>
+                      <Text style={styles.userMeta}>
+                        Registriert: {new Date(u.createdAt).toLocaleDateString("de-DE")}
+                        {u.lastActiveAt ? ` \u00b7 Aktiv: ${new Date(u.lastActiveAt).toLocaleDateString("de-DE")}` : ""}
+                      </Text>
+                    </View>
+                    {u.role !== "admin" && (
+                      <TouchableOpacity
+                        style={styles.userDeleteBtn}
+                        onPress={() => handleDeleteUser(u._id, u.name, u.email)}
+                        activeOpacity={0.7}
+                        disabled={deletingUserId === u._id}
+                      >
+                        {deletingUserId === u._id ? (
+                          <ActivityIndicator size="small" color={colors.danger} />
+                        ) : (
+                          <SymbolView name="trash" size={14} tintColor={colors.danger} />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+            </>
           )}
         </Card>
 
@@ -1262,6 +1376,110 @@ const styles = StyleSheet.create({
   emptyReportsText: {
     fontSize: 14,
     color: colors.gray400,
+  },
+  /* user management */
+  userSearchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.gray50,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.gray100,
+    borderCurve: "continuous",
+  },
+  userSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.black,
+    padding: 0,
+  },
+  userCountLabel: {
+    fontSize: 12,
+    color: colors.gray400,
+    fontWeight: "500",
+    marginBottom: spacing.md,
+    fontVariant: ["tabular-nums"],
+  },
+  userRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray100,
+    gap: spacing.md,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  userName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  userEmail: {
+    fontSize: 13,
+    color: colors.gray500,
+    marginTop: 2,
+  },
+  userMeta: {
+    fontSize: 12,
+    color: colors.gray400,
+    marginTop: 2,
+  },
+  adminBadge: {
+    backgroundColor: colors.black,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.white,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  subBadge: {
+    backgroundColor: colors.gray100,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  subBadgeActive: {
+    backgroundColor: "rgba(34,197,94,0.1)",
+  },
+  subBadgeCanceled: {
+    backgroundColor: "rgba(239,68,68,0.06)",
+  },
+  subBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.gray500,
+  },
+  subBadgeTextActive: {
+    color: colors.success,
+  },
+  subBadgeTextCanceled: {
+    color: colors.danger,
+  },
+  userDeleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(239,68,68,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderCurve: "continuous",
   },
   reportCard: {
     backgroundColor: colors.gray100,
