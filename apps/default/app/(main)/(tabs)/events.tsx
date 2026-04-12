@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -18,8 +18,6 @@ import { ZLogo } from "@/components/ZLogo";
 import { Image } from "expo-image";
 import { RedactedBar } from "@/components/RedactedBar";
 
-type TabKey = "official" | "member";
-
 function calcEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
   const totalMin = h * 60 + m + durationMinutes;
@@ -34,11 +32,45 @@ function formatDateDE(iso: string): string {
   return iso;
 }
 
+type OfficialEvent = {
+  _id: string;
+  name: string;
+  thumbnailUrl?: string;
+  venue: string;
+  city: string;
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  totalTickets: number;
+  ticketPrice: number;
+  status: string;
+  isInfoHidden: boolean;
+};
+
+type MemberEvent = {
+  _id: string;
+  name: string;
+  thumbnailUrl?: string;
+  venue: string;
+  city: string;
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  maxAttendees?: number;
+  attendeeCount: number;
+  status: string;
+  isAttending: boolean;
+  creatorName: string;
+  creatorAvatarUrl?: string;
+};
+
+type UnifiedItem =
+  | { kind: "official"; data: OfficialEvent }
+  | { kind: "member"; data: MemberEvent };
+
 export default function EventsScreen() {
   const { isAuthenticated } = useConvexAuth();
-  const [activeTab, setActiveTab] = useState<TabKey>("official");
 
-  // Z Events (official)
   const {
     results: officialEvents,
     status: officialStatus,
@@ -46,10 +78,9 @@ export default function EventsScreen() {
   } = usePaginatedQuery(
     api.events.list,
     isAuthenticated ? {} : "skip",
-    { initialNumItems: 12 },
+    { initialNumItems: 20 },
   );
 
-  // Member Events
   const {
     results: memberEvents,
     status: memberStatus,
@@ -57,10 +88,37 @@ export default function EventsScreen() {
   } = usePaginatedQuery(
     api.memberEvents.list,
     isAuthenticated ? {} : "skip",
-    { initialNumItems: 12 },
+    { initialNumItems: 20 },
   );
 
-  const renderOfficialEvent = ({ item }: { item: NonNullable<typeof officialEvents>[number] }) => {
+  // Z Events always on top, then member events sorted by date
+  const unified: UnifiedItem[] = [
+    ...(officialEvents ?? []).map(
+      (e) => ({ kind: "official" as const, data: e as OfficialEvent }),
+    ),
+    ...(memberEvents ?? []).map(
+      (e) => ({ kind: "member" as const, data: e as MemberEvent }),
+    ),
+  ];
+
+  const isLoading =
+    officialStatus === "LoadingFirstPage" || memberStatus === "LoadingFirstPage";
+  const canLoadMore =
+    officialStatus === "CanLoadMore" || memberStatus === "CanLoadMore";
+  const isLoadingMore =
+    officialStatus === "LoadingMore" || memberStatus === "LoadingMore";
+
+  const handleLoadMore = () => {
+    if (officialStatus === "CanLoadMore") loadMoreOfficial(20);
+    if (memberStatus === "CanLoadMore") loadMoreMember(20);
+  };
+
+  const renderItem = ({ item }: { item: UnifiedItem }) => {
+    if (item.kind === "official") return renderOfficialEvent(item.data);
+    return renderMemberEvent(item.data);
+  };
+
+  const renderOfficialEvent = (item: OfficialEvent) => {
     const isHidden = item.isInfoHidden === true;
     return (
       <TouchableOpacity
@@ -134,11 +192,7 @@ export default function EventsScreen() {
     );
   };
 
-  const renderMemberEvent = ({
-    item,
-  }: {
-    item: NonNullable<typeof memberEvents>[number];
-  }) => {
+  const renderMemberEvent = (item: MemberEvent) => {
     const isFull =
       !!item.maxAttendees && item.attendeeCount >= item.maxAttendees;
     return (
@@ -165,11 +219,8 @@ export default function EventsScreen() {
               <SymbolView name="calendar.badge.plus" size={32} tintColor={colors.gray300} />
             </View>
           )}
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeBadgeText}>Z MEMBER EVENT</Text>
-          </View>
-          <View style={styles.freeBadge}>
-            <Text style={styles.freeText}>Kostenlos</Text>
+          <View style={[styles.typeBadge, styles.memberBadge]}>
+            <Text style={styles.typeBadgeText}>MEMBER EVENT</Text>
           </View>
           {item.isAttending && (
             <View style={styles.attendingBadge}>
@@ -242,11 +293,6 @@ export default function EventsScreen() {
     );
   };
 
-  const events = activeTab === "official" ? officialEvents : memberEvents;
-  const status = activeTab === "official" ? officialStatus : memberStatus;
-  const loadMore =
-    activeTab === "official" ? loadMoreOfficial : loadMoreMember;
-
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
@@ -255,80 +301,40 @@ export default function EventsScreen() {
         <View style={{ flex: 1 }} />
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "official" && styles.tabActive]}
-          onPress={() => setActiveTab("official")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "official" && styles.tabTextActive,
-            ]}
-          >
-            Z Events
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "member" && styles.tabActive]}
-          onPress={() => setActiveTab("member")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "member" && styles.tabTextActive,
-            ]}
-          >
-            Z Member Events
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       <FlatList
-        data={events}
-        renderItem={
-          activeTab === "official"
-            ? (renderOfficialEvent as FlatList["props"]["renderItem"])
-            : (renderMemberEvent as FlatList["props"]["renderItem"])
-        }
-        keyExtractor={(item) => item._id}
+        data={unified}
+        renderItem={renderItem}
+        keyExtractor={(item) => `${item.kind}-${item.data._id}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         onEndReached={() => {
-          if (status === "CanLoadMore") loadMore(12);
+          if (canLoadMore) handleLoadMore();
         }}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
-          status === "LoadingMore" ? (
+          isLoadingMore ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={colors.gray300} />
             </View>
-          ) : status === "CanLoadMore" ? (
+          ) : canLoadMore ? (
             <TouchableOpacity
               style={styles.loadMoreBtn}
-              onPress={() => loadMore(12)}
+              onPress={handleLoadMore}
             >
               <Text style={styles.loadMoreText}>Mehr laden</Text>
             </TouchableOpacity>
           ) : null
         }
         ListEmptyComponent={
-          status === "LoadingFirstPage" ? (
+          isLoading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={colors.gray300} />
             </View>
-          ) : activeTab === "official" ? (
+          ) : (
             <EmptyState
               icon="sparkles"
               title="Keine Events gerade"
               subtitle="Neue Events in Schwerin, Rostock und ganz MV erscheinen hier."
-            />
-          ) : (
-            <EmptyState
-              icon="calendar.badge.plus"
-              title="Keine Z Member Events"
-              subtitle="Erstelle dein eigenes kostenloses Event und lade die Community ein!"
             />
           )
         }
@@ -352,30 +358,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.black,
     letterSpacing: -0.5,
-  },
-  tabBar: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.xl,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray100,
-  },
-  tabActive: {
-    backgroundColor: colors.black,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.gray500,
-    letterSpacing: -0.2,
-  },
-  tabTextActive: {
-    color: colors.white,
   },
   list: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
   loadingWrap: { paddingVertical: 60, alignItems: "center" },
@@ -431,22 +413,15 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.full,
   },
+  memberBadge: {
+    backgroundColor: "rgba(60,60,60,0.75)",
+  },
   typeBadgeText: {
     fontSize: 10,
     fontWeight: "800",
     color: colors.white,
     letterSpacing: 0.8,
   },
-  freeBadge: {
-    position: "absolute",
-    bottom: spacing.md,
-    right: spacing.md,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  freeText: { fontSize: 13, fontWeight: "700", color: colors.white },
   attendingBadge: {
     position: "absolute",
     top: spacing.md,

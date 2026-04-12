@@ -76,7 +76,7 @@ export default function MemberEventDetailScreen() {
 
   const handleLeave = useCallback(async () => {
     if (!id) return;
-    Alert.alert("Event verlassen?", "Möchtest du das Event wirklich verlassen?", [
+    Alert.alert("Event verlassen", "Möchtest du das Event safe verlassen?", [
       { text: "Abbrechen", style: "cancel" },
       {
         text: "Verlassen",
@@ -123,7 +123,7 @@ export default function MemberEventDetailScreen() {
 
   const handleCancel = useCallback(async () => {
     if (!id) return;
-    Alert.alert("Event absagen?", "Alle Teilnehmer werden benachrichtigt.", [
+    Alert.alert("Event absagen", "Du möchtest das Event safe absagen?", [
       { text: "Nein", style: "cancel" },
       {
         text: "Absagen",
@@ -264,18 +264,6 @@ export default function MemberEventDetailScreen() {
                 ) : (
                   <Text style={styles.infoSub}>Unbegrenzte Plätze</Text>
                 )}
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <SymbolView name="tag" size={18} tintColor={colors.gray500} />
-              </View>
-              <View style={styles.infoTextWrap}>
-                <Text style={styles.infoLabel}>Kostenlos</Text>
-                <Text style={styles.infoSub}>Kein Ticket nötig – einfach dabei sein</Text>
               </View>
             </View>
           </View>
