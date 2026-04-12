@@ -5,23 +5,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 
+const VIDEO_URL =
+  "https://glad-canary-992.convex.cloud/api/storage/736a5b5b-c6d4-4adb-9080-180beb9a14e3";
+
 const FEATURES = [
   {
     icon: "mappin.and.ellipse" as const,
-    label: "Nur Leute aus\ndeiner Gegend",
+    label: "Nur Leute\naus MV",
   },
   {
     icon: "hands.sparkles" as const,
-    label: "Wir bewegen etwas,\ngemeinsam.",
+    label: "Gemeinsam\nbewegen",
   },
   {
     icon: "sparkles" as const,
-    label: "Exklusive Events\nnur für Z Member",
+    label: "Exklusive\nEvents",
   },
   {
     icon: "person.2" as const,
@@ -31,10 +35,17 @@ const FEATURES = [
 
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
-  const cardSize = (width - spacing.xl * 2 - spacing.md) / 2;
-  const cardHeight = cardSize * 0.8;
+  const videoWidth = width - spacing.xl * 2;
+  const videoHeight = videoWidth * (16 / 9);
+  const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
+
+  const player = useVideoPlayer(VIDEO_URL, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
 
   const handleJoin = useCallback(() => {
     router.navigate("/(auth)/signup");
@@ -47,33 +58,48 @@ export default function WelcomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
+        {/* Header */}
         <View style={styles.logoRow}>
-          <ZLogo size={96} />
+          <ZLogo size={72} />
         </View>
 
         <Text style={styles.title}>We are Z</Text>
         <Text style={styles.subtitle}>{"Social Media. Nur für MV."}</Text>
 
-        <View style={styles.grid}>
+        {/* Video */}
+        <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls={false}
+            allowsPictureInPicture={false}
+          />
+        </View>
+
+        {/* Compact Feature Chips */}
+        <View style={styles.featureRow}>
           {FEATURES.map((feature, index) => (
             <View
               key={index}
-              style={[styles.card, { width: cardSize, height: cardHeight }]}
+              style={[styles.featureChip, { width: featureSize }]}
             >
-              <View style={styles.cardIconWrap}>
-                <SymbolView name={feature.icon} size={26} tintColor={colors.gray600} />
+              <View style={styles.chipIcon}>
+                <SymbolView name={feature.icon} size={18} tintColor={colors.gray500} />
               </View>
-              <Text style={styles.cardLabel}>{feature.label}</Text>
+              <Text style={styles.chipLabel}>{feature.label}</Text>
             </View>
           ))}
         </View>
 
+        {/* Bottom Statement */}
         <View style={styles.bottomText}>
           <Text style={styles.statement}>{"Social Media ist\nnicht mehr social."}</Text>
           <Text style={styles.punchline}>{"Wir ändern das."}</Text>
         </View>
       </ScrollView>
 
+      {/* CTA */}
       <View style={styles.ctaWrap}>
         <Button
           title="Join the Movement"
@@ -82,7 +108,6 @@ export default function WelcomeScreen() {
           fullWidth
         />
 
-        {/* AGB Checkbox — below button */}
         <TouchableOpacity
           style={styles.agbRow}
           onPress={() => setAgbAccepted(!agbAccepted)}
@@ -143,72 +168,86 @@ const styles = StyleSheet.create({
   },
   logoRow: {
     alignItems: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   title: {
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: "900",
     color: colors.black,
     letterSpacing: -1,
-    lineHeight: 42,
+    lineHeight: 38,
     textAlign: "center",
   },
   subtitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "500",
     color: colors.gray400,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     letterSpacing: -0.2,
     textAlign: "center",
   },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
-    marginTop: spacing.xxl,
-  },
-  card: {
-    backgroundColor: colors.gray50,
-    borderRadius: radius.lg,
+
+  /* Video */
+  videoWrap: {
+    marginTop: spacing.lg,
+    borderRadius: radius.xl,
     borderCurve: "continuous",
-    padding: spacing.lg,
-    justifyContent: "space-between",
+    overflow: "hidden",
+    backgroundColor: colors.gray100,
+    alignSelf: "center",
   },
-  cardIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.gray200,
+
+  /* Compact Feature Chips */
+  featureRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  featureChip: {
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  chipIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
-  cardLabel: {
-    fontSize: 14,
+  chipLabel: {
+    fontSize: 10,
     fontWeight: "600",
-    color: colors.black,
-    lineHeight: 19,
-    letterSpacing: -0.2,
+    color: colors.gray500,
+    lineHeight: 13,
+    letterSpacing: -0.1,
+    textAlign: "center",
   },
+
+  /* Bottom */
   bottomText: {
-    marginTop: spacing.xxl + spacing.md,
+    marginTop: spacing.xl,
     gap: spacing.xs,
   },
   statement: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "800",
     color: colors.black,
     letterSpacing: -0.8,
-    lineHeight: 32,
+    lineHeight: 28,
     textAlign: "center",
   },
   punchline: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "500",
     color: colors.gray400,
     letterSpacing: -0.2,
     marginTop: spacing.xs,
     textAlign: "center",
   },
+
+  /* CTA */
   ctaWrap: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
