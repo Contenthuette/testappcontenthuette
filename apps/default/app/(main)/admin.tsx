@@ -185,6 +185,11 @@ export default function AdminDashboard() {
   const groups = useQuery(api.admin.listGroups, isAuthenticated ? {} : "skip");
   const deleteGroupMut = useMutation(api.admin.deleteGroupAdmin);
 
+  /* ── Member Events ── */
+  const memberEvents = useQuery(api.admin.listMemberEventsAdmin, isAuthenticated ? {} : "skip");
+  const deleteMemberEventMut = useMutation(api.admin.deleteMemberEventAdmin);
+  const [expandedMemberEventId, setExpandedMemberEventId] = useState<Id<"memberEvents"> | null>(null);
+
   /* ── Partners ── */
   const partners = useQuery(api.admin.listPartners, isAuthenticated ? {} : "skip");
   const deletePartnerMut = useMutation(api.admin.deletePartner);
@@ -310,6 +315,27 @@ export default function AdminDashboard() {
       }
     },
     [deleteGroupMut],
+  );
+
+  const handleDeleteMemberEvent = useCallback(
+    (eventId: Id<"memberEvents">, name: string) => {
+      const doDelete = async () => {
+        try {
+          await deleteMemberEventMut({ eventId });
+        } catch {
+          if (Platform.OS !== "web") Alert.alert("Fehler", "Member Event konnte nicht gelöscht werden");
+        }
+      };
+      if (Platform.OS !== "web") {
+        Alert.alert("Member Event löschen", `"${name}" wirklich löschen? Alle Teilnehmer und die Event-Gruppe werden gelöscht.`, [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Löschen", style: "destructive", onPress: doDelete },
+        ]);
+      } else {
+        doDelete();
+      }
+    },
+    [deleteMemberEventMut],
   );
 
   if (!stats) {
@@ -706,7 +732,7 @@ export default function AdminDashboard() {
           )}
         </Card>
 
-        {/* ── Gruppen ────────────────────────────────────────── */}
+        {/* ── Gruppen ──────────────────────────────────────────── */}
         <Card title="Gruppen" icon="person.3">
           {!groups ? (
             <ActivityIndicator size="small" color={colors.gray400} />
@@ -749,6 +775,61 @@ export default function AdminDashboard() {
                     </TouchableOpacity>
                   </View>
                 </View>
+              </View>
+            ))
+          )}
+        </Card>
+
+        {/* ── Member Events ───────────────────────────────────── */}
+        <Card title="Member Events" icon="calendar.badge.plus">
+          {!memberEvents ? (
+            <ActivityIndicator size="small" color={colors.gray400} />
+          ) : memberEvents.length === 0 ? (
+            <View style={styles.emptyEvents}>
+              <SymbolView name="calendar" size={28} tintColor={colors.gray300} />
+              <Text style={styles.emptyText}>Noch keine Member Events</Text>
+            </View>
+          ) : (
+            memberEvents.map((me: { _id: Id<"memberEvents">; name: string; date: string; city: string; venue: string; attendeeCount: number; maxAttendees?: number; status: string; creatorName: string; groupId: Id<"groups">; createdAt: number }) => (
+              <View key={me._id} style={styles.eventCard}>
+                <TouchableOpacity
+                  onPress={() => setExpandedMemberEventId((prev) => (prev === me._id ? null : me._id))}
+                  activeOpacity={0.7}
+                  style={styles.eventHeader}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.eventName}>{me.name}</Text>
+                    <Text style={styles.eventMeta}>
+                      {me.date} · {me.city} · {me.venue} · von {me.creatorName}
+                    </Text>
+                    <Text style={styles.eventMeta}>
+                      {me.attendeeCount}{me.maxAttendees ? `/${me.maxAttendees}` : ""} Teilnehmer
+                    </Text>
+                  </View>
+                  <View style={[styles.eventBadge, me.status === "canceled" && { backgroundColor: "rgba(255,59,48,0.06)" }]}>
+                    <Text style={[styles.eventBadgeText, me.status === "canceled" && { color: colors.danger }]}>
+                      {me.status === "upcoming" ? "Geplant" : me.status === "ongoing" ? "Laufend" : me.status === "canceled" ? "Abgesagt" : "Abgeschlossen"}
+                    </Text>
+                  </View>
+                  <SymbolView
+                    name={expandedMemberEventId === me._id ? "chevron.up" : "chevron.down"}
+                    size={13}
+                    tintColor={colors.gray400}
+                  />
+                </TouchableOpacity>
+                {expandedMemberEventId === me._id && (
+                  <View style={[styles.eventExpanded, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray200 }]}>
+                    <View style={styles.eventActions}>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteMemberEvent(me._id, me.name)}
+                        style={[styles.eventActionBtn, styles.eventDeleteBtn]}
+                      >
+                        <SymbolView name="trash" size={13} tintColor={colors.danger} />
+                        <Text style={[styles.eventActionText, { color: colors.danger }]}>Löschen</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
               </View>
             ))
           )}
@@ -1172,7 +1253,7 @@ const styles = StyleSheet.create({
     color: colors.gray700,
   },
 
-  /* Reports */
+  /* reports */
   emptyReports: {
     alignItems: "center",
     paddingVertical: 24,

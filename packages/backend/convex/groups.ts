@@ -488,3 +488,79 @@ export const generateUploadUrl = authMutation({
     return await ctx.storage.generateUploadUrl();
   },
 });
+
+// ── Delete group (creator only) ─────────────────────────────────
+export const deleteGroup = authMutation({
+  args: { groupId: v.id("groups") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const myUserId = await getMyUserId(ctx);
+    if (!myUserId) throw new Error("User not found");
+
+    const group = await ctx.db.get(args.groupId);
+    if (!group) throw new Error("Gruppe nicht gefunden");
+    if (group.creatorId !== myUserId) {
+      throw new Error("Nur der Gruppenadmin kann diese Gruppe löschen");
+    }
+
+    // Notify all members
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    await Promise.all(
+      members
+        .filter((m) => m.userId !== myUserId && m.status === "active")
+        .map((m) =>
+          ctx.db.insert("notifications", {
+            userId: m.userId,
+            type: "group_deleted",
+            title: "Gruppe gelöscht",
+            body: `Gruppenadmin hat die Gruppe "${group.name}" gelöscht.`,
+            isRead: false,
+            createdAt: Date.now(),
+          }),
+        ),
+    );
+
+    // Delete all members
+    for (const m of members) {
+      await ctx.db.delete(m._id);
+    }
+
+    // Delete group conversations and messages
+    const conversations = await ctx.db
+      .query("conversations")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const conv of conversations) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversationId", (q) => q.eq("conversationId", conv._id))
+        .collect();
+      for (const msg of messages) {
+        await ctx.db.delete(msg._id);
+      }
+      await ctx.db.delete(conv._id);
+    }
+
+    // Delete thumbnail from storage
+    if (group.thumbnailStorageId) {
+      await ctx.storage.delete(group.thumbnailStorageId);
+    }
+
+    // If linked to member event, also delete it
+    if (group.isMemberEventGroup && group.memberEventId) {
+      const event = await ctx.db.get(group.memberEventId);
+      if (event) {
+        if (event.thumbnailStorageId) {
+          await ctx.storage.delete(event.thumbnailStorageId);
+        }
+        await ctx.db.delete(event._id);
+      }
+    }
+
+    await ctx.db.delete(args.groupId);
+    return null;
+  },
+});

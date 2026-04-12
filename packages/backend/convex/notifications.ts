@@ -29,6 +29,9 @@ const notificationTypeValidator = v.union(
   v.literal("event_kicked"),
   v.literal("event_invite"),
   v.literal("event_canceled"),
+  v.literal("group_deleted"),
+  v.literal("event_deleted"),
+  v.literal("post_removed"),
 );
 
 const notificationValidator = v.object({

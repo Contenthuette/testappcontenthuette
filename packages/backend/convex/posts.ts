@@ -309,7 +309,7 @@ export const create = authMutation({
   },
 });
 
-// Delete post (owner only, cleans up all related data)
+// Delete post (owner or admin, cleans up all related data)
 export const deletePost = authMutation({
   args: { postId: v.id("posts") },
   returns: v.null(),
@@ -319,7 +319,12 @@ export const deletePost = authMutation({
 
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Beitrag nicht gefunden");
-    if (post.authorId !== myUserId) throw new Error("Nur der Autor kann diesen Beitrag löschen");
+
+    // Allow owner or admin
+    const me = await ctx.db.get(myUserId);
+    if (post.authorId !== myUserId && me?.role !== "admin") {
+      throw new Error("Nur der Autor oder ein Admin kann diesen Beitrag löschen");
+    }
 
     const [likes, comments, savedPosts] = await Promise.all([
       ctx.db

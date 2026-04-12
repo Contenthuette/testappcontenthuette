@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -14,7 +14,7 @@ import { Image } from "expo-image";
 import { safeBack } from "@/lib/navigation";
 import * as Haptics from "expo-haptics";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from "react-native-reanimated";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PollCard } from "@/components/PollCard";
 
 interface GroupMember { _id: string; userId: Id<"users">; name: string; avatarUrl?: string; role: string; status: string }
@@ -23,6 +23,7 @@ interface PendingRequest { _id: string; userId: Id<"users">; name: string; avata
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
+  const me = useQuery(api.users.me);
   const membership = useQuery(api.groups.getMyMembership, id ? { groupId: id as Id<"groups"> } : "skip");
   const members = useQuery(api.groups.getMembers, id ? { groupId: id as Id<"groups"> } : "skip");
   const pendingRequests = useQuery(api.groups.getPendingRequests, id ? { groupId: id as Id<"groups"> } : "skip");
@@ -31,6 +32,9 @@ export default function GroupDetailScreen() {
   const joinGroup = useMutation(api.groups.join);
   const acceptRequest = useMutation(api.groups.acceptRequest);
   const rejectRequest = useMutation(api.groups.rejectRequest);
+  const deleteGroupMut = useMutation(api.groups.deleteGroup);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Pulse for live badge — hooks MUST be before any early returns
   const livePulse = useSharedValue(1);
@@ -57,7 +61,22 @@ export default function GroupDetailScreen() {
   const isMember = membership?.status === "active";
   const isPending = membership?.status === "pending";
   const isAdmin = membership?.role === "admin";
+  const isCreator = me && group ? group.creatorId === me._id : false;
   const isRequestGroup = group.visibility === "request" || group.visibility === "invite_only";
+
+  const handleDeleteGroup = async () => {
+    setDeleting(true);
+    try {
+      await deleteGroupMut({ groupId: id as Id<"groups"> });
+      setShowDeleteModal(false);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      router.back();
+    } catch {
+      if (Platform.OS !== "web") Alert.alert("Fehler", "Gruppe konnte nicht gelöscht werden");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleJoin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -285,8 +304,56 @@ export default function GroupDetailScreen() {
               <Text style={styles.emptyText}>Noch keine Mitglieder</Text>
             )}
           </View>
+
+          {/* Delete Group — only for creator */}
+          {isCreator && (
+            <TouchableOpacity
+              style={styles.deleteGroupBtn}
+              onPress={() => setShowDeleteModal(true)}
+              activeOpacity={0.7}
+            >
+              <SymbolView name="trash" size={16} tintColor="#FF3B30" />
+              <Text style={styles.deleteGroupBtnText}>Gruppe löschen</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
+
+      {/* Delete Confirmation Modal */}
+      <Modal visible={showDeleteModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconCircle}>
+              <SymbolView name="trash" size={24} tintColor="#FF3B30" />
+            </View>
+            <Text style={styles.modalTitle}>Gruppe löschen?</Text>
+            <Text style={styles.modalDesc}>
+              Möchtest du die Gruppe "{group.name}" safe löschen? Alle Mitglieder und Nachrichten werden entfernt. Alle werden benachrichtigt.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowDeleteModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Abbrechen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalDeleteBtn}
+                onPress={handleDeleteGroup}
+                disabled={deleting}
+                activeOpacity={0.7}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalDeleteText}>Löschen</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -569,4 +636,94 @@ const styles = StyleSheet.create({
   memberName: { fontSize: 15, fontWeight: "600", color: colors.black },
   memberRole: { fontSize: 13, color: colors.gray400, marginTop: 1 },
   emptyText: { fontSize: 14, color: colors.gray400, paddingVertical: spacing.lg },
+
+  /* Delete group */
+  deleteGroupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    backgroundColor: "rgba(255,59,48,0.06)",
+    borderCurve: "continuous",
+  },
+  deleteGroupBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FF3B30",
+  },
+
+  /* Confirmation modal */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+    borderCurve: "continuous",
+  },
+  modalIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,59,48,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.black,
+    marginBottom: 8,
+  },
+  modalDesc: {
+    fontSize: 14,
+    color: colors.gray500,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: spacing.xl,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    width: "100%",
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    borderCurve: "continuous",
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  modalDeleteBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+    borderCurve: "continuous",
+  },
+  modalDeleteText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.white,
+  },
 });

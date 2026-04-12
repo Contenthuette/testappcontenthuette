@@ -354,7 +354,10 @@ export default defineSchema({
       v.literal("event_join"),
       v.literal("event_kicked"),
       v.literal("event_invite"),
-      v.literal("event_canceled")
+      v.literal("event_canceled"),
+      v.literal("group_deleted"),
+      v.literal("event_deleted"),
+      v.literal("post_removed")
     ),
     title: v.string(),
     body: v.string(),

@@ -972,7 +972,6 @@ export const updatePartner = authMutation({
     if (updates.phone !== undefined) patch.phone = updates.phone;
     if (updates.address !== undefined) patch.address = updates.address;
     if (updates.city !== undefined) patch.city = updates.city;
-    if (updates.isActive !== undefined) patch.isActive = updates.isActive;
     if (updates.thumbnailStorageId !== undefined) {
       patch.thumbnailStorageId = updates.thumbnailStorageId;
       patch.thumbnailUrl = undefined;
@@ -1162,11 +1161,27 @@ export const deleteGroupAdmin = authMutation({
     const group = await ctx.db.get(args.groupId);
     if (!group) throw new Error("Gruppe nicht gefunden");
 
-    // Delete all members
+    // Notify all members before deleting
     const members = await ctx.db
       .query("groupMembers")
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .collect();
+    await Promise.all(
+      members
+        .filter((m) => m.status === "active")
+        .map((m) =>
+          ctx.db.insert("notifications", {
+            userId: m.userId,
+            type: "group_deleted",
+            title: "Gruppe gelöscht",
+            body: `Die Gruppe "${group.name}" wurde von einem Admin gelöscht.`,
+            isRead: false,
+            createdAt: Date.now(),
+          }),
+        ),
+    );
+
+    // Delete all members
     for (const m of members) {
       await ctx.db.delete(m._id);
     }
@@ -1190,6 +1205,17 @@ export const deleteGroupAdmin = authMutation({
     // Delete thumbnail from storage
     if (group.thumbnailStorageId) {
       await ctx.storage.delete(group.thumbnailStorageId);
+    }
+
+    // If this is a member event group, also delete the linked member event
+    if (group.isMemberEventGroup && group.memberEventId) {
+      const event = await ctx.db.get(group.memberEventId);
+      if (event) {
+        if (event.thumbnailStorageId) {
+          await ctx.storage.delete(event.thumbnailStorageId);
+        }
+        await ctx.db.delete(event._id);
+      }
     }
 
     await ctx.db.delete(args.groupId);
@@ -1378,6 +1404,226 @@ export const deleteAnnouncement = authMutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
     await ctx.db.delete(args.id);
+    return null;
+  },
+});
+
+/* ─── Member Events (admin) ──────────────────────────────────── */
+export const listMemberEventsAdmin = authQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("memberEvents"),
+      name: v.string(),
+      date: v.string(),
+      city: v.string(),
+      venue: v.string(),
+      attendeeCount: v.number(),
+      maxAttendees: v.optional(v.number()),
+      status: v.union(
+        v.literal("upcoming"),
+        v.literal("ongoing"),
+        v.literal("completed"),
+        v.literal("canceled"),
+      ),
+      creatorName: v.string(),
+      groupId: v.id("groups"),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const events = await ctx.db.query("memberEvents").order("desc").take(500);
+    return await Promise.all(
+      events.map(async (e) => {
+        const creator = await ctx.db.get(e.creatorId);
+        return {
+          _id: e._id,
+          name: e.name,
+          date: e.date,
+          city: e.city,
+          venue: e.venue,
+          attendeeCount: e.attendeeCount,
+          maxAttendees: e.maxAttendees,
+          status: e.status,
+          creatorName: creator?.name ?? "Unbekannt",
+          groupId: e.groupId,
+          createdAt: e.createdAt,
+        };
+      }),
+    );
+  },
+});
+
+export const deleteMemberEventAdmin = authMutation({
+  args: { eventId: v.id("memberEvents") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const event = await ctx.db.get(args.eventId);
+    if (!event) throw new Error("Member Event nicht gefunden");
+
+    // Notify all attendees
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId", (q) => q.eq("groupId", event.groupId))
+      .collect();
+    await Promise.all(
+      members
+        .filter((m) => m.status === "active")
+        .map((m) =>
+          ctx.db.insert("notifications", {
+            userId: m.userId,
+            type: "event_deleted",
+            title: "Event gelöscht",
+            body: `Das Event "${event.name}" wurde von einem Admin gelöscht.`,
+            isRead: false,
+            createdAt: Date.now(),
+          }),
+        ),
+    );
+
+    // Delete all group members
+    for (const m of members) {
+      await ctx.db.delete(m._id);
+    }
+
+    // Delete group conversation and messages
+    const conversations = await ctx.db
+      .query("conversations")
+      .withIndex("by_groupId", (q) => q.eq("groupId", event.groupId))
+      .collect();
+    for (const conv of conversations) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversationId", (q) => q.eq("conversationId", conv._id))
+        .collect();
+      for (const msg of messages) {
+        await ctx.db.delete(msg._id);
+      }
+      await ctx.db.delete(conv._id);
+    }
+
+    // Delete the event group
+    const group = await ctx.db.get(event.groupId);
+    if (group) {
+      if (group.thumbnailStorageId) {
+        await ctx.storage.delete(group.thumbnailStorageId);
+      }
+      await ctx.db.delete(event.groupId);
+    }
+
+    // Delete event thumbnail
+    if (event.thumbnailStorageId) {
+      await ctx.storage.delete(event.thumbnailStorageId);
+    }
+
+    await ctx.db.delete(args.eventId);
+    return null;
+  },
+});
+
+export const updateMemberEventAdmin = authMutation({
+  args: {
+    eventId: v.id("memberEvents"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    venue: v.optional(v.string()),
+    city: v.optional(v.string()),
+    date: v.optional(v.string()),
+    startTime: v.optional(v.string()),
+    durationMinutes: v.optional(v.number()),
+    maxAttendees: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("upcoming"),
+        v.literal("ongoing"),
+        v.literal("completed"),
+        v.literal("canceled"),
+      ),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const { eventId, ...patch } = args;
+    const event = await ctx.db.get(eventId);
+    if (!event) throw new Error("Member Event nicht gefunden");
+    const clean: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(patch)) {
+      if (val !== undefined) clean[k] = val;
+    }
+    if (Object.keys(clean).length > 0) {
+      await ctx.db.patch(eventId, clean);
+    }
+    // Update group name if event name changed
+    if (args.name) {
+      await ctx.db.patch(event.groupId, {
+        name: `Event: ${args.name}`,
+      });
+    }
+    return null;
+  },
+});
+
+/* ─── Admin: Delete any post ─────────────────────────────────── */
+export const deletePostAdmin = authMutation({
+  args: { postId: v.id("posts") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Beitrag nicht gefunden");
+
+    const [likes, comments, savedPosts] = await Promise.all([
+      ctx.db
+        .query("likes")
+        .withIndex("by_postId", (q) => q.eq("postId", args.postId))
+        .collect(),
+      ctx.db
+        .query("comments")
+        .withIndex("by_postId", (q) => q.eq("postId", args.postId))
+        .collect(),
+      ctx.db
+        .query("savedPosts")
+        .withIndex("by_postId_and_userId", (q) => q.eq("postId", args.postId))
+        .collect(),
+    ]);
+
+    const commentLikeGroups = await Promise.all(
+      comments.map((comment) =>
+        ctx.db
+          .query("commentLikes")
+          .withIndex("by_commentId", (q) => q.eq("commentId", comment._id))
+          .collect(),
+      ),
+    );
+
+    await Promise.all([
+      ...likes.map((like) => ctx.db.delete(like._id)),
+      ...savedPosts.map((savedPost) => ctx.db.delete(savedPost._id)),
+      ...commentLikeGroups.flat().map((commentLike) => ctx.db.delete(commentLike._id)),
+      ...comments.map((comment) => ctx.db.delete(comment._id)),
+    ]);
+
+    if (post.mediaStorageId) {
+      await ctx.storage.delete(post.mediaStorageId);
+    }
+    if (post.thumbnailStorageId) {
+      await ctx.storage.delete(post.thumbnailStorageId);
+    }
+
+    // Notify the post author
+    await ctx.db.insert("notifications", {
+      userId: post.authorId,
+      type: "post_removed",
+      title: "Beitrag entfernt",
+      body: "Dein Beitrag wurde von einem Admin entfernt, da er gegen die Nutzungsbedingungen verstößt.",
+      isRead: false,
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.delete(args.postId);
     return null;
   },
 });
