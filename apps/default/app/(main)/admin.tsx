@@ -26,6 +26,61 @@ const ABO_PRICE = "5,99";
 interface DayStats { label: string; photos: number; videos: number }
 interface GrowthDay { label: string; count: number }
 
+interface AdminReport {
+  _id: Id<"reports">;
+  postId: string;
+  reporterName: string;
+  reason: string;
+  status: "pending" | "reviewed" | "resolved";
+  postCaption?: string;
+  postAuthorName: string;
+  postMediaUrl?: string;
+  postType: "photo" | "video";
+  createdAt: number;
+}
+
+interface AdminPartner {
+  _id: Id<"partners">;
+  businessName: string;
+  city?: string;
+  status: string;
+}
+
+interface AdminGroup {
+  _id: Id<"groups">;
+  name: string;
+  memberCount: number;
+  city?: string;
+  visibility: "public" | "invite_only" | "request";
+  creatorName: string;
+  createdAt: number;
+}
+
+interface AdminMemberEvent {
+  _id: Id<"memberEvents">;
+  name: string;
+  date: string;
+  city: string;
+  venue: string;
+  attendeeCount: number;
+  maxAttendees?: number;
+  status: "upcoming" | "ongoing" | "completed" | "canceled";
+  creatorName: string;
+  groupId: Id<"groups">;
+  createdAt: number;
+}
+
+interface AdminUser {
+  _id: Id<"users">;
+  name: string;
+  email: string;
+  role: "user" | "admin";
+  subscriptionStatus: "none" | "active" | "canceled" | "expired";
+  onboardingComplete: boolean;
+  createdAt: number;
+  lastActiveAt?: number;
+}
+
 interface AdminEvent {
   _id: Id<"events">;
   name: string;
@@ -381,12 +436,12 @@ export default function AdminDashboard() {
   }
 
   /* chart data */
-  const postChartData = stats.postsByDay.map((d) => d.photos + d.videos);
-  const postChartLabels = stats.postsByDay.map((d) => d.label);
-  const userChartData = stats.userGrowthByDay.map((d) => d.count);
-  const userChartLabels = stats.userGrowthByDay.map((d) => d.label);
+  const postChartData = stats.postsByDay.map((d: DayStats) => d.photos + d.videos);
+  const postChartLabels = stats.postsByDay.map((d: DayStats) => d.label);
+  const userChartData = stats.userGrowthByDay.map((d: GrowthDay) => d.count);
+  const userChartLabels = stats.userGrowthByDay.map((d: GrowthDay) => d.label);
 
-  const barData = stats.postsByDay.map((d) => ({
+  const barData = stats.postsByDay.map((d: DayStats) => ({
     label: d.label,
     value: d.photos + d.videos,
   }));
@@ -528,7 +583,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyReportsText}>Keine offenen Meldungen</Text>
             </View>
           ) : (
-            reports.map((r) => (
+            reports.map((r: AdminReport) => (
               <View key={r._id} style={styles.reportCard}>
                 <View style={styles.reportCardHeader}>
                   <Text style={styles.reportCardAuthor}>{r.postAuthorName}</Text>
@@ -690,7 +745,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Events</Text>
             </View>
           ) : (
-            events.map((ev) => (
+            events.map((ev: AdminEvent) => (
               <EventRow
                 key={ev._id}
                 event={ev}
@@ -728,7 +783,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Partner</Text>
             </View>
           ) : (
-            partners.map((p) => (
+            partners.map((p: AdminPartner) => (
               <View key={p._id} style={styles.eventCard}>
                 <View style={styles.eventHeader}>
                   <View style={{ flex: 1 }}>
@@ -737,8 +792,8 @@ export default function AdminDashboard() {
                       {p.city || "Kein Ort"} · {p.status === "active" ? "Aktiv" : "Inaktiv"}
                     </Text>
                   </View>
-                  <View style={[styles.eventBadge, p.status !== "active" && { backgroundColor: colors.gray100 }]}>
-                    <Text style={[styles.eventBadgeText, p.status !== "active" && { color: colors.gray400 }]}>
+                  <View style={styles.eventBadge}>
+                    <Text style={styles.eventBadgeText}>
                       {p.status === "active" ? "✓ Live" : "Inaktiv"}
                     </Text>
                   </View>
@@ -776,7 +831,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Gruppen</Text>
             </View>
           ) : (
-            groups.map((g) => (
+            groups.map((g: AdminGroup) => (
               <View key={g._id} style={styles.eventCard}>
                 <View style={styles.eventHeader}>
                   <View style={{ flex: 1 }}>
@@ -824,7 +879,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Member Events</Text>
             </View>
           ) : (
-            memberEvents.map((me) => (
+            memberEvents.map((me: AdminMemberEvent) => (
               <View key={me._id} style={styles.eventCard}>
                 <TouchableOpacity
                   onPress={() => setExpandedMemberEventId((prev) => (prev === me._id ? null : me._id))}
@@ -901,12 +956,12 @@ export default function AdminDashboard() {
               </View>
               <Text style={styles.userCountLabel}>{users.length} Nutzer insgesamt</Text>
               {users
-                .filter((u) => {
+                .filter((u: AdminUser) => {
                   if (!userSearch.trim()) return true;
                   const q = userSearch.toLowerCase();
                   return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
                 })
-                .map((u) => (
+                .map((u: AdminUser) => (
                   <View key={u._id} style={styles.userRow}>
                     <View style={styles.userInfo}>
                       <View style={styles.userNameRow}>
