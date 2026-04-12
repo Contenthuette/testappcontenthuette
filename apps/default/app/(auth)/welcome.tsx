@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEvent } from "expo";
 import { Image } from "expo-image";
+import { BlurView } from "expo-blur";
 import Animated, {
   useAnimatedStyle, useSharedValue, withRepeat, withTiming,
   withSequence, Easing,
@@ -113,11 +114,18 @@ export default function WelcomeScreen() {
         <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
           {/* Thumbnail shown before play */}
           {!hasStarted && (
-            <Image
-              source={VIDEO_THUMBNAIL}
-              style={[StyleSheet.absoluteFill, { borderRadius: radius.xl }]}
-              contentFit="cover"
-            />
+            <View style={StyleSheet.absoluteFill}>
+              <Image
+                source={VIDEO_THUMBNAIL}
+                style={[StyleSheet.absoluteFill, { borderRadius: radius.xl }]}
+                contentFit="cover"
+              />
+              <BlurView
+                intensity={30}
+                tint="default"
+                style={[StyleSheet.absoluteFill, { borderRadius: radius.xl, overflow: "hidden" }]}
+              />
+            </View>
           )}
           <VideoView
             player={player}
