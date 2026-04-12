@@ -9,7 +9,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useEvent } from "expo";
 import Animated, {
   useAnimatedStyle, useSharedValue, withRepeat, withTiming,
-  withDelay, withSequence, Easing,
+  withSequence, Easing,
 } from "react-native-reanimated";
 import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
@@ -45,7 +45,6 @@ export default function WelcomeScreen() {
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
-  const [showThumbnail, setShowThumbnail] = useState(true);
 
   // Pulse animation for play button
   const pulseScale = useSharedValue(1);
@@ -68,22 +67,24 @@ export default function WelcomeScreen() {
   const player = useVideoPlayer(VIDEO_URL, (p) => {
     p.loop = false;
     p.muted = false;
-    // Seek to first frame so it's visible as thumbnail
-    p.currentTime = 0.01;
   });
 
   const { isPlaying } = useEvent(player, "playingChange", {
     isPlaying: player.playing,
   });
 
+  const [hasStarted, setHasStarted] = useState(false);
+
   const togglePlay = useCallback(() => {
+    if (!hasStarted) {
+      setHasStarted(true);
+    }
     if (isPlaying) {
       player.pause();
     } else {
-      setShowThumbnail(false);
       player.play();
     }
-  }, [isPlaying, player]);
+  }, [isPlaying, player, hasStarted]);
 
   const handleJoin = useCallback(() => {
     router.navigate("/(auth)/signup");
@@ -105,22 +106,22 @@ export default function WelcomeScreen() {
         <Text style={styles.subtitle}>{"Social Media. Nur für MV."}</Text>
 
         {/* Video */}
-        <Pressable onPress={togglePlay} style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
+        <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
           <VideoView
             player={player}
-            style={StyleSheet.absoluteFill}
+            style={{ width: videoWidth, height: videoHeight }}
             contentFit="contain"
-            nativeControls={false}
+            nativeControls={hasStarted}
             allowsPictureInPicture={false}
           />
-          {!isPlaying && (
-            <View style={styles.playOverlay}>
+          {!hasStarted && (
+            <Pressable onPress={togglePlay} style={styles.playOverlay}>
               <Animated.View style={[styles.playButton, pulseStyle]}>
                 <SymbolView name="play.fill" size={28} tintColor={colors.white} />
               </Animated.View>
-            </View>
+            </Pressable>
           )}
-        </Pressable>
+        </View>
 
         {/* Compact Feature Chips */}
         <View style={styles.featureRow}>
