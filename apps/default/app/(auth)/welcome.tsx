@@ -17,7 +17,6 @@ import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 
-// eslint-disable-next-line
 const VIDEO_THUMBNAIL = require("../../../../assets/images/video-thumbnail.jpg");
 
 const VIDEO_URL =
