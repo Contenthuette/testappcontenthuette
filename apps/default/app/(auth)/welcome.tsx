@@ -7,6 +7,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEvent } from "expo";
+import { Image } from "expo-image";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import Animated, {
   useAnimatedStyle, useSharedValue, withRepeat, withTiming,
   withSequence, Easing,
@@ -17,7 +19,7 @@ import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
 
 const VIDEO_URL =
-  "https://glad-canary-992.convex.cloud/api/storage/736a5b5b-c6d4-4adb-9080-180beb9a14e3";
+  "https://glad-canary-992.convex.cloud/api/storage/d660c790-7509-42a7-877d-434fd7f82efc";
 
 const FEATURES = [
   {
@@ -45,6 +47,18 @@ export default function WelcomeScreen() {
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+
+  // Generate thumbnail from first frame
+  useEffect(() => {
+    let mounted = true;
+    VideoThumbnails.getThumbnailAsync(VIDEO_URL, { time: 500 })
+      .then(({ uri }) => {
+        if (mounted) setThumbnailUri(uri);
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   // Pulse animation for play button
   const pulseScale = useSharedValue(1);
@@ -107,9 +121,20 @@ export default function WelcomeScreen() {
 
         {/* Video */}
         <View style={[styles.videoWrap, { width: videoWidth, height: videoHeight }]}>
+          {/* Thumbnail shown before play */}
+          {!hasStarted && thumbnailUri && (
+            <Image
+              source={{ uri: thumbnailUri }}
+              style={[StyleSheet.absoluteFill, { borderRadius: radius.xl }]}
+              contentFit="cover"
+            />
+          )}
           <VideoView
             player={player}
-            style={{ width: videoWidth, height: videoHeight }}
+            style={[
+              { width: videoWidth, height: videoHeight },
+              !hasStarted && { opacity: 0 },
+            ]}
             contentFit="contain"
             nativeControls={hasStarted}
             allowsPictureInPicture={false}
