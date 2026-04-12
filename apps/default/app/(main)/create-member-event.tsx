@@ -18,7 +18,7 @@ import { Image } from "expo-image";
 import { SymbolView } from "@/components/Icon";
 import { colors, spacing, radius } from "@/lib/theme";
 import { safeBack } from "@/lib/navigation";
-import { pickImage, uploadToConvex } from "@/lib/media-picker";
+import { pickImage, pickVideo, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CITIES, COUNTIES } from "@/lib/constants";
@@ -47,6 +47,14 @@ export default function CreateMemberEventScreen() {
 
   const [thumbPreview, setThumbPreview] = useState<string | null>(null);
   const [thumbFile, setThumbFile] = useState<{ uri: string; mimeType: string } | null>(null);
+
+  // Video state
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<{ uri: string; mimeType: string } | null>(null);
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [videoThumbUri, setVideoThumbUri] = useState<string | null>(null);
+  const [videoThumbFile, setVideoThumbFile] = useState<{ uri: string; mimeType: string } | null>(null);
+
   const [creating, setCreating] = useState(false);
 
   const handlePickThumb = async () => {
@@ -55,6 +63,27 @@ export default function CreateMemberEventScreen() {
       setThumbPreview(result.uri);
       setThumbFile({ uri: result.uri, mimeType: result.mimeType });
     }
+  };
+
+  const handlePickVideo = async () => {
+    const result = await pickVideo();
+    if (!result) return;
+    setVideoUri(result.uri);
+    setVideoFile({ uri: result.uri, mimeType: result.mimeType });
+  };
+
+  const handlePickVideoThumb = async () => {
+    const result = await pickImage({ mediaType: "images", quality: 0.8 });
+    if (!result) return;
+    setVideoThumbUri(result.uri);
+    setVideoThumbFile({ uri: result.uri, mimeType: result.mimeType });
+  };
+
+  const handleRemoveVideo = () => {
+    setVideoUri(null);
+    setVideoFile(null);
+    setVideoThumbUri(null);
+    setVideoThumbFile(null);
   };
 
   const handleCreate = async () => {
@@ -93,6 +122,19 @@ export default function CreateMemberEventScreen() {
         thumbnailStorageId = await uploadToConvex(uploadUrl, thumbFile.uri, thumbFile.mimeType);
       }
 
+      let videoStorageId: string | undefined;
+      if (videoFile) {
+        setVideoUploading(true);
+        const uploadUrl = await generateUploadUrl();
+        videoStorageId = await uploadToConvex(uploadUrl, videoFile.uri, videoFile.mimeType);
+      }
+
+      let videoThumbnailStorageId: string | undefined;
+      if (videoThumbFile) {
+        const uploadUrl = await generateUploadUrl();
+        videoThumbnailStorageId = await uploadToConvex(uploadUrl, videoThumbFile.uri, videoThumbFile.mimeType);
+      }
+
       const eventId = await createEvent({
         name: name.trim(),
         description: description.trim() || undefined,
@@ -110,6 +152,8 @@ export default function CreateMemberEventScreen() {
         })(),
         maxAttendees: maxAttendees ? parseInt(maxAttendees, 10) : undefined,
         thumbnailStorageId: thumbnailStorageId as never,
+        ...(videoStorageId ? { videoStorageId: videoStorageId as never } : {}),
+        ...(videoThumbnailStorageId ? { videoThumbnailStorageId: videoThumbnailStorageId as never } : {}),
       });
 
       router.replace({ pathname: "/(main)/member-event-detail", params: { id: eventId } });
@@ -118,6 +162,7 @@ export default function CreateMemberEventScreen() {
       Alert.alert("Fehler", msg);
     } finally {
       setCreating(false);
+      setVideoUploading(false);
     }
   };
 
@@ -278,6 +323,59 @@ export default function CreateMemberEventScreen() {
             />
           </View>
         </View>
+
+        {/* ─── Erklärvideo Section ─── */}
+        <View style={styles.sectionHeader}>
+          <SymbolView name="film" size={16} tintColor={colors.gray600} />
+          <Text style={styles.sectionTitle}>Erklärvideo (optional)</Text>
+        </View>
+
+        {videoUri ? (
+          <View style={styles.videoPreview}>
+            <View style={styles.videoInfo}>
+              <View style={styles.videoIconWrap}>
+                <SymbolView name="checkmark.circle.fill" size={20} tintColor="#34C759" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.videoFileName}>Video ausgewählt</Text>
+                {videoUploading && (
+                  <View style={styles.uploadingRow}>
+                    <ActivityIndicator size="small" color={colors.gray500} />
+                    <Text style={styles.uploadingText}>Wird hochgeladen…</Text>
+                  </View>
+                )}
+              </View>
+              <TouchableOpacity onPress={handleRemoveVideo} hitSlop={12}>
+                <SymbolView name="trash" size={18} tintColor={colors.gray500} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Video Thumbnail */}
+            <TouchableOpacity
+              style={styles.videoThumbPicker}
+              onPress={handlePickVideoThumb}
+              activeOpacity={0.7}
+            >
+              {videoThumbUri ? (
+                <Image source={{ uri: videoThumbUri }} style={styles.videoThumbImg} contentFit="cover" />
+              ) : (
+                <View style={styles.videoThumbPlaceholder}>
+                  <SymbolView name="photo" size={20} tintColor={colors.gray400} />
+                  <Text style={styles.videoThumbText}>Video-Thumbnail wählen</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.addVideoBtn}
+            onPress={handlePickVideo}
+            activeOpacity={0.7}
+          >
+            <SymbolView name="plus.circle.fill" size={22} tintColor={colors.black} />
+            <Text style={styles.addVideoText}>Video hinzufügen</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.infoBox}>
           <SymbolView name="info.circle" size={16} tintColor={colors.gray400} />
@@ -449,5 +547,93 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.white,
     letterSpacing: -0.2,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.gray600,
+    letterSpacing: -0.2,
+  },
+  videoPreview: {
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  videoInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  videoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(52,199,89,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoFileName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
+  },
+  uploadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  uploadingText: {
+    fontSize: 12,
+    color: colors.gray500,
+  },
+  videoThumbPicker: {
+    height: 100,
+    borderRadius: radius.sm,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  videoThumbImg: {
+    width: "100%",
+    height: "100%",
+  },
+  videoThumbPlaceholder: {
+    flex: 1,
+    backgroundColor: colors.gray50,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  videoThumbText: {
+    fontSize: 12,
+    color: colors.gray400,
+    fontWeight: "500",
+  },
+  addVideoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.md,
+    paddingVertical: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  addVideoText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.black,
   },
 });

@@ -19,6 +19,7 @@ import { safeBack } from "@/lib/navigation";
 import { SymbolView } from "@/components/Icon";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
+import { EventVideoPlayer } from "@/components/EventVideoPlayer";
 
 interface Attendee {
   _id: string;
@@ -291,6 +292,14 @@ export default function MemberEventDetailScreen() {
               <Text style={styles.descText}>{event.description}</Text>
             </View>
           ) : null}
+
+          {/* Video player */}
+          {event.videoUrl && (
+            <EventVideoPlayer
+              videoUrl={event.videoUrl}
+              thumbnailUrl={event.videoThumbnailUrl}
+            />
+          )}
 
           {/* Action buttons */}
           {!isCanceled && isAuthenticated && !isAttending && (

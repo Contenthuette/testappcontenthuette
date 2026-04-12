@@ -125,7 +125,7 @@ export const list = authQuery({
   },
 });
 
-// ── Get single member event ─────────────────────────────────────
+// ── Get single member event ─────────────────────────────────
 export const getById = query({
   args: { eventId: v.id("memberEvents") },
   returns: v.union(
@@ -135,6 +135,8 @@ export const getById = query({
       name: v.string(),
       description: v.optional(v.string()),
       thumbnailUrl: v.optional(v.string()),
+      videoUrl: v.optional(v.string()),
+      videoThumbnailUrl: v.optional(v.string()),
       venue: v.string(),
       city: v.string(),
       county: v.optional(v.string()),
@@ -167,6 +169,12 @@ export const getById = query({
       thumbnailUrl: event.thumbnailStorageId
         ? ((await ctx.storage.getUrl(event.thumbnailStorageId)) ?? undefined)
         : event.thumbnailUrl,
+      videoUrl: event.videoStorageId
+        ? ((await ctx.storage.getUrl(event.videoStorageId)) ?? undefined)
+        : undefined,
+      videoThumbnailUrl: event.videoThumbnailStorageId
+        ? ((await ctx.storage.getUrl(event.videoThumbnailStorageId)) ?? undefined)
+        : undefined,
       venue: event.venue,
       city: event.city,
       county: event.county,
@@ -187,7 +195,7 @@ export const getById = query({
   },
 });
 
-// ── Create member event ─────────────────────────────────────────
+// ── Create member event ─────────────────────────────────
 export const create = authMutation({
   args: {
     name: v.string(),
@@ -200,6 +208,8 @@ export const create = authMutation({
     durationMinutes: v.number(),
     maxAttendees: v.optional(v.number()),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    videoStorageId: v.optional(v.id("_storage")),
+    videoThumbnailStorageId: v.optional(v.id("_storage")),
   },
   returns: v.id("memberEvents"),
   handler: async (ctx, args) => {
@@ -247,6 +257,8 @@ export const create = authMutation({
       durationMinutes: args.durationMinutes,
       maxAttendees: args.maxAttendees,
       thumbnailStorageId: args.thumbnailStorageId,
+      videoStorageId: args.videoStorageId,
+      videoThumbnailStorageId: args.videoThumbnailStorageId,
       attendeeCount: 1, // creator counts
       creatorId: myUserId,
       groupId,
@@ -521,7 +533,7 @@ export const cancel = authMutation({
   },
 });
 
-// ── Update member event (admin only) ────────────────────────────
+// ── Update member event (admin only) ────────────────────
 export const update = authMutation({
   args: {
     eventId: v.id("memberEvents"),
@@ -538,6 +550,9 @@ export const update = authMutation({
     clearMaxAttendees: v.optional(v.boolean()),
     thumbnailStorageId: v.optional(v.id("_storage")),
     removeThumbnail: v.optional(v.boolean()),
+    videoStorageId: v.optional(v.id("_storage")),
+    videoThumbnailStorageId: v.optional(v.id("_storage")),
+    removeVideo: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -566,6 +581,13 @@ export const update = authMutation({
     if (args.removeThumbnail) {
       patch.thumbnailStorageId = undefined;
       patch.thumbnailUrl = undefined;
+    }
+    if (args.videoStorageId !== undefined) patch.videoStorageId = args.videoStorageId;
+    if (args.videoThumbnailStorageId !== undefined)
+      patch.videoThumbnailStorageId = args.videoThumbnailStorageId;
+    if (args.removeVideo) {
+      patch.videoStorageId = undefined;
+      patch.videoThumbnailStorageId = undefined;
     }
 
     if (Object.keys(patch).length > 0) {
