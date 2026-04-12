@@ -894,12 +894,12 @@ export default function AdminDashboard() {
               </View>
               <Text style={styles.userCountLabel}>{users.length} Nutzer insgesamt</Text>
               {users
-                .filter((u) => {
+                .filter((u: { _id: string; name: string; email: string; role: string; subscriptionStatus: string; onboardingComplete: boolean; createdAt: number; lastActiveAt?: number }) => {
                   if (!userSearch.trim()) return true;
                   const q = userSearch.toLowerCase();
                   return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
                 })
-                .map((u) => (
+                .map((u: { _id: string; name: string; email: string; role: string; subscriptionStatus: string; onboardingComplete: boolean; createdAt: number; lastActiveAt?: number }) => (
                   <View key={u._id} style={styles.userRow}>
                     <View style={styles.userInfo}>
                       <View style={styles.userNameRow}>
