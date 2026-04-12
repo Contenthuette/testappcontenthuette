@@ -381,12 +381,12 @@ export default function AdminDashboard() {
   }
 
   /* chart data */
-  const postChartData = stats.postsByDay.map((d: DayStats) => d.photos + d.videos);
-  const postChartLabels = stats.postsByDay.map((d: DayStats) => d.label);
-  const userChartData = stats.userGrowthByDay.map((d: GrowthDay) => d.count);
-  const userChartLabels = stats.userGrowthByDay.map((d: GrowthDay) => d.label);
+  const postChartData = stats.postsByDay.map((d) => d.photos + d.videos);
+  const postChartLabels = stats.postsByDay.map((d) => d.label);
+  const userChartData = stats.userGrowthByDay.map((d) => d.count);
+  const userChartLabels = stats.userGrowthByDay.map((d) => d.label);
 
-  const barData = stats.postsByDay.map((d: DayStats) => ({
+  const barData = stats.postsByDay.map((d) => ({
     label: d.label,
     value: d.photos + d.videos,
   }));
@@ -528,7 +528,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyReportsText}>Keine offenen Meldungen</Text>
             </View>
           ) : (
-            reports.map((r: { _id: Id<"reports">; postAuthorName: string; postType: string; postCaption?: string; reason: string; reporterName: string }) => (
+            reports.map((r) => (
               <View key={r._id} style={styles.reportCard}>
                 <View style={styles.reportCardHeader}>
                   <Text style={styles.reportCardAuthor}>{r.postAuthorName}</Text>
@@ -690,12 +690,12 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Events</Text>
             </View>
           ) : (
-            events.map((ev: AdminEvent) => (
+            events.map((ev) => (
               <EventRow
                 key={ev._id}
                 event={ev}
                 expanded={expandedId === ev._id}
-                onToggle={() => setExpandedId((prev: Id<"events"> | null) => (prev === ev._id ? null : ev._id))}
+                onToggle={() => setExpandedId((prev) => (prev === ev._id ? null : ev._id))}
                 onEdit={() => router.navigate(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
                 onToggleHidden={() => {
@@ -728,7 +728,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Partner</Text>
             </View>
           ) : (
-            partners.map((p: { _id: Id<"partners">; businessName: string; city?: string; status: string }) => (
+            partners.map((p) => (
               <View key={p._id} style={styles.eventCard}>
                 <View style={styles.eventHeader}>
                   <View style={{ flex: 1 }}>
@@ -776,7 +776,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Gruppen</Text>
             </View>
           ) : (
-            groups.map((g: { _id: Id<"groups">; name: string; memberCount: number; city?: string; visibility: string; creatorName: string; createdAt: number }) => (
+            groups.map((g) => (
               <View key={g._id} style={styles.eventCard}>
                 <View style={styles.eventHeader}>
                   <View style={{ flex: 1 }}>
@@ -824,7 +824,7 @@ export default function AdminDashboard() {
               <Text style={styles.emptyText}>Noch keine Member Events</Text>
             </View>
           ) : (
-            memberEvents.map((me: { _id: Id<"memberEvents">; name: string; date: string; city: string; venue: string; attendeeCount: number; maxAttendees?: number; status: string; creatorName: string; groupId: Id<"groups">; createdAt: number }) => (
+            memberEvents.map((me) => (
               <View key={me._id} style={styles.eventCard}>
                 <TouchableOpacity
                   onPress={() => setExpandedMemberEventId((prev) => (prev === me._id ? null : me._id))}
@@ -894,12 +894,12 @@ export default function AdminDashboard() {
               </View>
               <Text style={styles.userCountLabel}>{users.length} Nutzer insgesamt</Text>
               {users
-                .filter((u: { _id: string; name: string; email: string; role: string; subscriptionStatus: string; onboardingComplete: boolean; createdAt: number; lastActiveAt?: number }) => {
+                .filter((u) => {
                   if (!userSearch.trim()) return true;
                   const q = userSearch.toLowerCase();
                   return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
                 })
-                .map((u: { _id: string; name: string; email: string; role: string; subscriptionStatus: string; onboardingComplete: boolean; createdAt: number; lastActiveAt?: number }) => (
+                .map((u) => (
                   <View key={u._id} style={styles.userRow}>
                     <View style={styles.userInfo}>
                       <View style={styles.userNameRow}>

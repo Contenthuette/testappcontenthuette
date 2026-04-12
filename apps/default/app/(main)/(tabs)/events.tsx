@@ -60,6 +60,7 @@ type MemberEvent = {
   attendeeCount: number;
   status: string;
   isAttending: boolean;
+  isCreator: boolean;
   creatorName: string;
   creatorAvatarUrl?: string;
 };
@@ -227,6 +228,22 @@ export default function EventsScreen() {
               <SymbolView name="checkmark" size={10} tintColor={colors.white} />
               <Text style={styles.attendingText}>Dabei</Text>
             </View>
+          )}
+          {item.isCreator && item.status !== "canceled" && (
+            <TouchableOpacity
+              style={styles.editCardBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.navigate({
+                  pathname: "/(main)/edit-member-event",
+                  params: { id: item._id },
+                });
+              }}
+              activeOpacity={0.7}
+              hitSlop={8}
+            >
+              <SymbolView name="pencil" size={12} tintColor={colors.white} />
+            </TouchableOpacity>
           )}
         </View>
         <View style={styles.cardBody}>
@@ -435,6 +452,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   attendingText: { fontSize: 11, fontWeight: "700", color: colors.white },
+  editCardBtn: {
+    position: "absolute",
+    bottom: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cardBody: { padding: spacing.lg },
   cardName: {
     fontSize: 18,

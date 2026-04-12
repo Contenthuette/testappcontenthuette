@@ -38,6 +38,7 @@ const memberEventListItemValidator = v.object({
   creatorName: v.string(),
   creatorAvatarUrl: v.optional(v.string()),
   isAttending: v.boolean(),
+  isCreator: v.boolean(),
   groupId: v.id("groups"),
   createdAt: v.number(),
 });
@@ -116,6 +117,7 @@ export const list = authQuery({
                 undefined)
               : creator?.avatarUrl,
             isAttending,
+            isCreator: !!myUserId && event.creatorId === myUserId,
             groupId: event.groupId,
             createdAt: event.createdAt,
           };
