@@ -152,6 +152,16 @@ export default function CreatePostScreen() {
   );
 
   const panGesture = Gesture.Pan()
+    .manualActivation(true)
+    .onTouchesDown((_e, state) => {
+      // Only activate pan when zoomed in – at scale 1 there's nothing to pan,
+      // so let the ScrollView handle the touch for scrolling
+      if (scale.value > 1.05) {
+        state.activate();
+      } else {
+        state.fail();
+      }
+    })
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
