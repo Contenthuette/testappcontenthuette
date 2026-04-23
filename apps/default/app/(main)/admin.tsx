@@ -19,6 +19,8 @@ import { SymbolView } from "@/components/Icon";
 import { MiniLineChart, MiniBarChart, RevenueRow } from "@/components/admin/MiniChart";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConvexAuth } from "convex/react";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 const ABO_PRICE = "5,99";
 
@@ -250,6 +252,7 @@ export default function AdminDashboard() {
   const deleteUserMut = useMutation(api.admin.deleteUserAdmin);
   const [userSearch, setUserSearch] = useState("");
   const [deletingUserId, setDeletingUserId] = useState<Id<"users"> | null>(null);
+  const [exportingCSV, setExportingCSV] = useState(false);
 
   /* ── Partners ── */
   const partners = useQuery(api.admin.listPartners, isAuthenticated ? {} : "skip");
@@ -426,6 +429,63 @@ export default function AdminDashboard() {
     },
     [deleteUserMut],
   );
+
+  const handleExportCSV = useCallback(async () => {
+    if (!users || users.length === 0) return;
+    setExportingCSV(true);
+    try {
+      const BOM = "\uFEFF";
+      const header = "Name;E-Mail;Rolle;Abo-Status;Registriert;Zuletzt aktiv";
+      const rows = users.map((u: AdminUser) => {
+        const registered = new Date(u.createdAt).toLocaleDateString("de-DE");
+        const lastActive = u.lastActiveAt
+          ? new Date(u.lastActiveAt).toLocaleDateString("de-DE")
+          : "\u2013";
+        const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+        return [
+          escapeCsv(u.name),
+          escapeCsv(u.email),
+          u.role === "admin" ? "Admin" : "Nutzer",
+          u.subscriptionStatus === "active"
+            ? "Aktiv"
+            : u.subscriptionStatus === "canceled"
+              ? "Gek\u00fcndigt"
+              : u.subscriptionStatus === "expired"
+                ? "Abgelaufen"
+                : "Kein Abo",
+          registered,
+          lastActive,
+        ].join(";");
+      });
+      const csv = BOM + header + "\n" + rows.join("\n");
+
+      if (Platform.OS === "web") {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `z-nutzer-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri =
+          FileSystem.cacheDirectory +
+          `z-nutzer-${new Date().toISOString().slice(0, 10)}.csv`;
+        await FileSystem.writeAsStringAsync(fileUri, csv, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          UTI: "public.comma-separated-values-text",
+        });
+      }
+    } catch {
+      if (Platform.OS !== "web")
+        Alert.alert("Fehler", "CSV konnte nicht exportiert werden.");
+    } finally {
+      setExportingCSV(false);
+    }
+  }, [users]);
 
   if (!stats) {
     return (
@@ -931,8 +991,28 @@ export default function AdminDashboard() {
           )}
         </Card>
 
-        {/* ── Nutzer-Verwaltung ────────────────────────────── */}
-        <Card title="Nutzer" icon="person.2">
+        {/* \u2500\u2500 Nutzer-Verwaltung \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+        <Card
+          title="Nutzer"
+          icon="person.2"
+          action={
+            <TouchableOpacity
+              style={[styles.csvExportBtn, (exportingCSV || !users || users.length === 0) && { opacity: 0.4 }]}
+              onPress={handleExportCSV}
+              activeOpacity={0.7}
+              disabled={exportingCSV || !users || users.length === 0}
+            >
+              {exportingCSV ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <>
+                  <SymbolView name="arrow.down.doc" size={13} tintColor={colors.white} />
+                  <Text style={styles.csvExportText}>CSV</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          }
+        >
           {!users ? (
             <ActivityIndicator size="small" color={colors.gray400} />
           ) : (
@@ -1175,6 +1255,7 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
     justifyContent: "space-between",
     paddingVertical: 6,
+    paddingHorizontal: 4,
   },
   contentNum: {
     fontSize: 20,
@@ -1440,6 +1521,22 @@ const styles = StyleSheet.create({
     color: colors.gray400,
   },
   /* user management */
+  csvExportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.black,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+  },
+  csvExportText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.white,
+    letterSpacing: 0.3,
+  },
   userSearchWrap: {
     flexDirection: "row",
     alignItems: "center",
