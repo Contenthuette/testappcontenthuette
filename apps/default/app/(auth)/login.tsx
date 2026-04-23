@@ -75,18 +75,46 @@ export default function LoginScreen() {
     }
     setLoading(true);
     setError("");
-    try {
-      const result = await authClient.signIn.email({ email: email.trim(), password });
-      if (result.error) {
-        const msg = result.error.message ?? result.error.code ?? "";
-        if (msg.includes("not found") || msg.includes("Invalid") || msg.includes("invalid")) {
-          setError("Kein Konto mit dieser E-Mail gefunden. Bitte registriere dich zuerst.");
-        } else {
-          setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
+
+    // Retry up to 2 times for transient network/CSRF failures
+    let lastError = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await authClient.signIn.email({ email: email.trim(), password });
+        if (result.error) {
+          const msg = result.error.message ?? result.error.code ?? "";
+          console.log("[Login] Attempt", attempt + 1, "error:", msg, JSON.stringify(result.error));
+
+          // Transient/CSRF errors — retry silently
+          if (
+            msg.includes("MISSING_OR_NULL_ORIGIN") ||
+            msg.includes("CSRF") ||
+            msg.includes("csrf") ||
+            msg.includes("fetch") ||
+            msg.includes("network") ||
+            msg.includes("Network")
+          ) {
+            lastError = msg;
+            if (attempt < 2) {
+              await new Promise((r) => setTimeout(r, 800 + attempt * 500));
+              continue;
+            }
+          }
+
+          // Real auth errors — show appropriate message
+          if (msg.includes("not found")) {
+            setError("Kein Konto mit dieser E-Mail gefunden. Bitte registriere dich zuerst.");
+          } else if (msg.includes("Invalid") || msg.includes("invalid") || msg.includes("password") || msg.includes("credentials")) {
+            setError("E-Mail oder Passwort ist falsch. Bitte überprüfe deine Eingaben.");
+          } else {
+            setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
+          }
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-      } else {
-        // Force session refresh so the auth provider picks up the new session immediately
+
+        // Success — force session refresh
+        console.log("[Login] Success on attempt", attempt + 1);
         try {
           await authClient.getSession();
         } catch {
@@ -94,12 +122,21 @@ export default function LoginScreen() {
         }
         // Don't navigate yet — wait for Convex to confirm auth state
         setAwaitingAuth(true);
+        return;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.log("[Login] Attempt", attempt + 1, "exception:", msg);
+        lastError = msg;
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 800 + attempt * 500));
+          continue;
+        }
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
-      setLoading(false);
     }
+
+    // All retries exhausted
+    setError(lastError || "Anmeldung fehlgeschlagen. Bitte versuche es erneut.");
+    setLoading(false);
   };
 
   return (
