@@ -189,7 +189,8 @@ export default defineSchema({
     likeCount: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index("by_postId", ["postId"]),
+    .index("by_postId", ["postId"])
+    .index("by_authorId", ["authorId"]),
 
   commentLikes: defineTable({
     commentId: v.id("comments"),

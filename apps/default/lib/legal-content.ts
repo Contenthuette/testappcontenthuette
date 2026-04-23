@@ -149,12 +149,15 @@ export const AGB_SECTIONS: LegalSection[] = [
     ].join("\n\n"),
   },
   {
-    heading: "§ 14 Kündigung und Kontolöschung",
+    heading: "\u00a7 14 K\u00fcndigung und Kontol\u00f6schung",
     body: [
-      "(1) Der Nutzer kann sein Konto jederzeit in den App-Einstellungen löschen oder die Löschung per E-Mail an leif@z-social.com beantragen.",
-      "(2) Mit der Kontolöschung werden Profil, Beiträge, Nachrichten und sonstige Inhalte gelöscht, sofern keine gesetzlichen Aufbewahrungspflichten bestehen.",
-      "(3) Der Anbieter ist berechtigt, das Nutzungsverhältnis aus wichtigem Grund fristlos zu kündigen.",
-      "(4) Bei Kündigung durch den Anbieter aufgrund von Verstößen besteht kein Anspruch auf Rückerstattung.",
+      "(1) Der Nutzer kann sein Konto jederzeit \u00fcber die Funktion \u201eAccount l\u00f6schen\u201c in den Profileinstellungen der App l\u00f6schen. Alternativ kann die L\u00f6schung per E-Mail an leif@z-social.com beantragt werden.",
+      "(2) Mit der Kontol\u00f6schung werden folgende Daten unwiderruflich gel\u00f6scht:\n\n\u2022 Profildaten (Name, Bio, Profilbild, Bannerbild, Standort, Interessen)\n\u2022 Alle ver\u00f6ffentlichten Beitr\u00e4ge (Fotos, Videos, Bildunterschriften)\n\u2022 Kommentare und Reaktionen (Likes) des Nutzers\n\u2022 Gespeicherte Beitr\u00e4ge\n\u2022 Freundschaftsverbindungen und Freundschaftsanfragen\n\u2022 Gruppenmitgliedschaften\n\u2022 Benachrichtigungen und Tickets\n\u2022 Hochgeladene Mediendateien (Profilbilder, Banner, Beitragsmedien)",
+      "(3) Nachrichten, die der Nutzer innerhalb der Direktnachrichtenfunktion an andere Nutzer gesendet hat, werden bei Kontol\u00f6schung nicht gel\u00f6scht und bleiben f\u00fcr den jeweiligen Gespr\u00e4chspartner weiterhin sichtbar.",
+      "(4) Die L\u00f6schung ist endg\u00fcltig und kann nicht r\u00fcckg\u00e4ngig gemacht werden. Ein etwaiges aktives Abonnement wird automatisch zum n\u00e4chsten Abrechnungszeitraum gek\u00fcndigt.",
+      "(5) Der Anbieter ist berechtigt, das Nutzungsverh\u00e4ltnis aus wichtigem Grund fristlos zu k\u00fcndigen.",
+      "(6) Bei K\u00fcndigung durch den Anbieter aufgrund von Verst\u00f6\u00dfen besteht kein Anspruch auf R\u00fcckerstattung.",
+      "(7) Gesetzliche Aufbewahrungspflichten (insbesondere f\u00fcr Zahlungs- und Rechnungsdaten gem\u00e4\u00df \u00a7 147 AO) bleiben von der Kontol\u00f6schung unber\u00fchrt.",
     ].join("\n\n"),
   },
   {

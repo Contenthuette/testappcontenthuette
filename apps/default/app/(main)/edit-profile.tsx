@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  Modal,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -22,6 +23,8 @@ import { pickImage, uploadToConvex } from "@/lib/media-picker";
 import * as Haptics from "expo-haptics";
 import { INTERESTS } from "@/lib/constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { authClient } from "@/lib/auth-client";
+import { router } from "expo-router";
 
 export default function EditProfileScreen() {
   const { isAuthenticated } = useConvexAuth();
@@ -46,6 +49,9 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [customInterest, setCustomInterest] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteMyAccount = useMutation(api.accountDeletion.deleteMyAccount);
 
   useEffect(() => {
     if (me) {
@@ -141,6 +147,23 @@ export default function EditProfileScreen() {
       setSelectedInterests(prev => [...prev, trimmed]);
       setCustomInterest("");
       if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+      await authClient.signOut();
+      setShowDeleteModal(false);
+      router.replace("/");
+    } catch (error) {
+      console.error("Account deletion failed:", error);
+      if (Platform.OS !== "web") {
+        Alert.alert("Fehler", "Account konnte nicht gel\u00f6scht werden. Bitte versuche es erneut.");
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -375,7 +398,61 @@ export default function EditProfileScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Delete Account Button */}
+        <TouchableOpacity
+          style={styles.deleteAccountBtn}
+          onPress={() => setShowDeleteModal(true)}
+          disabled={saving}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.deleteAccountBtnText}>Account l\u00f6schen</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <Icon name="exclamationmark.triangle.fill" size={28} tintColor="#E53935" />
+            </View>
+            <Text style={styles.modalTitle}>Account l\u00f6schen?</Text>
+            <Text style={styles.modalBody}>
+              Bist du sicher, dass du deinen Account l\u00f6schen willst? Alle deine
+              Posts, Fotos, Videos und Profildaten werden unwiderruflich gel\u00f6scht.
+              Nachrichten, die du gesendet hast, bleiben erhalten.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalBtnCancelText}>Nicht l\u00f6schen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBtnDelete}
+                onPress={handleDeleteAccount}
+                disabled={deleting}
+                activeOpacity={0.7}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.modalBtnDeleteText}>L\u00f6schen</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -569,4 +646,82 @@ const styles = StyleSheet.create({
   customInterestBtnDisabled: {
     backgroundColor: colors.gray200,
   },
+  deleteAccountBtn: {
+    backgroundColor: "#E53935",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  deleteAccountBtnText: { color: colors.white, fontSize: 15, fontWeight: "600" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 340,
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    borderCurve: "continuous",
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: 12,
+  },
+  modalIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#FDECEA",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.black,
+    textAlign: "center",
+  },
+  modalBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.gray500,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+    marginTop: 4,
+  },
+  modalBtnCancel: {
+    flex: 1,
+    backgroundColor: colors.gray100,
+    paddingVertical: 14,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnCancelText: { color: colors.black, fontSize: 15, fontWeight: "600" },
+  modalBtnDelete: {
+    flex: 1,
+    backgroundColor: "#E53935",
+    paddingVertical: 14,
+    borderRadius: radius.full,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnDeleteText: { color: colors.white, fontSize: 15, fontWeight: "600" },
 });
