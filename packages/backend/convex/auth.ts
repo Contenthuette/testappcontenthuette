@@ -126,6 +126,7 @@ export const createAuth = (
     { optionsOnly } = { optionsOnly: false }
 ) => {
     return betterAuth({
+        baseURL: process.env.CONVEX_SITE_URL,
         socialProviders: {
             google: {
                 clientId: process.env.GOOGLE_CLIENT_ID as string,
