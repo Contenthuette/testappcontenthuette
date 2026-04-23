@@ -93,7 +93,7 @@ export default function UserProfileScreen() {
     if (Platform.OS === "web") {
       setBlockLoading(true);
       try {
-        await blockUser({ blockedId: userId });
+        await blockUser({ blockedUserId: userId });
         router.back();
       } catch (e: unknown) {
         console.error("Block error:", e);
@@ -115,7 +115,7 @@ export default function UserProfileScreen() {
             try {
               if (Platform.OS !== "web")
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              await blockUser({ blockedId: userId });
+              await blockUser({ blockedUserId: userId });
               router.back();
             } catch (e: unknown) {
               console.error("Block error:", e);

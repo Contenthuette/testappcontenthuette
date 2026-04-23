@@ -5,6 +5,7 @@ import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { paginatedResultValidator } from "./pagination";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 
 async function getMyUserId(
   ctx: { db: QueryCtx["db"]; user: { _id: string } },
@@ -197,7 +198,7 @@ export const getById = query({
   },
 });
 
-// ── Create member event ─────────────────────────────────
+// ── Create member event ───────────────────────────────────
 export const create = authMutation({
   args: {
     name: v.string(),
@@ -215,9 +216,14 @@ export const create = authMutation({
   },
   returns: v.id("memberEvents"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "createMemberEvent", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-
+    validateStringLength(args.name, "Name", INPUT_LIMITS.eventName);
+    validateStringLength(args.description, "Beschreibung", INPUT_LIMITS.eventDescription);
+    validateStringLength(args.venue, "Ort", INPUT_LIMITS.venue);
+    validateStringLength(args.city, "Stadt", INPUT_LIMITS.city);
+    validateStringLength(args.county, "Landkreis", INPUT_LIMITS.county);
     // 1) Create the event group (hidden from Community tab)
     const groupId = await ctx.db.insert("groups", {
       name: `Event: ${args.name}`,
@@ -275,11 +281,12 @@ export const create = authMutation({
   },
 });
 
-// ── Join event ("Dabei sein") ───────────────────────────────────
+// ── Join event ("Dabei sein") ──────────────────────────────────
 export const join = authMutation({
   args: { eventId: v.id("memberEvents") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "joinMemberEvent", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 

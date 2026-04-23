@@ -5,7 +5,7 @@ import { authQuery, authMutation } from "./functions";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { paginatedResultValidator } from "./pagination";
-import { rateLimiter } from "./rateLimit";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 
 export const generateUploadUrl = authMutation({
   args: {},
@@ -498,6 +498,7 @@ export const toggleLike = authMutation({
   args: { postId: v.id("posts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "toggleLike", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     const existing = await ctx.db.query("likes")
@@ -521,6 +522,7 @@ export const toggleSave = authMutation({
   args: { postId: v.id("posts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "toggleSave", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     const existing = await ctx.db.query("savedPosts")
@@ -598,9 +600,13 @@ export const addComment = authMutation({
   args: { postId: v.id("posts"), text: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "addComment", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
-    await ctx.db.insert("comments", { postId: args.postId, authorId: myUserId, text: args.text, likeCount: 0, createdAt: Date.now() });
+    const text = sanitizeText(args.text);
+    validateStringLength(text, "Kommentar", INPUT_LIMITS.commentText);
+    if (!text) throw new Error("Kommentar darf nicht leer sein");
+    await ctx.db.insert("comments", { postId: args.postId, authorId: myUserId, text, likeCount: 0, createdAt: Date.now() });
     const post = await ctx.db.get(args.postId);
     if (post) {
       await ctx.db.patch(args.postId, { commentCount: post.commentCount + 1 });
@@ -633,6 +639,7 @@ export const toggleCommentLike = authMutation({
   args: { commentId: v.id("comments") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "toggleCommentLike", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     const existing = await ctx.db.query("commentLikes")
@@ -655,6 +662,7 @@ export const likeComment = authMutation({
   args: { commentId: v.id("comments") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "toggleCommentLike", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     const existing = await ctx.db.query("commentLikes")
@@ -674,6 +682,7 @@ export const unlikeComment = authMutation({
   args: { commentId: v.id("comments") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "toggleCommentLike", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     const existing = await ctx.db.query("commentLikes")

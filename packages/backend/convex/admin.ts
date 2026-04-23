@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { paginatedResultValidator } from "./pagination";
 import { internal } from "./_generated/api";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 type AdminReadCtx = {
@@ -332,11 +333,14 @@ async function getDashboardFromSnapshots(ctx: SnapshotReadCtx) {
   };
 }
 
-/* ─── login ───────────────────────────────────────────────────── */
+/* ─── login ─────────────────────────────────────────────────────── */
 export const verifyAdminPassword = mutation({
   args: { email: v.string(), password: v.string() },
   returns: v.boolean(),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "adminLogin", { key: args.email.toLowerCase().trim() });
+    validateStringLength(args.email, "Email", INPUT_LIMITS.email);
+    validateStringLength(args.password, "Passwort", INPUT_LIMITS.password);
     const adminPassword = process.env.ADMIN_PASSWORD;
     if (!adminPassword) return false;
     return (

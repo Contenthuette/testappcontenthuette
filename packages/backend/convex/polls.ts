@@ -3,6 +3,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, validateArrayLength, sanitizeText } from "./rateLimit";
 
 const APP_ADMIN_EMAIL = "leif@z-social.com";
 const POLL_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -127,8 +128,14 @@ export const create = authMutation({
   },
   returns: v.id("polls"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "createPoll", { key: ctx.user._id });
     const userId = await getMyUserId(ctx);
     if (!userId) throw new Error("User not found");
+
+    validateStringLength(args.question, "Frage", INPUT_LIMITS.pollQuestion);
+    for (const opt of args.options) {
+      validateStringLength(opt, "Option", INPUT_LIMITS.pollOption);
+    }
 
     if (args.options.length < 2 || args.options.length > 5) {
       throw new Error("Eine Umfrage braucht 2–5 Optionen");
@@ -164,6 +171,7 @@ export const vote = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "pollVote", { key: ctx.user._id });
     const userId = await getMyUserId(ctx);
     if (!userId) throw new Error("User not found");
 

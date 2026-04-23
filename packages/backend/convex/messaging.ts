@@ -7,7 +7,7 @@ import type { QueryCtx } from "./_generated/server";
 import { getConversationKeyFromParticipants, getDirectConversationKey } from "./conversationKey";
 import { paginatedResultValidator } from "./pagination";
 import { touchConversationActivity } from "./conversationActivity";
-import { rateLimiter } from "./rateLimit";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 import { isBlockedBetween } from "./users";
 import { internal } from "./_generated/api";
 
@@ -487,6 +487,7 @@ export const sendMessage = authMutation({
   returns: v.id("messages"),
   handler: async (ctx, args) => {
     await rateLimiter.limit(ctx, "sendDirectMessage", { key: `${ctx.user._id}:${args.conversationId}` });
+    validateStringLength(args.text, "Nachricht", INPUT_LIMITS.messageText);
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
@@ -647,6 +648,7 @@ export const sendDirectMessage = authMutation({
   returns: v.id("messages"),
   handler: async (ctx, args) => {
     await rateLimiter.limit(ctx, "sendDirectMessage", { key: `${ctx.user._id}:${args.conversationId}` });
+    validateStringLength(args.text, "Nachricht", INPUT_LIMITS.messageText);
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 

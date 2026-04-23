@@ -3,7 +3,7 @@ import { query } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
-import { rateLimiter } from "./rateLimit";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 
 const MAX_PARTICIPANTS = 2;
 const MAX_VIEWERS_PER_STREAM = 50;
@@ -540,7 +540,7 @@ export const sendComment = authMutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
 
-    const trimmed = args.text.trim().slice(0, 500);
+    const trimmed = sanitizeText(args.text).slice(0, INPUT_LIMITS.livestreamComment);
     if (trimmed.length === 0) return null;
 
     await ctx.db.insert("livestreamComments", {
@@ -587,6 +587,7 @@ export const ackSignals = authMutation({
   args: { signalIds: v.array(v.id("livestreamSignaling")) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (args.signalIds.length > 100) throw new Error("Maximal 100 Signals gleichzeitig");
     for (const id of args.signalIds) {
       const doc = await ctx.db.get(id);
       if (doc) await ctx.db.delete(id);

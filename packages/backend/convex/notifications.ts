@@ -4,6 +4,7 @@ import { authQuery, authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { paginatedResultValidator } from "./pagination";
+import { rateLimiter } from "./rateLimit";
 
 type AuthCtx = {
   db: QueryCtx["db"];
@@ -88,19 +89,23 @@ export const list = authQuery({
 });
 
 export const markRead = authMutation({
-  args: { notificationId: v.id("notifications") },
+  args: { notificationIds: v.array(v.id("notifications")) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "markNotificationsRead", { key: ctx.user._id });
+    if (args.notificationIds.length > 100)
+      throw new Error("Maximal 100 Benachrichtigungen gleichzeitig");
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
-    const notification = await ctx.db.get(args.notificationId);
-    if (!notification) throw new Error("Notification not found");
-    if (notification.userId !== myUserId) {
-      throw new Error("Only the notification owner can mark it as read");
+    for (const nId of args.notificationIds) {
+      const notification = await ctx.db.get(nId);
+      if (!notification) continue;
+      if (notification.userId !== myUserId) {
+        throw new Error("Nur der Empfänger kann Benachrichtigungen als gelesen markieren");
+      }
+      await ctx.db.patch(nId, { isRead: true });
     }
-
-    await ctx.db.patch(args.notificationId, { isRead: true });
     return null;
   },
 });
@@ -109,6 +114,8 @@ export const markAllRead = authMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    await rateLimiter.limit(ctx, "markNotificationsRead", { key: ctx.user._id });
+    const authId = ctx.user._id;
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) return null;
 

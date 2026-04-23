@@ -4,6 +4,7 @@ import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { rateLimiter } from "./rateLimit";
 
 type AuthCtx = {
   db: QueryCtx["db"];
@@ -110,6 +111,7 @@ export const sendRequest = authMutation({
   args: { receiverId: v.id("users") },
   returns: v.id("friendRequests"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "friendRequest", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     if (myUserId === args.receiverId) throw new Error("Cannot send request to yourself");
@@ -184,6 +186,7 @@ export const acceptRequest = authMutation({
   args: { requestId: v.id("friendRequests") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "friendRequest", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 
@@ -223,6 +226,7 @@ export const declineRequest = authMutation({
   args: { requestId: v.id("friendRequests") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "friendRequest", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
 

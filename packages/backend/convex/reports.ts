@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { authMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 
 async function getMyUserId(ctx: any): Promise<Id<"users"> | null> {
   const authId = ctx.user._id;
@@ -16,13 +17,17 @@ export const create = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "submitReport", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+    const reason = sanitizeText(args.reason);
+    validateStringLength(reason, "Grund", INPUT_LIMITS.reportReason);
+    if (!reason) throw new Error("Bitte gib einen Grund an");
     await ctx.db.insert("reports", {
       reporterId: myUserId,
       type: args.type,
       targetId: args.targetId,
-      reason: args.reason,
+      reason,
       status: "pending",
       createdAt: Date.now(),
     });

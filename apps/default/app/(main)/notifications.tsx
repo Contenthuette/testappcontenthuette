@@ -56,7 +56,7 @@ export default function NotificationsScreen() {
   const handleAcceptFriend = useCallback(async (requestId: string, notificationId: Id<"notifications">) => {
     try {
       await acceptFriend({ requestId: requestId as Id<"friendRequests"> });
-      await markRead({ notificationId });
+      await markRead({ notificationIds: [notificationId] });
       setHandledRequests((prev) => new Set(prev).add(notificationId));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Fehler";
@@ -67,7 +67,7 @@ export default function NotificationsScreen() {
   const handleRejectFriend = useCallback(async (requestId: string, notificationId: Id<"notifications">) => {
     try {
       await rejectFriend({ requestId: requestId as Id<"friendRequests"> });
-      await markRead({ notificationId });
+      await markRead({ notificationIds: [notificationId] });
       setHandledRequests((prev) => new Set(prev).add(notificationId));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Fehler";
@@ -76,7 +76,7 @@ export default function NotificationsScreen() {
   }, [rejectFriend, markRead]);
 
   const handlePress = useCallback((item: NonNullable<typeof notifications>[number]) => {
-    markRead({ notificationId: item._id });
+    markRead({ notificationIds: [item._id] });
     if (item.type === "message" && item.referenceId) {
       router.navigate({ pathname: "/(main)/chat", params: { id: item.referenceId } });
     } else if (item.type === "friend_accepted" && item.referenceId) {

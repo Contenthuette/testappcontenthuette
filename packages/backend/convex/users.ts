@@ -7,6 +7,7 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { buildUserSearchText, normalizeSearchQuery } from "./searchText";
 import { paginatedResultValidator } from "./pagination";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, sanitizeText } from "./rateLimit";
 
 // Helper: get user by authId
 async function getUserByAuthId(ctx: { db: QueryCtx["db"] }, authId: string) {
@@ -179,6 +180,11 @@ export const updateProfile = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "updateProfile", { key: ctx.user._id });
+    validateStringLength(args.name, "Name", INPUT_LIMITS.name);
+    validateStringLength(args.bio, "Bio", INPUT_LIMITS.bio);
+    validateStringLength(args.county, "Landkreis", INPUT_LIMITS.county);
+    validateStringLength(args.city, "Stadt", INPUT_LIMITS.city);
     const authId = ctx.user._id;
     const user = await getUserByAuthId(ctx, authId);
     if (!user) throw new Error("User not found");
@@ -464,19 +470,20 @@ export async function isBlockedBetween(
 
 // Block user
 export const blockUser = authMutation({
-  args: { blockedId: v.id("users") },
+  args: { blockedUserId: v.id("users") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "blockUser", { key: ctx.user._id });
     const authId = ctx.user._id;
     const user = await getUserByAuthId(ctx, authId);
     if (!user) throw new Error("User not found");
     const existing = await ctx.db.query("blockedUsers")
-      .withIndex("by_blockerId_and_blockedId", q => q.eq("blockerId", user._id).eq("blockedId", args.blockedId))
+      .withIndex("by_blockerId_and_blockedId", q => q.eq("blockerId", user._id).eq("blockedId", args.blockedUserId))
       .unique();
     if (!existing) {
       await ctx.db.insert("blockedUsers", {
         blockerId: user._id,
-        blockedId: args.blockedId,
+        blockedId: args.blockedUserId,
         createdAt: Date.now(),
       });
     }

@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { buildGroupSearchText, normalizeSearchQuery } from "./searchText";
 import { paginatedResultValidator } from "./pagination";
+import { rateLimiter, INPUT_LIMITS, validateStringLength, validateArrayLength, sanitizeText } from "./rateLimit";
 
 // Helper to get userId from authId
 async function getMyUserId(ctx: { db: QueryCtx["db"]; user: { _id: string } }): Promise<Id<"users"> | null> {
@@ -148,8 +149,14 @@ export const create = authMutation({
   },
   returns: v.id("groups"),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "createGroup", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+    validateStringLength(args.name, "Gruppenname", INPUT_LIMITS.groupName);
+    validateStringLength(args.description, "Beschreibung", INPUT_LIMITS.groupDescription);
+    validateStringLength(args.county, "Landkreis", INPUT_LIMITS.county);
+    validateStringLength(args.city, "Stadt", INPUT_LIMITS.city);
+    validateArrayLength(args.interests, "Interessen", 20);
     const groupId = await ctx.db.insert("groups", {
       ...args,
       searchText: buildGroupSearchText({
@@ -186,6 +193,7 @@ export const join = authMutation({
   args: { groupId: v.id("groups") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "joinGroup", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
     const existing = await ctx.db.query("groupMembers")
@@ -435,8 +443,14 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, "createGroup", { key: ctx.user._id });
     const myUserId = await getMyUserId(ctx);
     if (!myUserId) throw new Error("User not found");
+    validateStringLength(args.name, "Gruppenname", INPUT_LIMITS.groupName);
+    validateStringLength(args.description, "Beschreibung", INPUT_LIMITS.groupDescription);
+    validateStringLength(args.county, "Landkreis", INPUT_LIMITS.county);
+    validateStringLength(args.city, "Stadt", INPUT_LIMITS.city);
+    validateArrayLength(args.interests, "Interessen", 20);
 
     const group = await ctx.db.get(args.groupId);
     if (!group) throw new Error("Group not found");
