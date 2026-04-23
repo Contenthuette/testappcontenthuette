@@ -217,8 +217,19 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     body: "Die App richtet sich an Nutzer ab 16 Jahren. Personenbezogene Daten von Kindern unter 16 Jahren werden nicht wissentlich erhoben. Sollten wir Kenntnis erlangen, dass ein Kind unter 16 Jahren ein Konto erstellt hat, werden wir dieses Konto und die zugeh\u00f6rigen Daten unverz\u00fcglich l\u00f6schen.",
   },
   {
-    heading: "22. \u00c4nderungen dieser Datenschutzerkl\u00e4rung",
-    body: "Wir behalten uns vor, diese Datenschutzerkl\u00e4rung anzupassen, um sie an ge\u00e4nderte Rechtslagen, neue Funktionen oder ver\u00e4nderte Datenverarbeitungsprozesse anzupassen.\n\nBei wesentlichen \u00c4nderungen werden die Nutzer per E-Mail oder In-App-Benachrichtigung informiert. Die jeweils aktuelle Fassung ist jederzeit innerhalb der App im Privacy Center einsehbar.\n\nStand: April 2026",
+    heading: "22. Änderungen dieser Datenschutzerklärung",
+    body: "Wir behalten uns vor, diese Datenschutzerklärung anzupassen, um sie an geänderte Rechtslagen, neue Funktionen oder veränderte Datenverarbeitungsprozesse anzupassen.\n\nBei wesentlichen Änderungen werden die Nutzer per E-Mail oder In-App-Benachrichtigung informiert. Die jeweils aktuelle Fassung ist jederzeit innerhalb der App im Privacy Center einsehbar.\n\nStand: April 2026",
+  },
+  {
+    heading: "23. Plattformstatistiken und interne Analysen",
+    body: [
+      "Der Anbieter erhebt und speichert aggregierte, nicht personenbezogene Plattformstatistiken zum Zweck der Betriebsüberwachung, Qualitätssicherung und Weiterentwicklung der App. Hierbei werden ausschließlich Gesamtzahlen und zusammengefasste Kennwerte erfasst, die keinen Rückschluss auf einzelne Nutzer ermöglichen.",
+      "Erfasste Statistiken umfassen insbesondere:",
+      "• Gesamtanzahl registrierter Nutzer\n• Anzahl aktiver Nutzer (heute, 7 Tage, 30 Tage)\n• Neuregistrierungen pro Tag\n• Gesamtanzahl und tägliche Anzahl veröffentlichter Beiträge (aufgeschlüsselt nach Fotos und Videos)\n• Gesamtanzahl der Gruppen und Events\n• Gesamtanzahl der Nachrichten\n• Umsatzkennzahlen (Ticket-Erlöse, Abonnement-Status)\n• Abonnementstatus-Verteilung (aktiv, gekündigt, abgelaufen)",
+      "Diese Statistiken werden automatisiert in regelmäßigen Intervallen (alle 6 Stunden) durch ein serverseitiges Verfahren berechnet und als Tagesschnappschuss gespeichert. Die Auswertung erfolgt ausschließlich in aggregierter Form; es werden keine individuellen Nutzerprofile erstellt und keine Bewegungs- oder Verhaltensprofile einzelner Nutzer angelegt.",
+      "Es werden keine externen Analyse- oder Tracking-Dienste (wie z. B. Google Analytics, Firebase Analytics, Facebook Pixel o. Ä.) eingesetzt. Es findet kein Tracking für Werbezwecke statt. Es werden keine Daten an Werbenetzwerke oder sonstige Dritte zu Analysezwecken übermittelt.",
+      "Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse des Anbieters an der Betriebsüberwachung und Weiterentwicklung der Plattform). Da ausschließlich anonymisierte, aggregierte Daten verarbeitet werden, liegt kein Personenbezug im Sinne der DSGVO vor.",
+    ].join("\n\n"),
   },
 ];
 
