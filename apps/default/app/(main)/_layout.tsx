@@ -93,6 +93,7 @@ export default function MainLayout() {
         <Stack.Screen name="create-member-event" options={{ presentation: "modal" }} />
         <Stack.Screen name="edit-member-event" options={{ presentation: "modal" }} />
         <Stack.Screen name="member-event-detail" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="event-paywall" options={{ presentation: "modal" }} />
       </Stack>
     </CallProvider>
   );

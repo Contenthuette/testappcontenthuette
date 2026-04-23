@@ -8,7 +8,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     heading: "1. Verantwortlicher",
     body: [
       "Verantwortlich für die Datenverarbeitung im Sinne der Datenschutz-Grundverordnung (DSGVO) ist:",
-      "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstr. 135\n19055 Schwerin\nDeutschland",
+      "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstraße 135\n19055 Schwerin\nDeutschland",
       "Tel.: 01734506873\nE-Mail: leif@z-social.com",
       "Bei Fragen zum Datenschutz können Sie sich jederzeit an die oben genannte E-Mail-Adresse wenden.",
     ].join("\n\n"),
@@ -122,6 +122,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "12.3 Expo / The Expo Project (USA)\nZweck: Push-Benachrichtigungen an mobile Ger\u00e4te\nStandort: USA\nGrundlage: EU-US Data Privacy Framework (DPF) sowie SCC.",
       "12.4 Metered Networks Inc. (Kanada)\nZweck: Bereitstellung von TURN/STUN-Relayservern f\u00fcr WebRTC-Verbindungen (Audio-/Videoanrufe und Live-Streams), wenn eine direkte Peer-to-Peer-Verbindung zwischen den Endger\u00e4ten nicht m\u00f6glich ist.\nVerarbeitete Daten: IP-Adressen der Verbindungsteilnehmer, verschl\u00fcsselte Medienstr\u00f6me (Inhalt bleibt durch DTLS-SRTP-Verschl\u00fcsselung gesch\u00fctzt).\nStandort: Kanada / weltweit verteilte Serverinfrastruktur\nGrundlage f\u00fcr Drittlandtransfer: Angemessenheitsbeschluss der EU-Kommission f\u00fcr Kanada (Art. 45 DSGVO) sowie Standardvertragsklauseln (SCC) f\u00fcr Server au\u00dferhalb Kanadas.",
       "12.5 WebRTC (Peer-to-Peer)\nAudio- und Videoanrufe sowie Live-Streams werden \u00fcber das WebRTC-Protokoll realisiert. Nach dem Verbindungsaufbau laufen Medienstr\u00f6me nach M\u00f6glichkeit direkt zwischen den Endger\u00e4ten. Ist eine direkte Verbindung nicht m\u00f6glich, werden die Daten \u00fcber TURN-Relayserver (Metered Networks, siehe 12.4) geleitet. Signalisierungsdaten werden \u00fcber die Server des Anbieters (Convex, siehe 12.1) vermittelt.",
+      "12.6 Resend, Inc. (USA)\nZweck: Versand transaktionaler E-Mails (z.\u00a0B. Kontobest\u00e4tigungen, Passwortzur\u00fccksetzungen, Systembenachrichtigungen) sowie E-Mail-Kommunikation zu Plattform-Updates, neuen Funktionen und Angeboten des Anbieters (Direktwerbung gem\u00e4\u00df \u00a7 7 Abs. 3 UWG)\nVerarbeitete Daten: E-Mail-Adresse des Empf\u00e4ngers, Name (sofern angegeben), E-Mail-Inhalt\nStandort: USA\nGrundlage f\u00fcr Drittlandtransfer: EU-US Data Privacy Framework (DPF) sowie Standardvertragsklauseln (SCC) gem\u00e4\u00df Art. 46 Abs. 2 lit. c DSGVO.\nN\u00e4here Informationen: https://resend.com/legal/privacy-policy",
       "Eine Weitergabe personenbezogener Daten an sonstige Dritte erfolgt nur:",
       "\u2022 Wenn eine gesetzliche Verpflichtung besteht (Art. 6 Abs. 1 lit. c DSGVO)\n\u2022 Wenn der Nutzer ausdr\u00fccklich eingewilligt hat (Art. 6 Abs. 1 lit. a DSGVO)\n\u2022 Wenn dies zur Geltendmachung von Rechtsanspr\u00fcchen erforderlich ist",
       "Eine kommerzielle Weitergabe oder ein Verkauf personenbezogener Daten an Dritte findet nicht statt.",
@@ -148,11 +149,17 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     ].join("\n\n"),
   },
   {
-    heading: "15. Direktwerbung",
+    heading: "15. Direktwerbung und E-Mail-Kommunikation",
     body: [
-      "Wenn Sie uns Ihre E-Mail-Adresse zur Verf\u00fcgung gestellt haben, behalten wir uns vor, Ihnen regelm\u00e4\u00dfig Informationen zu unseren Angeboten per E-Mail oder In-App-Benachrichtigung zuzusenden. Hierf\u00fcr m\u00fcssen wir gem\u00e4\u00df \u00a7 7 Abs. 3 UWG keine gesonderte Einwilligung einholen.",
-      "Die Datenverarbeitung erfolgt auf Basis unseres berechtigten Interesses an personalisierter Direktwerbung gem\u00e4\u00df Art. 6 Abs. 1 lit. f DSGVO.",
-      "Sie sind berechtigt, der Nutzung Ihrer E-Mail-Adresse zu dem vorbezeichneten Werbezweck jederzeit mit Wirkung f\u00fcr die Zukunft durch eine Mitteilung an leif@z-social.com zu widersprechen.",
+      "15.1 Eigenwerbung per E-Mail (\u00a7 7 Abs. 3 UWG)",
+      "Wenn Sie sich bei Z registrieren, speichern wir Ihren Namen und Ihre E-Mail-Adresse auch zum Zweck der Direktwerbung. Auf Grundlage von \u00a7 7 Abs. 3 UWG sind wir berechtigt, Ihnen ohne gesonderte Einwilligung E-Mails zu \u00e4hnlichen Dienstleistungen zu senden, die in Zusammenhang mit Ihrer Nutzung der Z-Plattform stehen. Dies umfasst insbesondere:",
+      "\u2022 Informationen \u00fcber neue Funktionen und Updates der Z App\n\u2022 Ank\u00fcndigungen zu Events und Community-Aktivit\u00e4ten in Mecklenburg-Vorpommern\n\u2022 Tipps zur Nutzung der Plattform\n\u2022 Einladungen zu besonderen Aktionen des Anbieters",
+      "Die Datenverarbeitung erfolgt auf Basis unseres berechtigten Interesses an personalisierter Direktwerbung gem\u00e4\u00df Art. 6 Abs. 1 lit. f DSGVO i.\u00a0V.\u00a0m. \u00a7 7 Abs. 3 UWG.",
+      "15.2 Widerspruchsrecht",
+      "Sie k\u00f6nnen der Nutzung Ihrer E-Mail-Adresse zu Werbezwecken jederzeit mit Wirkung f\u00fcr die Zukunft widersprechen, ohne dass hierf\u00fcr andere als die \u00dcbermittlungskosten nach den Basistarifen entstehen. Der Widerspruch kann formlos erfolgen:\n\u2022 Per E-Mail an: leif@z-social.com\n\u2022 \u00dcber den Abmeldelink in jeder Werbe-E-Mail\n\u2022 In den App-Einstellungen unter \u201eBenachrichtigungen\u201c",
+      "15.3 Transaktionale E-Mails",
+      "Unabh\u00e4ngig von der Direktwerbung senden wir Ihnen systemrelevante E-Mails, die f\u00fcr die Nutzung Ihres Kontos erforderlich sind. Diese k\u00f6nnen nicht abbestellt werden und umfassen:\n\u2022 Passwort-Zur\u00fccksetzungen\n\u2022 Sicherheitsbenachrichtigungen (z.\u00a0B. Kontol\u00f6schung)\n\u2022 Wesentliche \u00c4nderungen der Nutzungsbedingungen oder Datenschutzerkl\u00e4rung",
+      "Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserf\u00fcllung).",
     ].join("\n\n"),
   },
   {
@@ -219,16 +226,16 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
    ═══════════════════════════════════════════════════ */
 export const IMPRESSUM_SECTIONS: LegalSection[] = [
   {
-    heading: "Angaben gem\u00e4\u00df \u00a7 5 DDG",
-    body: "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstr. 135\n19055 Schwerin\nDeutschland",
+    heading: "Angaben gemäß § 5 DDG",
+    body: "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstraße 135\n19055 Schwerin\nDeutschland",
   },
   {
     heading: "Kontakt",
     body: "Tel.: 01734506873\nE-Mail: leif@z-social.com",
   },
   {
-    heading: "Verantwortliche/r i.S.d. \u00a7 18 Abs. 2 MStV",
-    body: "Leif Dunkelmann\nWerderstr. 135\n19055 Schwerin",
+    heading: "Verantwortliche/r i.S.d. § 18 Abs. 2 MStV",
+    body: "Leif Dunkelmann\nWerderstraße 135\n19055 Schwerin",
   },
   {
     heading: "Zust\u00e4ndige Aufsichtsbeh\u00f6rde",

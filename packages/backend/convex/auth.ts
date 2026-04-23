@@ -19,6 +19,36 @@ function isAllowedPreviewOrigin(origin: string): boolean {
     return /^https:\/\/[a-z0-9-]+\.preview\.bl\.run$/i.test(origin);
 }
 
+/* ─── Helper: Send email via Resend ────────────────────── */
+async function sendEmailViaResend(opts: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("RESEND_API_KEY not set – skipping email to", opts.to);
+    return;
+  }
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Z Social <leif@z-social.com>",
+      to: [opts.to],
+      subject: opts.subject,
+      html: opts.html,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Resend email failed:", res.status, text);
+  }
+}
+
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
 export const authComponent = createClient<DataModel>(components.betterAuth, {
@@ -102,20 +132,48 @@ export const createAuth = (
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
             },
         },
-        // disable logging when createAuth is called just to generate options.
-        // this is not required, but there's a lot of noise in logs without it.
         logger: {
             disabled: optionsOnly,
         },
         trustedOrigins,
         database: authComponent.adapter(ctx),
-        // Configure simple, non-verified email/password to get started
         emailAndPassword: {
             enabled: true,
             requireEmailVerification: false,
+            sendResetPassword: async ({ user, url }) => {
+                const html = `
+                  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+                    <div style="text-align: center; margin-bottom: 32px;">
+                      <span style="font-size: 48px; font-weight: 900; letter-spacing: -2px;">Z</span>
+                    </div>
+                    <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: #000;">Passwort zur\u00fccksetzen</h2>
+                    <p style="font-size: 15px; color: #333; line-height: 1.6; margin-bottom: 16px;">
+                      Hallo ${user.name || "Mitglied"},
+                    </p>
+                    <p style="font-size: 15px; color: #333; line-height: 1.6; margin-bottom: 24px;">
+                      du hast angefordert, dein Passwort bei Z zur\u00fcckzusetzen. Klicke auf den Button unten, um ein neues Passwort festzulegen.
+                    </p>
+                    <div style="text-align: center; margin-bottom: 24px;">
+                      <a href="${url}" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 32px; border-radius: 50px; text-decoration: none; font-weight: 600; font-size: 15px;">
+                        Neues Passwort setzen
+                      </a>
+                    </div>
+                    <p style="font-size: 13px; color: #999; line-height: 1.5;">
+                      Wenn du diese Anfrage nicht gestellt hast, kannst du diese E-Mail ignorieren. Der Link ist 1 Stunde g\u00fcltig.
+                    </p>
+                    <div style="border-top: 1px solid #eee; margin-top: 32px; padding-top: 16px;">
+                      <p style="font-size: 12px; color: #999;">Z Social \u00b7 Mecklenburg-Vorpommern</p>
+                    </div>
+                  </div>
+                `;
+                await sendEmailViaResend({
+                  to: user.email,
+                  subject: "Dein Z-Passwort zur\u00fccksetzen",
+                  html,
+                });
+            },
         },
         plugins: [
-            // The Expo and Convex plugins are required
             anonymous(),
             expo(),
             convex({ authConfig }),

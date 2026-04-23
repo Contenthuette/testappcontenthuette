@@ -16,7 +16,10 @@ export default function RootLayout() {
       <SoundProvider>
         <StatusBar style="dark" />
         <Stack
-          screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+          screenOptions={{
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
         >
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />

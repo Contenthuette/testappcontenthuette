@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -7,16 +7,38 @@ import { safeBack } from "@/lib/navigation";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { SymbolView } from "@/components/Icon";
+import { authClient } from "@/lib/auth-client";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleReset = () => {
-    if (!email.trim()) { setError("Bitte gib deine E-Mail ein"); return; }
+  const handleReset = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      setError("Bitte gib deine E-Mail ein");
+      return;
+    }
     setError("");
-    setSent(true);
+    setLoading(true);
+    try {
+      const { error: authError } = await authClient.requestPasswordReset({
+        email: trimmed,
+        redirectTo: "/reset-password",
+      });
+      if (authError) {
+        setError(authError.message || "Etwas ist schiefgelaufen. Versuche es erneut.");
+      } else {
+        setSent(true);
+      }
+    } catch {
+      // Even if the email doesn't exist, we show success to prevent email enumeration
+      setSent(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,9 +48,9 @@ export default function ForgotPasswordScreen() {
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Passwort zurücksetzen</Text>
+        <Text style={styles.title}>Passwort zur\u00fccksetzen</Text>
         <Text style={styles.subtitle}>
-          Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zurücksetzen.
+          Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zur\u00fccksetzen.
         </Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -38,15 +60,27 @@ export default function ForgotPasswordScreen() {
             <SymbolView name="checkmark.circle.fill" size={40} tintColor={colors.success} />
             <Text style={styles.successTitle}>E-Mail gesendet</Text>
             <Text style={styles.successText}>
-              Prüfe deinen Posteingang und folge dem Link zum Zurücksetzen deines Passworts.
+              Pr\u00fcfe deinen Posteingang und folge dem Link zum Zur\u00fccksetzen deines Passworts.
             </Text>
-            <Button title="Zurück zur Anmeldung" onPress={() => router.replace("/(auth)/login")} fullWidth style={{ marginTop: spacing.xl }} />
+            <Button title="Zur\u00fcck zur Anmeldung" onPress={() => router.replace("/(auth)/login")} fullWidth style={{ marginTop: spacing.xl }} />
           </View>
         ) : (
           <>
-            <Input label="E-Mail" placeholder="name@email.de" value={email}
-              onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            <Button title="Link senden" onPress={handleReset} fullWidth style={{ marginTop: spacing.md }} />
+            <Input
+              label="E-Mail"
+              placeholder="name@email.de"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Button
+              title={loading ? "Wird gesendet..." : "Link senden"}
+              onPress={handleReset}
+              fullWidth
+              disabled={loading}
+              style={{ marginTop: spacing.md }}
+            />
           </>
         )}
       </ScrollView>

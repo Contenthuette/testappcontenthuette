@@ -62,7 +62,8 @@
     "babel-preset-expo": "^55.0.12",
     "expo-asset": "~55.0.10",
     "expo-print": "^55.0.9",
-    "expo-sharing": "^55.0.14"
+    "expo-sharing": "^55.0.14",
+    "react-native-purchases": "^10.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
