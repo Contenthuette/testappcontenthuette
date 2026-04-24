@@ -61,8 +61,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // Clear minimized state when the call we're tracking ends
   const minimizedCall = useQuery(
     api.calls.getCallDetails,
-    minimizedCallId ? { callId: minimizedCallId } : "skip"
+    isAuthenticated && minimizedCallId ? { callId: minimizedCallId } : "skip"
   );
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setMinimizedCallId(null);
+    stopWebRTC();
+  }, [isAuthenticated, stopWebRTC]);
 
   useEffect(() => {
     if (
@@ -83,7 +89,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // Also monitor active call state to auto-cleanup ended calls
   const activeCallDetails = useQuery(
     api.calls.getCallDetails,
-    activeCallId && activeCallId !== minimizedCallId ? { callId: activeCallId } : "skip"
+    isAuthenticated && activeCallId && activeCallId !== minimizedCallId
+      ? { callId: activeCallId }
+      : "skip"
   );
 
   useEffect(() => {

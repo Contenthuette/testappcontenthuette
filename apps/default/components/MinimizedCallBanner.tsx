@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Animated, {
@@ -52,8 +53,12 @@ const PIP_HEIGHT = 180;
 
 export function MinimizedCallBanner({ callId }: MinimizedCallBannerProps) {
   const insets = useSafeAreaInsets();
+  const { isAuthenticated } = useConvexAuth();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const call = useQuery(api.calls.getCallDetails, { callId });
+  const call = useQuery(
+    api.calls.getCallDetails,
+    isAuthenticated ? { callId } : "skip",
+  );
   const heartbeat = useMutation(api.calls.heartbeat);
   const endCallMutation = useMutation(api.calls.endCall);
   const { expandCall, webrtc, stopWebRTC } = useCallContext();

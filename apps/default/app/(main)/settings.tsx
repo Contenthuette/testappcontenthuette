@@ -50,14 +50,18 @@ const FEEDBACK_BODY = "Hallo Z-Team,\n\nich möchte folgendes melden:\n\n";
 
 export default function SettingsScreen() {
   const { isAuthenticated } = useConvexAuth();
-  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
+  const [isSigningOut, setIsSigningOut] = React.useState(false);
+  const me = useQuery(api.users.me, isAuthenticated && !isSigningOut ? {} : "skip");
   const isAdmin = me?.role === "admin" || me?.email === "leif@z-social.com";
 
   const handleSignOut = async () => {
     try {
+      setIsSigningOut(true);
       signalIntentionalLogout();
+      router.replace("/(auth)/welcome");
       await authClient.signOut();
     } catch (e) {
+      setIsSigningOut(false);
       console.error("Sign out error:", e);
     }
   };

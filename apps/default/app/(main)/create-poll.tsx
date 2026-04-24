@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { colors, spacing, radius } from "@/lib/theme";
 import { SymbolView } from "@/components/Icon";
@@ -23,8 +24,9 @@ export default function CreatePollScreen() {
   const [submitting, setSubmitting] = useState(false);
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+  const { isAuthenticated } = useConvexAuth();
 
-  const myGroups = useQuery(api.polls.myGroups);
+  const myGroups = useQuery(api.polls.myGroups, isAuthenticated ? {} : "skip");
   const createPoll = useMutation(api.polls.create);
 
   const addOption = () => {

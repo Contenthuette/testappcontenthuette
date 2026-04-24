@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { useQuery, Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { useQuery, Authenticated, Unauthenticated, AuthLoading, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { router } from "expo-router";
 import { colors } from "@/lib/theme";
@@ -8,7 +8,8 @@ import { ZLogo } from "@/components/ZLogo";
 import { usePushNotifications } from "@/lib/push-notifications";
 
 function AuthenticatedRouter() {
-  const me = useQuery(api.users.me);
+  const { isAuthenticated } = useConvexAuth();
+  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
   usePushNotifications();
   const [hasWaited, setHasWaited] = useState(false);
 

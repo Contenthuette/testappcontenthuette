@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -22,13 +23,23 @@ interface PendingRequest { _id: string; userId: Id<"users">; name: string; avata
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { isAuthenticated } = useConvexAuth();
   const group = useQuery(api.groups.getById, id ? { groupId: id as Id<"groups"> } : "skip");
-  const me = useQuery(api.users.me);
-  const membership = useQuery(api.groups.getMyMembership, id ? { groupId: id as Id<"groups"> } : "skip");
+  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
+  const membership = useQuery(
+    api.groups.getMyMembership,
+    isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip",
+  );
   const members = useQuery(api.groups.getMembers, id ? { groupId: id as Id<"groups"> } : "skip");
-  const pendingRequests = useQuery(api.groups.getPendingRequests, id ? { groupId: id as Id<"groups"> } : "skip");
+  const pendingRequests = useQuery(
+    api.groups.getPendingRequests,
+    isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip",
+  );
   const activeStream = useQuery(api.livestreams.getActiveForGroup, id ? { groupId: id as Id<"groups"> } : "skip");
-  const groupPolls = useQuery(api.polls.listByGroup, id ? { groupId: id as Id<"groups"> } : "skip");
+  const groupPolls = useQuery(
+    api.polls.listByGroup,
+    isAuthenticated && id ? { groupId: id as Id<"groups"> } : "skip",
+  );
   const joinGroup = useMutation(api.groups.join);
   const acceptRequest = useMutation(api.groups.acceptRequest);
   const rejectRequest = useMutation(api.groups.rejectRequest);

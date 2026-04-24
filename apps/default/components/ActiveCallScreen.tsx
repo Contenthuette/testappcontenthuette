@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar } from "@/components/Avatar";
@@ -43,10 +44,14 @@ interface ActiveCallScreenProps {
 }
 
 export function ActiveCallScreen({ callId }: ActiveCallScreenProps) {
-  const call = useQuery(api.calls.getCallDetails, { callId });
+  const { isAuthenticated } = useConvexAuth();
+  const call = useQuery(
+    api.calls.getCallDetails,
+    isAuthenticated ? { callId } : "skip",
+  );
   const endCallMutation = useMutation(api.calls.endCall);
   const toggleVideoMutation = useMutation(api.calls.toggleVideo);
-  const me = useQuery(api.users.me);
+  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
   const { minimizeCall, startWebRTC, stopWebRTC, webrtc } = useCallContext();
   const { playSound, stopSound } = useSound();
 
