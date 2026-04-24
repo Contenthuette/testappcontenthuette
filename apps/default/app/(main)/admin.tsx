@@ -810,7 +810,7 @@ export default function AdminDashboard() {
                 key={ev._id}
                 event={ev}
                 expanded={expandedId === ev._id}
-                onToggle={() => setExpandedId((prev) => (prev === ev._id ? null : ev._id))}
+                onToggle={() => setExpandedId((prev: string | null) => (prev === ev._id ? null : ev._id))}
                 onEdit={() => router.navigate(`/(main)/admin-event-form?eventId=${ev._id}` as "/")}
                 onDelete={() => handleDelete(ev._id, ev.name)}
                 onToggleHidden={() => {
@@ -942,7 +942,7 @@ export default function AdminDashboard() {
             memberEvents.map((me: AdminMemberEvent) => (
               <View key={me._id} style={styles.eventCard}>
                 <TouchableOpacity
-                  onPress={() => setExpandedMemberEventId((prev) => (prev === me._id ? null : me._id))}
+                  onPress={() => setExpandedMemberEventId((prev: string | null) => (prev === me._id ? null : me._id))}
                   activeOpacity={0.7}
                   style={styles.eventHeader}
                 >
@@ -1330,8 +1330,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
   },
-  eventDeleteBtn: { backgroundColor: "rgba(239,68,68,0.06)" },
-  eventActionText: { fontSize: 13, fontWeight: "500", color: colors.gray600 },
+  eventDeleteBtn: {
+    backgroundColor: "rgba(239,68,68,0.06)",
+  },
+  eventActionText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.gray600,
+  },
   eventHiddenActiveBtn: {
     backgroundColor: colors.black,
   },
@@ -1344,14 +1350,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 4,
   },
-  eventInfoRow: { fontSize: 13, color: colors.gray600, marginBottom: spacing.md },
+  eventInfoRow: {
+    fontSize: 13,
+    color: colors.gray600,
+    marginBottom: spacing.md,
+  },
 
   emptyEvents: {
     alignItems: "center",
     paddingVertical: spacing.xxl,
     gap: spacing.sm,
   },
-  emptyText: { fontSize: 14, color: colors.gray400 },
+  emptyText: {
+    fontSize: 14,
+    color: colors.gray400,
+  },
 
   /* announcement manager */
   annLiveBanner: {
