@@ -244,7 +244,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
 export const IMPRESSUM_SECTIONS: LegalSection[] = [
   {
     heading: "Angaben gemäß § 5 DDG",
-    body: "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstraße 135\n19055 Schwerin\nDeutschland",
+    body: "Contenthuette\nLeif Dunkelmann\nWerderstraße 135\n19055 Schwerin\nDeutschland",
   },
   {
     heading: "Kontakt",
