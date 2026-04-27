@@ -9,7 +9,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     heading: "1. Verantwortlicher",
     body: [
       "Verantwortlich für die Datenverarbeitung im Sinne der Datenschutz-Grundverordnung (DSGVO) ist:",
-      "Leif Dunkelmann\nLeif Dunkelmann Contenthuette\nWerderstraße 135\n19055 Schwerin\nDeutschland",
+      "Contenthuette\nLeif Dunkelmann\nWerderstraße 135\n19055 Schwerin\nDeutschland",
       "Tel.: 01734506873\nE-Mail: leif@z-social.com",
       "Bei Fragen zum Datenschutz können Sie sich jederzeit an die oben genannte E-Mail-Adresse wenden.",
     ].join("\n\n"),
