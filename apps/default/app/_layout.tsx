@@ -5,8 +5,11 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@/lib/ConvexAuthProvider";
 import { SoundProvider } from "@/lib/sounds";
 
+const convexUrl =
+  process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://cheery-panther-475.convex.cloud";
+
 const convex = new ConvexReactClient(
-  process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://cheery-panther-475.convex.cloud",
+  convexUrl,
   { unsavedChangesWarning: false },
 );
 
