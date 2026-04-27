@@ -48,9 +48,9 @@ export default function ForgotPasswordScreen() {
           <SymbolView name="chevron.left" size={20} tintColor={colors.black} />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Passwort zur\u00fccksetzen</Text>
+        <Text style={styles.title}>Passwort zurücksetzen</Text>
         <Text style={styles.subtitle}>
-          Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zur\u00fccksetzen.
+          Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zurücksetzen.
         </Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -60,9 +60,9 @@ export default function ForgotPasswordScreen() {
             <SymbolView name="checkmark.circle.fill" size={40} tintColor={colors.success} />
             <Text style={styles.successTitle}>E-Mail gesendet</Text>
             <Text style={styles.successText}>
-              Pr\u00fcfe deinen Posteingang und folge dem Link zum Zur\u00fccksetzen deines Passworts.
+              Prüfe deinen Posteingang und folge dem Link zum Zurücksetzen deines Passworts.
             </Text>
-            <Button title="Zur\u00fcck zur Anmeldung" onPress={() => router.replace("/(auth)/login")} fullWidth style={{ marginTop: spacing.xl }} />
+            <Button title="Zurück zur Anmeldung" onPress={() => router.replace("/(auth)/login")} fullWidth style={{ marginTop: spacing.xl }} />
           </View>
         ) : (
           <>
