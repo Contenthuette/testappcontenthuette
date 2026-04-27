@@ -171,7 +171,7 @@ export const AGB_SECTIONS: LegalSection[] = [
   {
     heading: "§ 16 Datenschutz",
     body: [
-      "(1) Die Verarbeitung personenbezogener Daten erfolgt gemäß der Datenschutzerklärung, die im Tab \u201eDatenschutz\u201c dieses Privacy Centers einsehbar ist.",
+      "(1) Die Verarbeitung personenbezogener Daten erfolgt gemäß der Datenschutzerklärung, die im Tab „Datenschutz“ dieses Privacy Centers sowie öffentlich unter https://www.z-movement.de/datenschutz einsehbar ist.",
       "(2) Der Anbieter erhebt und speichert aggregierte, anonymisierte Plattformstatistiken (z.\u00a0B. Gesamtzahl der Nutzer, Gruppen, Events, Beiträge pro Tag, Umsatzkennzahlen). Diese Auswertungen lassen keinen Rückschluss auf einzelne Nutzer zu und dienen ausschließlich der Betriebs\u00fcberwachung und Weiterentwicklung der Plattform.",
       "(3) Es werden keine externen Analyse-, Tracking- oder Werbedienste (z.\u00a0B. Google Analytics, Facebook Pixel) eingesetzt. Es findet kein Tracking zu Werbezwecken statt und es werden keine Daten an Werbenetzwerke übermittelt.",
     ].join("\n\n"),

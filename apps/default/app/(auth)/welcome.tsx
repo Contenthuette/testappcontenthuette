@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
-  TouchableOpacity, Pressable,
+  TouchableOpacity, Pressable, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -17,6 +17,7 @@ import { colors, spacing, radius } from "@/lib/theme";
 import { Button } from "@/components/Button";
 import { SymbolView } from "@/components/Icon";
 import { ZLogo } from "@/components/ZLogo";
+import { LEGAL_URLS } from "@/lib/legal-links";
 
 const VIDEO_THUMBNAIL = require("../../../../assets/images/video-thumbnail.jpg");
 
@@ -53,6 +54,14 @@ export default function WelcomeScreen() {
   const featureSize = (width - spacing.xl * 2 - spacing.sm * 3) / 4;
 
   const [agbAccepted, setAgbAccepted] = useState(false);
+
+  const openLegalUrl = useCallback(async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn("Failed to open legal URL", error);
+    }
+  }, []);
 
   // Pulse animation for play button
   const pulseScale = useSharedValue(1);
@@ -197,7 +206,7 @@ export default function WelcomeScreen() {
               style={styles.agbLink}
               onPress={(e) => {
                 e.stopPropagation();
-                router.navigate("/(main)/privacy-center" as "/");
+                void openLegalUrl(LEGAL_URLS.terms);
               }}
             >
               AGB
@@ -207,7 +216,7 @@ export default function WelcomeScreen() {
               style={styles.agbLink}
               onPress={(e) => {
                 e.stopPropagation();
-                router.navigate("/(main)/privacy-center" as "/");
+                void openLegalUrl(LEGAL_URLS.privacy);
               }}
             >
               Datenschutzerklärung

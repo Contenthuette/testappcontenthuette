@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/lib/theme";
@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { AGB_SECTIONS } from "@/lib/legal-content";
 import { PRIVACY_SECTIONS, IMPRESSUM_SECTIONS } from "@/lib/legal-content-extra";
 import type { LegalSection } from "@/lib/legal-content";
+import { LEGAL_URLS } from "@/lib/legal-links";
 
 /* ─── Tabs ─── */
 const TABS = ["AGB", "Datenschutz", "Impressum"] as const;
@@ -26,6 +27,14 @@ export default function PrivacyCenterScreen() {
   const [activeTab, setActiveTab] = useState<Tab>("AGB");
   const scrollRef = useRef<ScrollView>(null);
   const page = CONTENT_MAP[activeTab];
+
+  const openLegalUrl = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn("Failed to open legal URL", error);
+    }
+  };
 
   const switchTab = (tab: Tab) => {
     setActiveTab(tab);
@@ -79,6 +88,29 @@ export default function PrivacyCenterScreen() {
       >
         <Text style={styles.pageTitle}>{page.title}</Text>
         <Text style={styles.appLabel}>Z App – Regionale Community für MV</Text>
+
+        <View style={styles.webCard}>
+          <Text style={styles.webCardTitle}>Öffentliche Web-Fassungen</Text>
+          <Text style={styles.webCardBody}>
+            AGB und Datenschutzerklärung sind auch außerhalb der App abrufbar.
+          </Text>
+          <View style={styles.webActions}>
+            <TouchableOpacity
+              style={styles.webAction}
+              onPress={() => void openLegalUrl(LEGAL_URLS.terms)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.webActionText}>AGB öffnen</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.webAction}
+              onPress={() => void openLegalUrl(LEGAL_URLS.privacy)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.webActionText}>Datenschutz öffnen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {page.sections.map((section, i) => (
           <View key={`${activeTab}-${i}`} style={styles.section}>
@@ -158,6 +190,42 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     marginTop: 4,
     marginBottom: spacing.lg,
+  },
+  webCard: {
+    backgroundColor: colors.gray50,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+  },
+  webCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.black,
+  },
+  webCardBody: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.gray600,
+  },
+  webActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    flexWrap: "wrap",
+  },
+  webAction: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray300,
+  },
+  webActionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.black,
   },
 
   section: {

@@ -1,4 +1,5 @@
 import type { LegalSection } from "./legal-content";
+import { LEGAL_URLS } from "./legal-links";
 
 /* ═══════════════════════════════════════════════════
    Datenschutzerklärung – DSGVO-konform
@@ -14,8 +15,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     ].join("\n\n"),
   },
   {
-    heading: "2. \u00dcberblick \u00fcber die Datenverarbeitung",
-    body: "Die Z App verarbeitet personenbezogene Daten ausschlie\u00dflich im Rahmen der nachfolgend beschriebenen Zwecke und Rechtsgrundlagen. Wir erheben nur solche Daten, die f\u00fcr die Bereitstellung und Verbesserung unserer Dienste erforderlich sind.",
+    heading: "2. Überblick über die Datenverarbeitung",
+    body: `Die Z App verarbeitet personenbezogene Daten ausschließlich im Rahmen der nachfolgend beschriebenen Zwecke und Rechtsgrundlagen. Wir erheben nur solche Daten, die für die Bereitstellung und Verbesserung unserer Dienste erforderlich sind.\n\nDie aktuelle Datenschutzerklärung ist jederzeit vor dem Download unter ${LEGAL_URLS.privacy} abrufbar und zusätzlich in der App im Privacy Center einsehbar.`,
   },
   {
     heading: "3. Rechtsgrundlagen der Verarbeitung",
@@ -52,11 +53,11 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     ].join("\n\n"),
   },
   {
-    heading: "7. Erhebung von Standortdaten",
+    heading: "7. Regionale Angaben",
     body: [
-      "Unser Angebot umfasst sog. Location Based Services, mit welchen wir Ihnen standortbezogene Inhalte anbieten k\u00f6nnen (z.\u00a0B. regionale Events und Beitr\u00e4ge).",
-      "Diese Funktion k\u00f6nnen Sie erst nutzen, nachdem Sie \u00fcber ein Pop-up zugestimmt haben, dass wir zu Zwecken der Leistungserbringung Ihre Standortdaten mittels GPS und Ihre IP-Adresse in anonymisierter Form erheben k\u00f6nnen.",
-      "Sie k\u00f6nnen die Funktion in den Einstellungen der App oder Ihres mobilen Betriebssystems jederzeit erlauben oder widerrufen. Ihr Standort wird nur an uns \u00fcbertragen, wenn Sie bei Nutzung der App Funktionen in Anspruch nehmen, die wir Ihnen nur bei Kenntnis Ihres Standortes anbieten k\u00f6nnen.",
+      "In der App können Sie freiwillig regionale Angaben wie Landkreis und Stadt hinterlegen, damit wir Ihnen passende Inhalte und Community-Bezüge innerhalb Mecklenburg-Vorpommerns anzeigen können.",
+      "Diese Angaben stammen ausschließlich aus Ihren manuellen Eingaben innerhalb der App. Eine Erhebung präziser Standortdaten per GPS oder im Hintergrund findet derzeit nicht statt.",
+      "Sie können diese Angaben jederzeit in Ihrem Profil ändern oder löschen.",
       "Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung).",
     ].join("\n\n"),
   },
@@ -83,8 +84,12 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Kreditkarten- oder Bankdaten werden ausschlie\u00dflich von Stripe verarbeitet und zu keinem Zeitpunkt auf unseren Servern gespeichert.",
       "Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserf\u00fcllung).",
       "8.7 Technische Daten und Nutzungsdaten",
-      "\u2022 App-Aktivit\u00e4t und Interaktionen\n\u2022 Zeitpunkt der letzten Aktivit\u00e4t\n\u2022 Freundschaftsanfragen und soziale Verbindungen\n\u2022 Gespeicherte Beitr\u00e4ge\n\u2022 Benachrichtigungspr\u00e4ferenzen\n\u2022 Meldungen und Blockierungen",
+      "\u2022 App-Aktivität und Interaktionen\n\u2022 Zeitpunkt der letzten Aktivität\n\u2022 Freundschaftsanfragen und soziale Verbindungen\n\u2022 Gespeicherte Beiträge\n\u2022 Benachrichtigungspräferenzen\n\u2022 Meldungen und Blockierungen",
       "Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der Bereitstellung und Sicherheit der App).",
+      "8.8 Geräteberechtigungen und Zugriffsrechte",
+      "• Push-Benachrichtigungen: Für Nachrichten, Gruppenaktivitäten, Event-Erinnerungen, Freundschaftsanfragen und Ankündigungen. Verarbeitet werden insbesondere Push-Token, Plattform-/Gerätebezug und Ihre Benachrichtigungseinstellungen.\n• Mikrofon: Für Sprachnachrichten sowie Audioanteile bei Audio-/Videoanrufen und Live-Streams. Verarbeitet werden von Ihnen aktiv aufgenommene oder übertragene Audiodaten.\n• Kamera: Für Videoanrufe und Live-Streams. Verarbeitet werden nur Bilddaten, die Sie im Rahmen dieser Funktionen aktiv erfassen oder übertragen.\n• Mediathek / Fotobibliothek: Zum Auswählen von Bildern und Videos für Profil, Banner, Beiträge, Gruppenbilder und Chat-Anhänge. Verarbeitet werden nur die von Ihnen ausgewählten Dateien.\n• Standortberechtigung des Geräts: Derzeit nicht erforderlich, da Landkreis und Stadt manuell eingegeben werden.",
+      "Sie können erteilte Berechtigungen jederzeit in den Einstellungen Ihres Geräts widerrufen. Ohne die jeweilige Berechtigung stehen die entsprechenden Funktionen nicht oder nur eingeschränkt zur Verfügung.",
+      "Rechtsgrundlagen: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung bzw. Gerätefreigabe) sowie Art. 6 Abs. 1 lit. b DSGVO, soweit die Datenverarbeitung zur Bereitstellung der von Ihnen angeforderten Funktion erforderlich ist.",
     ].join("\n\n"),
   },
   {
@@ -218,7 +223,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   },
   {
     heading: "22. Änderungen dieser Datenschutzerklärung",
-    body: "Wir behalten uns vor, diese Datenschutzerklärung anzupassen, um sie an geänderte Rechtslagen, neue Funktionen oder veränderte Datenverarbeitungsprozesse anzupassen.\n\nBei wesentlichen Änderungen werden die Nutzer per E-Mail oder In-App-Benachrichtigung informiert. Die jeweils aktuelle Fassung ist jederzeit innerhalb der App im Privacy Center einsehbar.\n\nStand: April 2026",
+    body: `Wir behalten uns vor, diese Datenschutzerklärung anzupassen, um sie an geänderte Rechtslagen, neue Funktionen oder veränderte Datenverarbeitungsprozesse anzupassen.\n\nBei wesentlichen Änderungen werden die Nutzer per E-Mail oder In-App-Benachrichtigung informiert. Die jeweils aktuelle Fassung ist jederzeit innerhalb der App im Privacy Center sowie unter ${LEGAL_URLS.privacy} einsehbar.\n\nStand: April 2026`,
   },
   {
     heading: "23. Plattformstatistiken und interne Analysen",
