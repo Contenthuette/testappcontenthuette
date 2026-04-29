@@ -18,6 +18,7 @@ const FALLBACK_ROUTES: Record<string, string> = {
   "conversations": "/(main)/(tabs)/groups",
   "settings": "/(main)/(tabs)/profile",
   "edit-profile": "/(main)/(tabs)/profile",
+  "change-password": "/(main)/(tabs)/profile",
   "saved-posts": "/(main)/(tabs)/profile",
   "blocked-users": "/(main)/(tabs)/profile",
   "subscription": "/(main)/(tabs)/profile",

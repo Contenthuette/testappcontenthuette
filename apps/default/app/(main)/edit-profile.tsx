@@ -406,7 +406,7 @@ export default function EditProfileScreen() {
           disabled={saving}
           activeOpacity={0.7}
         >
-          <Text style={styles.deleteAccountBtnText}>Account l\u00f6schen</Text>
+          <Text style={styles.deleteAccountBtnText}>Account löschen</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -422,10 +422,10 @@ export default function EditProfileScreen() {
             <View style={styles.modalIconWrap}>
               <Icon name="exclamationmark.triangle.fill" size={28} tintColor="#E53935" />
             </View>
-            <Text style={styles.modalTitle}>Account l\u00f6schen?</Text>
+            <Text style={styles.modalTitle}>Account löschen?</Text>
             <Text style={styles.modalBody}>
-              Bist du sicher, dass du deinen Account l\u00f6schen willst? Alle deine
-              Posts, Fotos, Videos und Profildaten werden unwiderruflich gel\u00f6scht.
+              Bist du sicher, dass du deinen Account löschen willst? Alle deine
+              Posts, Fotos, Videos und Profildaten werden unwiderruflich gelöscht.
               Nachrichten, die du gesendet hast, bleiben erhalten.
             </Text>
             <View style={styles.modalActions}>
@@ -435,7 +435,7 @@ export default function EditProfileScreen() {
                 disabled={deleting}
                 activeOpacity={0.7}
               >
-                <Text style={styles.modalBtnCancelText}>Nicht l\u00f6schen</Text>
+                <Text style={styles.modalBtnCancelText}>Nicht löschen</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalBtnDelete}
@@ -446,7 +446,7 @@ export default function EditProfileScreen() {
                 {deleting ? (
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
-                  <Text style={styles.modalBtnDeleteText}>L\u00f6schen</Text>
+                  <Text style={styles.modalBtnDeleteText}>Löschen</Text>
                 )}
               </TouchableOpacity>
             </View>
