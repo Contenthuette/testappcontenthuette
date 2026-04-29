@@ -31,9 +31,13 @@ interface CrossDomainAuthClient {
  * Set before calling authClient.signOut(), checked by the provider and layout.
  */
 let _intentionalLogout = false;
+const intentionalLogoutListeners = new Set<() => void>();
 
 export function signalIntentionalLogout() {
   _intentionalLogout = true;
+  for (const listener of intentionalLogoutListeners) {
+    listener();
+  }
 }
 
 export function isIntentionalLogout() {
@@ -65,6 +69,25 @@ function useBetterAuth() {
       wasAuthenticatedRef.current = true;
     }
   }, [cachedToken]);
+
+  useEffect(() => {
+    const handleIntentionalLogout = () => {
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+        logoutTimerRef.current = null;
+      }
+      pendingTokenRef.current = null;
+      cachedTokenRef.current = null;
+      wasAuthenticatedRef.current = false;
+      setCachedToken(null);
+      setSessionTimedOut(false);
+    };
+
+    intentionalLogoutListeners.add(handleIntentionalLogout);
+    return () => {
+      intentionalLogoutListeners.delete(handleIntentionalLogout);
+    };
+  }, []);
 
   // Timeout: if session stays pending too long, stop waiting
   useEffect(() => {
@@ -124,6 +147,9 @@ function useBetterAuth() {
 
   const fetchAccessToken = useCallback(
     async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
+      if (_intentionalLogout) {
+        return null;
+      }
       // Return cached token if not forced to refresh
       if (cachedTokenRef.current && !forceRefreshToken) {
         return cachedTokenRef.current;
@@ -174,7 +200,7 @@ function useBetterAuth() {
 
   // Trigger token fetch when session appears but we have no token yet
   useEffect(() => {
-    if (sessionId && cachedTokenRef.current === null && !pendingTokenRef.current) {
+    if (sessionId && cachedTokenRef.current === null && !pendingTokenRef.current && !_intentionalLogout) {
       void fetchAccessToken({ forceRefreshToken: true });
     }
   }, [sessionId, fetchAccessToken]);
