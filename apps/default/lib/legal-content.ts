@@ -52,10 +52,11 @@ export const AGB_SECTIONS: LegalSection[] = [
     body: [
       "(1) Verbraucher haben das Recht, den Vertrag binnen 14 Tagen ohne Angabe von Gründen zu widerrufen.",
       "(2) Die Widerrufsfrist beträgt 14 Tage ab dem Tag des Vertragsschlusses.",
-      "(3) Um das Widerrufsrecht auszuüben, muss der Nutzer dem Anbieter mittels einer eindeutigen Erklärung (z.\u00a0B. per E-Mail an leif@z-social.com) über den Entschluss, den Vertrag zu widerrufen, informieren.",
+      "(3) Um das Widerrufsrecht auszuüben, muss der Nutzer den Anbieter mittels einer eindeutigen Erklärung (z.\u00a0B. per E-Mail an leif@z-social.com) über den Entschluss, den Vertrag zu widerrufen, informieren.",
       "(4) Zur Wahrung der Widerrufsfrist reicht es aus, dass die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist abgesendet wird.",
       "(5) Im Falle des Widerrufs werden alle Zahlungen unverzüglich, spätestens binnen 14 Tagen ab dem Tag, an dem die Mitteilung über den Widerruf eingegangen ist, erstattet.",
-      "(6) Hat der Nutzer verlangt, dass die Dienstleistung während der Widerrufsfrist beginnen soll, so hat er dem Anbieter einen angemessenen Betrag zu zahlen, der dem Anteil der bis zum Widerruf bereits erbrachten Leistungen entspricht.",
+      "(6) Hat der Nutzer ausdrücklich verlangt, dass die Dienstleistung während der Widerrufsfrist beginnen soll, so hat er dem Anbieter einen angemessenen Betrag zu zahlen, der dem Anteil der bis zum Widerruf bereits erbrachten Leistungen entspricht.",
+      "(7) Gesetzlich künftig erforderliche elektronische Widerrufsfunktionen werden rechtzeitig vor Inkrafttreten der jeweiligen Pflicht in der App bereitgestellt.",
     ].join("\n\n"),
   },
   {
@@ -71,8 +72,8 @@ export const AGB_SECTIONS: LegalSection[] = [
     heading: "§ 7 Nutzerinhalte und Urheberrecht",
     body: [
       "(1) Der Nutzer behält alle Urheberrechte an den von ihm erstellten und hochgeladenen Inhalten.",
-      "(2) Mit dem Hochladen räumt der Nutzer dem Anbieter ein einfaches, zeitlich und räumlich unbeschränktes, unentgeltliches Recht ein, die Inhalte im Rahmen der App darzustellen, zu speichern und an andere Nutzer auszuliefern.",
-      "(3) Dieses Nutzungsrecht erlischt mit Löschung der Inhalte oder des Nutzerkontos.",
+      "(2) Mit dem Hochladen räumt der Nutzer dem Anbieter ein einfaches, nicht ausschließliches, nicht übertragbares und auf den Betrieb der App beschränktes Nutzungsrecht ein, soweit dies technisch erforderlich ist, um die Inhalte innerhalb der App zu speichern, darzustellen, zu vervielfältigen, zu übertragen, zu moderieren und anderen berechtigten Nutzern zugänglich zu machen.",
+      "(3) Das Nutzungsrecht besteht nur für die Dauer der Veröffentlichung des jeweiligen Inhalts in der App und erlischt mit Löschung des Inhalts oder des Nutzerkontos, soweit keine gesetzlichen Aufbewahrungspflichten, berechtigten Nachweisinteressen oder Rechte anderer Nutzer entgegenstehen.",
       "(4) Der Nutzer versichert, dass er die erforderlichen Rechte an den hochgeladenen Inhalten besitzt und keine Rechte Dritter verletzt.",
     ].join("\n\n"),
   },
@@ -161,11 +162,13 @@ export const AGB_SECTIONS: LegalSection[] = [
     ].join("\n\n"),
   },
   {
-    heading: "§ 15 Meldungen und Moderation",
+    heading: "§ 15 Meldungen, Moderation und DSA-Kontakt",
     body: [
-      "(1) Nutzer können Inhalte oder andere Nutzer melden, die gegen diese AGB verstoßen.",
-      "(2) Der Anbieter prüft Meldungen und kann Inhalte entfernen oder Konten sperren.",
-      "(3) Blockierte Nutzer können keine Nachrichten senden, keine Anrufe tätigen und keine Beiträge des blockierenden Nutzers sehen.",
+      "(1) Nutzer können Inhalte oder andere Nutzer melden, die gegen diese AGB oder geltendes Recht verstoßen. Meldungen können über die Meldefunktion der App oder per E-Mail an leif@z-social.com erfolgen.",
+      "(2) Meldungen sollten den betroffenen Inhalt, den Grund der Meldung und eine kurze Begründung enthalten, damit der Anbieter den Sachverhalt prüfen kann.",
+      "(3) Der Anbieter prüft Meldungen sorgfältig und kann Inhalte entfernen, Reichweiten beschränken, Verwarnungen aussprechen, Konten vorübergehend sperren oder Konten dauerhaft löschen, wenn ein Verstoß festgestellt wird oder gesetzliche Pflichten dies erfordern.",
+      "(4) Betroffene Nutzer können gegen Moderationsentscheidungen per E-Mail an leif@z-social.com Beschwerde einlegen. Die Beschwerde wird erneut geprüft.",
+      "(5) Blockierte Nutzer können keine Nachrichten senden, keine Anrufe tätigen und keine Beiträge des blockierenden Nutzers sehen.",
     ].join("\n\n"),
   },
   {
@@ -179,10 +182,10 @@ export const AGB_SECTIONS: LegalSection[] = [
   {
     heading: "§ 17 Änderungen der AGB",
     body: [
-      "(1) Der Anbieter behält sich vor, diese AGB mit Wirkung für die Zukunft zu ändern.",
-      "(2) Änderungen werden mindestens 30 Tage vor Inkrafttreten mitgeteilt.",
-      "(3) Widerspricht der Nutzer nicht innerhalb von 30 Tagen, gelten die neuen AGB als angenommen.",
-      "(4) Im Falle des Widerspruchs steht beiden Parteien ein Kündigungsrecht zu.",
+      "(1) Der Anbieter kann diese AGB mit Wirkung für die Zukunft ändern, soweit dies wegen neuer Funktionen, geänderter Rechtslage, technischer Anpassungen oder berechtigter Sicherheitsinteressen erforderlich ist.",
+      "(2) Wesentliche Änderungen, die das vertragliche Gleichgewicht zulasten des Nutzers verändern, werden nur mit ausdrücklicher Zustimmung des Nutzers wirksam.",
+      "(3) Über Änderungen wird der Nutzer mindestens 30 Tage vor Inkrafttreten per E-Mail oder In-App-Hinweis informiert.",
+      "(4) Lehnt der Nutzer eine zustimmungspflichtige Änderung ab, kann der Anbieter das Nutzungsverhältnis ordentlich zum Ende des laufenden Abrechnungszeitraums kündigen, sofern die Fortführung des Dienstes zu den bisherigen Bedingungen nicht zumutbar ist.",
     ].join("\n\n"),
   },
   {
@@ -192,7 +195,7 @@ export const AGB_SECTIONS: LegalSection[] = [
       "(2) Ist der Nutzer Verbraucher, gelten zusätzlich die zwingenden Verbraucherschutzvorschriften seines Aufenthaltsstaates.",
       "(3) Ist der Nutzer Kaufmann, ist ausschließlicher Gerichtsstand der Sitz des Anbieters.",
       "(4) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.",
-      "(5) Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung bereit: https://ec.europa.eu/consumers/odr\n\nDer Anbieter ist zur Teilnahme an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle weder verpflichtet noch bereit.",
+      "(5) Der Anbieter ist zur Teilnahme an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle weder verpflichtet noch bereit.",
       "Stand: April 2026",
     ].join("\n\n"),
   },

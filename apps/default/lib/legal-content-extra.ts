@@ -127,7 +127,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "12.3 Expo / The Expo Project (USA)\nZweck: Push-Benachrichtigungen an mobile Ger\u00e4te\nStandort: USA\nGrundlage: Soweit kein Angemessenheitsbeschluss oder keine Zertifizierung nach dem EU-US Data Privacy Framework vorliegt, erfolgt die Übermittlung auf Grundlage geeigneter Garantien, insbesondere EU-Standardvertragsklauseln gemäß Art. 46 DSGVO.",
       "12.4 Next Path Software Consulting Inc. (Metered), Kanada\nZweck: Bereitstellung von TURN/STUN-Relayservern f\u00fcr WebRTC-Verbindungen (Audio-/Videoanrufe und Live-Streams), wenn eine direkte Peer-to-Peer-Verbindung zwischen den Endger\u00e4ten nicht m\u00f6glich ist.\nVerarbeitete Daten: IP-Adressen der Verbindungsteilnehmer, verschl\u00fcsselte Medienstr\u00f6me (Inhalt bleibt durch DTLS-SRTP-Verschl\u00fcsselung gesch\u00fctzt).\nStandort: Kanada / weltweit verteilte Serverinfrastruktur\nGrundlage f\u00fcr Drittlandtransfer: Angemessenheitsbeschluss der EU-Kommission f\u00fcr Kanada (Art. 45 DSGVO) sowie, soweit Server au\u00dferhalb Kanadas eingesetzt werden, geeignete Garantien wie EU-Standardvertragsklauseln gemäß Art. 46 DSGVO.",
       "12.5 WebRTC (Peer-to-Peer)\nAudio- und Videoanrufe sowie Live-Streams werden \u00fcber das WebRTC-Protokoll realisiert. Nach dem Verbindungsaufbau laufen Medienstr\u00f6me nach M\u00f6glichkeit direkt zwischen den Endger\u00e4ten. Ist eine direkte Verbindung nicht m\u00f6glich, werden die Daten \u00fcber TURN-Relayserver (Metered, siehe 12.4) geleitet. Signalisierungsdaten werden \u00fcber die Server des Anbieters (Convex, siehe 12.1) vermittelt.",
-      "12.6 Plus Five Five, Inc. (Resend), USA\nZweck: Versand transaktionaler E-Mails (z.\u00a0B. Kontobest\u00e4tigungen, Passwortzur\u00fccksetzungen, Systembenachrichtigungen) sowie E-Mail-Kommunikation zu Plattform-Updates, neuen Funktionen und Angeboten des Anbieters (Direktwerbung gem\u00e4\u00df \u00a7 7 Abs. 3 UWG)\nVerarbeitete Daten: E-Mail-Adresse des Empf\u00e4ngers, Name (sofern angegeben), E-Mail-Inhalt\nStandort: USA\nGrundlage f\u00fcr Drittlandtransfer: EU-US Data Privacy Framework (DPF) sowie ergänzend EU-Standardvertragsklauseln gemäß Art. 46 DSGVO.\nN\u00e4here Informationen: https://resend.com/legal/privacy-policy",
+      "12.6 Plus Five Five, Inc. (Resend), USA\nZweck: Versand transaktionaler E-Mails (z.\u00a0B. Kontobestätigungen, Passwortzurücksetzungen, Sicherheits- und Systembenachrichtigungen) sowie E-Mail-Kommunikation zu Plattform-Updates nur, soweit hierfür eine Einwilligung vorliegt oder die gesetzlichen Voraussetzungen für Bestandskundenwerbung erfüllt sind.\nVerarbeitete Daten: E-Mail-Adresse des Empfängers, Name (sofern angegeben), E-Mail-Inhalt\nStandort: USA\nGrundlage für Drittlandtransfer: EU-US Data Privacy Framework (DPF) sowie ergänzend EU-Standardvertragsklauseln gemäß Art. 46 DSGVO.\nNähere Informationen: https://resend.com/legal/privacy-policy",
       "Eine Weitergabe personenbezogener Daten an sonstige Dritte erfolgt nur:",
       "\u2022 Wenn eine gesetzliche Verpflichtung besteht (Art. 6 Abs. 1 lit. c DSGVO)\n\u2022 Wenn der Nutzer ausdr\u00fccklich eingewilligt hat (Art. 6 Abs. 1 lit. a DSGVO)\n\u2022 Wenn dies zur Geltendmachung von Rechtsanspr\u00fcchen erforderlich ist",
       "Eine kommerzielle Weitergabe oder ein Verkauf personenbezogener Daten an Dritte findet nicht statt.",
@@ -157,15 +157,14 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     heading: "15. Direktwerbung und E-Mail-Kommunikation",
     body: [
-      "15.1 Eigenwerbung per E-Mail (\u00a7 7 Abs. 3 UWG)",
-      "Wenn Sie sich bei Z registrieren, speichern wir Ihren Namen und Ihre E-Mail-Adresse auch zum Zweck der Direktwerbung. Auf Grundlage von \u00a7 7 Abs. 3 UWG sind wir berechtigt, Ihnen ohne gesonderte Einwilligung E-Mails zu \u00e4hnlichen Dienstleistungen zu senden, die in Zusammenhang mit Ihrer Nutzung der Z-Plattform stehen. Dies umfasst insbesondere:",
-      "\u2022 Informationen \u00fcber neue Funktionen und Updates der Z App\n\u2022 Ank\u00fcndigungen zu Events und Community-Aktivit\u00e4ten in Mecklenburg-Vorpommern\n\u2022 Tipps zur Nutzung der Plattform\n\u2022 Einladungen zu besonderen Aktionen des Anbieters",
-      "Die Datenverarbeitung erfolgt auf Basis unseres berechtigten Interesses an personalisierter Direktwerbung gem\u00e4\u00df Art. 6 Abs. 1 lit. f DSGVO i.\u00a0V.\u00a0m. \u00a7 7 Abs. 3 UWG.",
+      "15.1 Werbliche E-Mails",
+      "Werbliche E-Mails versenden wir nur, wenn hierfür eine ausdrückliche Einwilligung vorliegt oder die gesetzlichen Voraussetzungen der Bestandskundenwerbung nach § 7 Abs. 3 UWG vollständig erfüllt sind. Das bedeutet insbesondere: Die E-Mail-Adresse wurde im Zusammenhang mit der Nutzung unserer eigenen Dienste erhoben, die Werbung betrifft eigene ähnliche Dienste, der Nutzer hat nicht widersprochen und wurde bei Erhebung der E-Mail-Adresse sowie bei jeder Verwendung klar auf sein Widerspruchsrecht hingewiesen.",
+      "Ohne Einwilligung oder ohne vollständige Erfüllung dieser gesetzlichen Voraussetzungen werden keine werblichen E-Mails versendet.",
       "15.2 Widerspruchsrecht",
-      "Sie k\u00f6nnen der Nutzung Ihrer E-Mail-Adresse zu Werbezwecken jederzeit mit Wirkung f\u00fcr die Zukunft widersprechen, ohne dass hierf\u00fcr andere als die \u00dcbermittlungskosten nach den Basistarifen entstehen. Der Widerspruch kann formlos erfolgen:\n\u2022 Per E-Mail an: leif@z-social.com\n\u2022 \u00dcber den Abmeldelink in jeder Werbe-E-Mail\n\u2022 In den App-Einstellungen unter \u201eBenachrichtigungen\u201c",
+      "Sie können der Nutzung Ihrer E-Mail-Adresse zu Werbezwecken jederzeit mit Wirkung für die Zukunft widersprechen, ohne dass hierfür andere als die Übermittlungskosten nach den Basistarifen entstehen. Der Widerspruch kann formlos erfolgen:\n• Per E-Mail an: leif@z-social.com\n• Über den Abmeldelink in jeder Werbe-E-Mail\n• In den App-Einstellungen, soweit eine entsprechende Einstellung angeboten wird",
       "15.3 Transaktionale E-Mails",
-      "Unabh\u00e4ngig von der Direktwerbung senden wir Ihnen systemrelevante E-Mails, die f\u00fcr die Nutzung Ihres Kontos erforderlich sind. Diese k\u00f6nnen nicht abbestellt werden und umfassen:\n\u2022 Passwort-Zur\u00fccksetzungen\n\u2022 Sicherheitsbenachrichtigungen (z.\u00a0B. Kontol\u00f6schung)\n\u2022 Wesentliche \u00c4nderungen der Nutzungsbedingungen oder Datenschutzerkl\u00e4rung",
-      "Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserf\u00fcllung).",
+      "Unabhängig von der Direktwerbung senden wir Ihnen systemrelevante E-Mails, die für die Nutzung Ihres Kontos oder die Sicherheit der App erforderlich sind. Diese können nicht abbestellt werden und umfassen:\n• Passwort-Zurücksetzungen\n• Sicherheitsbenachrichtigungen (z.\u00a0B. Kontolöschung)\n• Wesentliche Änderungen der Nutzungsbedingungen oder Datenschutzerklärung\n• Zahlungs- und Vertragsinformationen",
+      "Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung) sowie Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an sicherheits- und vertragsrelevanter Kommunikation).",
     ].join("\n\n"),
   },
   {
@@ -269,8 +268,8 @@ export const IMPRESSUM_SECTIONS: LegalSection[] = [
     body: "Der Anbieter hat f\u00fcr beh\u00f6rdliche Entfernungsanordnungen sowie f\u00fcr Anfragen und Beschwerden von Beh\u00f6rden und Nutzern in Bezug auf angebotene Hosting-Leistungen die folgende zentrale Kontaktstelle eingerichtet:\n\nleif@z-social.com\n\nEine Kommunikation \u00fcber diese Kontaktstelle ist in den Sprachen Deutsch und Englisch m\u00f6glich.",
   },
   {
-    heading: "Online-Streitbeilegung",
-    body: "Die Europ\u00e4ische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:\nhttps://ec.europa.eu/consumers/odr\n\nUnsere E-Mail-Adresse finden Sie oben.\n\nWir sind zur Teilnahme an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle weder verpflichtet noch bereit.",
+    heading: "Verbraucherstreitbeilegung",
+    body: "Der Anbieter ist zur Teilnahme an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle weder verpflichtet noch bereit.",
   },
   {
     heading: "Haftungsausschluss",
