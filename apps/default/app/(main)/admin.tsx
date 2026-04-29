@@ -409,18 +409,18 @@ export default function AdminDashboard() {
         try {
           await deleteUserMut({ userId });
         } catch {
-          if (Platform.OS !== "web") Alert.alert("Fehler", "Nutzer konnte nicht gel\u00f6scht werden");
+          if (Platform.OS !== "web") Alert.alert("Fehler", "Nutzer konnte nicht gelöscht werden");
         } finally {
           setDeletingUserId(null);
         }
       };
       if (Platform.OS !== "web") {
         Alert.alert(
-          "Profil l\u00f6schen",
-          `"${userName}" (${email}) wirklich l\u00f6schen?\n\n\u2022 Alle Daten werden gel\u00f6scht\n\u2022 Stripe-Abo wird gek\u00fcndigt\n\u2022 E-Mail-Benachrichtigung wird versendet`,
+          "Profil löschen",
+          `"${userName}" (${email}) wirklich löschen?\n\n• Alle Daten werden gelöscht\n• Stripe-Abo wird gekündigt\n• E-Mail-Benachrichtigung wird versendet`,
           [
             { text: "Abbrechen", style: "cancel" },
-            { text: "Profil l\u00f6schen", style: "destructive", onPress: doDelete },
+            { text: "Profil löschen", style: "destructive", onPress: doDelete },
           ],
         );
       } else {
@@ -449,7 +449,7 @@ export default function AdminDashboard() {
           u.subscriptionStatus === "active"
             ? "Aktiv"
             : u.subscriptionStatus === "canceled"
-              ? "Gek\u00fcndigt"
+              ? "Gekündigt"
               : u.subscriptionStatus === "expired"
                 ? "Abgelaufen"
                 : "Kein Abo",
@@ -1061,7 +1061,7 @@ export default function AdminDashboard() {
                             u.subscriptionStatus === "active" && styles.subBadgeTextActive,
                             u.subscriptionStatus === "canceled" && styles.subBadgeTextCanceled,
                           ]}>
-                            {u.subscriptionStatus === "active" ? "Abo aktiv" : u.subscriptionStatus === "canceled" ? "Gek\u00fcndigt" : u.subscriptionStatus === "expired" ? "Abgelaufen" : "Kein Abo"}
+                            {u.subscriptionStatus === "active" ? "Abo aktiv" : u.subscriptionStatus === "canceled" ? "Gekündigt" : u.subscriptionStatus === "expired" ? "Abgelaufen" : "Kein Abo"}
                           </Text>
                         </View>
                       </View>

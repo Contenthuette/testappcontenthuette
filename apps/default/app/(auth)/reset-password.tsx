@@ -18,7 +18,7 @@ export default function ResetPasswordScreen() {
 
   useEffect(() => {
     if (urlError === "INVALID_TOKEN" || urlError === "invalid_token") {
-      setError("Der Link ist abgelaufen oder ung\u00fcltig. Bitte fordere einen neuen an.");
+      setError("Der Link ist abgelaufen oder ungültig. Bitte fordere einen neuen an.");
     }
   }, [urlError]);
 
@@ -28,11 +28,11 @@ export default function ResetPasswordScreen() {
       return;
     }
     if (password !== confirmPassword) {
-      setError("Die Passw\u00f6rter stimmen nicht \u00fcberein.");
+      setError("Die Passwörter stimmen nicht überein.");
       return;
     }
     if (!token) {
-      setError("Kein g\u00fcltiger Token. Bitte fordere einen neuen Link an.");
+      setError("Kein gültiger Token. Bitte fordere einen neuen Link an.");
       return;
     }
     setError("");
@@ -43,7 +43,7 @@ export default function ResetPasswordScreen() {
         token,
       });
       if (authError) {
-        setError(authError.message || "Fehler beim Zur\u00fccksetzen. Versuche es erneut.");
+        setError(authError.message || "Fehler beim Zurücksetzen. Versuche es erneut.");
       } else {
         setSuccess(true);
       }
@@ -63,7 +63,7 @@ export default function ResetPasswordScreen() {
 
         <Text style={styles.title}>Neues Passwort</Text>
         <Text style={styles.subtitle}>
-          Lege ein neues Passwort f\u00fcr dein Z-Konto fest.
+          Lege ein neues Passwort für dein Z-Konto fest.
         </Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -71,9 +71,9 @@ export default function ResetPasswordScreen() {
         {success ? (
           <View style={styles.successBox}>
             <SymbolView name="checkmark.circle.fill" size={40} tintColor={colors.success} />
-            <Text style={styles.successTitle}>Passwort ge\u00e4ndert</Text>
+            <Text style={styles.successTitle}>Passwort geändert</Text>
             <Text style={styles.successText}>
-              Dein Passwort wurde erfolgreich zur\u00fcckgesetzt. Du kannst dich jetzt anmelden.
+              Dein Passwort wurde erfolgreich zurückgesetzt. Du kannst dich jetzt anmelden.
             </Text>
             <Button
               title="Zur Anmeldung"
@@ -93,7 +93,7 @@ export default function ResetPasswordScreen() {
             />
             <View style={{ height: spacing.md }} />
             <Input
-              label="Passwort best\u00e4tigen"
+              label="Passwort bestätigen"
               placeholder="Passwort wiederholen"
               value={confirmPassword}
               onChangeText={setConfirmPassword}

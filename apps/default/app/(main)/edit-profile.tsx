@@ -160,7 +160,7 @@ export default function EditProfileScreen() {
     } catch (error) {
       console.error("Account deletion failed:", error);
       if (Platform.OS !== "web") {
-        Alert.alert("Fehler", "Account konnte nicht gel\u00f6scht werden. Bitte versuche es erneut.");
+        Alert.alert("Fehler", "Account konnte nicht gelöscht werden. Bitte versuche es erneut.");
       }
     } finally {
       setDeleting(false);
