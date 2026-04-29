@@ -8,10 +8,9 @@ import { SoundProvider } from "@/lib/sounds";
 const convexUrl =
   process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://cheery-panther-475.convex.cloud";
 
-const convex = new ConvexReactClient(
-  convexUrl,
-  { unsavedChangesWarning: false },
-);
+const convex = new ConvexReactClient(convexUrl, {
+  unsavedChangesWarning: false,
+});
 
 export default function RootLayout() {
   return (
