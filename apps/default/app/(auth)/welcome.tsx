@@ -174,7 +174,7 @@ export default function WelcomeScreen() {
           ))}
         </View>
 
-        {/* Bottom Statement */}
+        {/* Bottom statement */}
         <View style={styles.bottomText}>
           <Text style={[styles.statement, { fontSize: 22 * s, lineHeight: 28 * s }]}>{"Social Media ist\nnicht mehr social."}</Text>
         </View>
