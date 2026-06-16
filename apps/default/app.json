@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "package": "com.zsocial.zsocial",
       "adaptiveIcon": {
         "foregroundImage": "../../assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
